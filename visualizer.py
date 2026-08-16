@@ -162,6 +162,77 @@ def get_map_image(x_center, y_center, span, width_px=800):
 
 # --- DATA PROCESSING ---
 
+def parse_coordinate(value):
+    """Parse coordinate values used by Android, iOS, and Takeout exports."""
+    if isinstance(value, dict):
+        value = value.get('latLng') or value.get('point')
+    if not isinstance(value, str) or not value.strip():
+        return None
+    cleaned = value.strip().removeprefix('geo:').split('?', 1)[0].replace('°', '').replace(' ', '')
+    parts = cleaned.split(',')
+    if len(parts) < 2:
+        return None
+    try:
+        lat, lon = float(parts[0]), float(parts[1])
+    except ValueError:
+        return None
+    if abs(lat) > 1_000_000 or abs(lon) > 1_000_000:
+        lat /= 10_000_000
+        lon /= 10_000_000
+    if not (-85.05112878 <= lat <= 85.05112878 and -180 <= lon <= 180):
+        return None
+    return lat, lon
+
+
+def extract_timeline_points(data, year):
+    """Return normalized points for a year from supported Timeline JSON roots."""
+    if isinstance(data, list):
+        segments = data
+    elif isinstance(data, dict):
+        segments = data.get('semanticSegments', [])
+    else:
+        raise ValueError('Timeline JSON must start with an object or array')
+
+    points = []
+
+    def add_point(time_value, coordinate_value):
+        coordinate = parse_coordinate(coordinate_value)
+        if not time_value or coordinate is None:
+            return
+        try:
+            timestamp = dateutil.parser.parse(time_value)
+        except (TypeError, ValueError, OverflowError):
+            return
+        if timestamp.year == year:
+            points.append({'dt': timestamp, 'lat': coordinate[0], 'lon': coordinate[1]})
+
+    for seg in segments:
+        if not isinstance(seg, dict):
+            continue
+        start_time = seg.get('startTime')
+        end_time = seg.get('endTime')
+
+        for path_point in seg.get('timelinePath', []):
+            if isinstance(path_point, dict):
+                add_point(path_point.get('time'), path_point.get('point'))
+
+        activity = seg.get('activity')
+        if isinstance(activity, dict):
+            add_point(start_time, activity.get('start'))
+            add_point(end_time, activity.get('end'))
+
+        visit = seg.get('visit')
+        if isinstance(visit, dict):
+            candidate = visit.get('topCandidate')
+            if isinstance(candidate, dict):
+                add_point(start_time, candidate.get('placeLocation'))
+
+    unique = {
+        (point['dt'], point['lat'], point['lon']): point
+        for point in points
+    }
+    return sorted(unique.values(), key=lambda point: point['dt'])
+
 def parse_timeline(input_path, year):
     print(f"Loading {input_path}...")
     try:
@@ -171,59 +242,14 @@ def parse_timeline(input_path, year):
         print(f"Error reading JSON: {e}")
         sys.exit(1)
         
-    segments = data.get('semanticSegments', [])
+    segments = data if isinstance(data, list) else data.get('semanticSegments', []) if isinstance(data, dict) else []
     print(f"Parsing {len(segments)} segments for year {year}...")
-    
-    points = [] # dicts of {dt, lat, lon}
-    
-    for seg in segments:
-        # Check time
-        start_str = seg.get('startTime')
-        if not start_str: continue
-        try:
-            dt = dateutil.parser.parse(start_str)
-        except: continue
-        
-        if dt.year != year:
-            continue
-            
-        # 1. timelinePath
-        path = seg.get('timelinePath', [])
-        if path:
-            for p in path:
-                pt_str = p.get('point')
-                tm_str = p.get('time')
-                if pt_str and tm_str:
-                    try:
-                        # "37.123°, 127.123°"
-                        parts = pt_str.replace('°','').split(',')
-                        lat = float(parts[0])
-                        lon = float(parts[1])
-                        t = dateutil.parser.parse(tm_str)
-                        points.append({'dt':t, 'lat':lat, 'lon':lon})
-                    except: pass
-        
-        # 2. Visit (Top Candidate)
-        if 'visit' in seg:
-            visit = seg['visit']
-            if 'topCandidate' in visit:
-                 loc = visit['topCandidate'].get('placeLocation', {})
-                 latlng = loc.get('latLng')
-                 if latlng:
-                     try:
-                        parts = latlng.replace('°','').split(',')
-                        lat = float(parts[0])
-                        lon = float(parts[1])
-                        # Use segment start time for visit anchor
-                        points.append({'dt':dt, 'lat':lat, 'lon':lon})
-                     except: pass
+    points = extract_timeline_points(data, year)
 
     if not points:
         print(f"No data points found for year {year}.")
         sys.exit(1)
         
-    # Sort
-    points.sort(key=lambda x: x['dt'])
     print(f"Found {len(points)} valid points.")
     
     # Process into arrays & Project
