@@ -10,7 +10,6 @@ import android.graphics.RectF
 import android.graphics.Shader
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.JourneyPosition
-import dev.mahlernim.timelinevisualizer.model.RouteSample
 import dev.mahlernim.timelinevisualizer.model.WebMercator
 import dev.mahlernim.timelinevisualizer.model.WorldPoint
 import java.time.ZoneId
@@ -34,6 +33,8 @@ data class Viewport(
 )
 
 class TimelinePainter {
+    private var cachedJourney: Journey? = null
+    private var cachedPrepared: PreparedJourney? = null
     private val routePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(233, 0, 100)
         style = Paint.Style.STROKE
@@ -75,17 +76,22 @@ class TimelinePainter {
     }
 
     fun viewport(journey: Journey, progress: Float, width: Int, height: Int): Viewport {
+        val prepared = prepare(journey)
         val current = journey.positionAt(progress)
         val tailDistance = max(0.0, current.distanceKm - CAMERA_CONTEXT_KM)
         val lookaheadDistance = min(journey.totalDistanceKm, current.distanceKm + CAMERA_CONTEXT_KM)
         val focus = buildList {
             add(journey.positionAtDistance(tailDistance).point)
-            addAll(journey.renderPath.filter { it.distanceKm in tailDistance..lookaheadDistance }.map(RouteSample::point))
+            val start = prepared.lowerBound(tailDistance)
+            val end = prepared.upperBound(lookaheadDistance)
+            for (index in start..end) {
+                if (index in prepared.projected.indices) add(journey.renderPath[index].point)
+            }
             add(current.point)
             add(journey.positionAtDistance(lookaheadDistance).point)
         }.map(WebMercator::project)
 
-        val routeReferenceX = routeReferenceX(journey, current.distanceKm)
+        val routeReferenceX = prepared.referenceX(current.distanceKm)
         val centerPoint = WebMercator.project(current.point)
         val centerX = unwrapNear(centerPoint.x, routeReferenceX)
         val wrappedX = focus.map { unwrapNear(it.x, centerX) }
@@ -132,25 +138,26 @@ class TimelinePainter {
     ) {
         if (journey.points.isEmpty() || width <= 0 || height <= 0) return
         val viewport = viewport(journey, progress, width, height)
+        val prepared = prepare(journey)
         drawBackground(canvas, width, height)
         drawTiles(canvas, width, height, viewport, tiles)
 
-        val samples = journey.renderPath
-        val projected = samples.map { WebMercator.project(it.point) }
-        val unwrappedX = unwrapRoute(projected.map { it.x })
-        val screen = projected.mapIndexed { index, point ->
-            worldToScreen(WorldPoint(unwrappedX[index], point.y), viewport, width, height)
+        val screen = prepared.projected.mapIndexed { index, point ->
+            worldToScreen(WorldPoint(prepared.unwrappedX[index], point.y), viewport, width, height)
         }
         drawSamplePath(canvas, screen.indices, screen, routePaint)
 
         val current = journey.positionAt(progress)
-        val traveledIndices = samples.indices.filter { samples[it].distanceKm <= current.distanceKm }
-        val currentScreen = screenPoint(current, journey, viewport, width, height)
+        val traveledEnd = prepared.upperBound(current.distanceKm)
+        val traveledIndices = if (traveledEnd >= 0) 0..traveledEnd else IntRange.EMPTY
+        val currentScreen = screenPoint(current, prepared, viewport, width, height)
         drawSamplePath(canvas, traveledIndices, screen, routePaint, currentScreen)
 
         val tailDistance = max(0.0, current.distanceKm - TRAIL_KM)
-        val tailStartScreen = screenPoint(journey.positionAtDistance(tailDistance), journey, viewport, width, height)
-        val tailIndices = samples.indices.filter { samples[it].distanceKm in tailDistance..current.distanceKm }
+        val tailStartScreen = screenPoint(journey.positionAtDistance(tailDistance), prepared, viewport, width, height)
+        val tailStart = prepared.lowerBound(tailDistance)
+        val tailEnd = prepared.upperBound(current.distanceKm)
+        val tailIndices = if (tailStart <= tailEnd) tailStart..tailEnd else IntRange.EMPTY
         drawSamplePath(canvas, tailIndices, screen, tailPaint, currentScreen, tailStartScreen)
 
         val head = currentScreen
@@ -252,22 +259,27 @@ class TimelinePainter {
 
     private fun screenPoint(
         position: JourneyPosition,
-        journey: Journey,
+        prepared: PreparedJourney,
         viewport: Viewport,
         width: Int,
         height: Int,
     ): Pair<Float, Float> {
         val projected = WebMercator.project(position.point)
-        val reference = routeReferenceX(journey, position.distanceKm)
+        val reference = prepared.referenceX(position.distanceKm)
         return worldToScreen(WorldPoint(unwrapNear(projected.x, reference), projected.y), viewport, width, height)
     }
 
-    private fun routeReferenceX(journey: Journey, distanceKm: Double): Double {
-        val path = journey.renderPath
-        if (path.isEmpty()) return 0.5
-        val projectedX = unwrapRoute(path.map { WebMercator.project(it.point).x })
-        val nearest = path.indices.minByOrNull { kotlin.math.abs(path[it].distanceKm - distanceKm) } ?: 0
-        return projectedX[nearest]
+    private fun prepare(journey: Journey): PreparedJourney {
+        if (cachedJourney === journey) return cachedPrepared!!
+        val projected = journey.renderPath.map { WebMercator.project(it.point) }
+        val prepared = PreparedJourney(
+            projected = projected,
+            unwrappedX = unwrapRoute(projected.map { it.x }),
+            distances = DoubleArray(journey.renderPath.size) { journey.renderPath[it].distanceKm },
+        )
+        cachedJourney = journey
+        cachedPrepared = prepared
+        return prepared
     }
 
     private fun unwrapRoute(values: List<Double>): List<Double> {
@@ -283,6 +295,43 @@ class TimelinePainter {
         while (result - reference > 0.5) result -= 1.0
         while (result - reference < -0.5) result += 1.0
         return result
+    }
+
+    private data class PreparedJourney(
+        val projected: List<WorldPoint>,
+        val unwrappedX: List<Double>,
+        val distances: DoubleArray,
+    ) {
+        fun lowerBound(value: Double): Int {
+            var low = 0
+            var high = distances.size
+            while (low < high) {
+                val middle = (low + high) ushr 1
+                if (distances[middle] < value) low = middle + 1 else high = middle
+            }
+            return low.coerceAtMost(distances.lastIndex.coerceAtLeast(0))
+        }
+
+        fun upperBound(value: Double): Int {
+            var low = 0
+            var high = distances.size
+            while (low < high) {
+                val middle = (low + high) ushr 1
+                if (distances[middle] <= value) low = middle + 1 else high = middle
+            }
+            return low - 1
+        }
+
+        fun referenceX(distanceKm: Double): Double {
+            if (distances.isEmpty()) return 0.5
+            val after = lowerBound(distanceKm)
+            val before = (after - 1).coerceAtLeast(0)
+            val nearest = if (
+                after in distances.indices &&
+                kotlin.math.abs(distances[after] - distanceKm) < kotlin.math.abs(distances[before] - distanceKm)
+            ) after else before
+            return unwrappedX[nearest]
+        }
     }
 
     companion object {
