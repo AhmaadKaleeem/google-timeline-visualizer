@@ -9,6 +9,8 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
 import dev.mahlernim.timelinevisualizer.model.Journey
+import dev.mahlernim.timelinevisualizer.model.JourneyPosition
+import dev.mahlernim.timelinevisualizer.model.RouteSample
 import dev.mahlernim.timelinevisualizer.model.WebMercator
 import dev.mahlernim.timelinevisualizer.model.WorldPoint
 import java.time.ZoneId
@@ -73,20 +75,21 @@ class TimelinePainter {
     }
 
     fun viewport(journey: Journey, progress: Float, width: Int, height: Int): Viewport {
-        val current = journey.pointIndexAt(progress)
-        val currentDistance = journey.cumulativeDistanceKm.getOrElse(current) { 0.0 }
-        val tailStartDistance = max(0.0, currentDistance - 500.0)
-        val lookaheadDistance = currentDistance + 500.0
-        val tailStart = lowerBound(journey.cumulativeDistanceKm, tailStartDistance)
-        val lookahead = min(lowerBound(journey.cumulativeDistanceKm, lookaheadDistance), journey.points.lastIndex)
-        val subset = journey.points.subList(tailStart.coerceAtMost(current), max(current, lookahead) + 1)
-        val projected = subset.map(WebMercator::project)
-        val wrappedX = WebMercator.shortestWrappedX(projected.map { it.x })
-        val ys = projected.map { it.y }
+        val current = journey.positionAt(progress)
+        val tailDistance = max(0.0, current.distanceKm - CAMERA_CONTEXT_KM)
+        val lookaheadDistance = min(journey.totalDistanceKm, current.distanceKm + CAMERA_CONTEXT_KM)
+        val focus = buildList {
+            add(journey.positionAtDistance(tailDistance).point)
+            addAll(journey.renderPath.filter { it.distanceKm in tailDistance..lookaheadDistance }.map(RouteSample::point))
+            add(current.point)
+            add(journey.positionAtDistance(lookaheadDistance).point)
+        }.map(WebMercator::project)
 
-        val centerPoint = WebMercator.project(journey.points[current])
-        var centerX = centerPoint.x
-        if (wrappedX.any { it > 1.0 } && centerX < 0.5) centerX += 1.0
+        val routeReferenceX = routeReferenceX(journey, current.distanceKm)
+        val centerPoint = WebMercator.project(current.point)
+        val centerX = unwrapNear(centerPoint.x, routeReferenceX)
+        val wrappedX = focus.map { unwrapNear(it.x, centerX) }
+        val ys = focus.map { it.y }
         val centerY = centerPoint.y
         val contentSpanX = max(0.00015, (wrappedX.maxOrNull() ?: centerX) - (wrappedX.minOrNull() ?: centerX))
         val contentSpanY = max(0.00015, (ys.maxOrNull() ?: centerY) - (ys.minOrNull() ?: centerY))
@@ -132,32 +135,28 @@ class TimelinePainter {
         drawBackground(canvas, width, height)
         drawTiles(canvas, width, height, viewport, tiles)
 
-        val projected = journey.points.map(WebMercator::project)
-        val wrappedX = WebMercator.shortestWrappedX(projected.map { it.x })
+        val samples = journey.renderPath
+        val projected = samples.map { WebMercator.project(it.point) }
+        val unwrappedX = unwrapRoute(projected.map { it.x })
         val screen = projected.mapIndexed { index, point ->
-            worldToScreen(WorldPoint(wrappedX[index], point.y), viewport, width, height)
+            worldToScreen(WorldPoint(unwrappedX[index], point.y), viewport, width, height)
         }
-        val current = journey.pointIndexAt(progress)
-        val path = Path()
-        for (index in 0..current) {
-            val p = screen[index]
-            if (index == 0) path.moveTo(p.first, p.second) else path.lineTo(p.first, p.second)
-        }
-        canvas.drawPath(path, routePaint)
+        drawSamplePath(canvas, screen.indices, screen, routePaint)
 
-        val tailDistance = max(0.0, journey.cumulativeDistanceKm[current] - 500.0)
-        val tailStart = lowerBound(journey.cumulativeDistanceKm, tailDistance)
-        val tail = Path()
-        for (index in tailStart..current) {
-            val p = screen[index]
-            if (index == tailStart) tail.moveTo(p.first, p.second) else tail.lineTo(p.first, p.second)
-        }
-        canvas.drawPath(tail, tailPaint)
+        val current = journey.positionAt(progress)
+        val traveledIndices = samples.indices.filter { samples[it].distanceKm <= current.distanceKm }
+        val currentScreen = screenPoint(current, journey, viewport, width, height)
+        drawSamplePath(canvas, traveledIndices, screen, routePaint, currentScreen)
 
-        val head = screen[current]
+        val tailDistance = max(0.0, current.distanceKm - TRAIL_KM)
+        val tailStartScreen = screenPoint(journey.positionAtDistance(tailDistance), journey, viewport, width, height)
+        val tailIndices = samples.indices.filter { samples[it].distanceKm in tailDistance..current.distanceKm }
+        drawSamplePath(canvas, tailIndices, screen, tailPaint, currentScreen, tailStartScreen)
+
+        val head = currentScreen
         canvas.drawCircle(head.first, head.second, width * 0.013f, headPaint)
         canvas.drawCircle(head.first, head.second, width * 0.017f, headRingPaint)
-        drawOverlay(canvas, width, height, journey, current, title)
+        drawOverlay(canvas, width, height, current, title)
     }
 
     private fun drawBackground(canvas: Canvas, width: Int, height: Int) {
@@ -195,40 +194,100 @@ class TimelinePainter {
         }
     }
 
-    private fun drawOverlay(canvas: Canvas, width: Int, height: Int, journey: Journey, index: Int, title: String) {
+    private fun drawOverlay(canvas: Canvas, width: Int, height: Int, position: JourneyPosition, title: String) {
         val scale = width / 720f
         val card = RectF(34f * scale, 28f * scale, width - 34f * scale, 132f * scale)
         canvas.drawRoundRect(card, 24f * scale, 24f * scale, cardPaint)
         titlePaint.textSize = 34f * scale
         bodyPaint.textSize = 20f * scale
         attributionPaint.textSize = 13f * scale
-        canvas.drawText(title.ifBlank { "My Trips" }, width / 2f, 72f * scale, titlePaint)
-        val point = journey.points[index]
-        val date = DATE_FORMAT.format(point.instant.atZone(ZoneId.systemDefault()))
-        val distance = journey.cumulativeDistanceKm[index]
+        val displayTitle = title.ifBlank { "My Trips" }
+        val availableWidth = card.width() - 36f * scale
+        while (titlePaint.textSize > 20f * scale && titlePaint.measureText(displayTitle) > availableWidth) {
+            titlePaint.textSize -= 1f * scale
+        }
+        val fittedTitle = if (titlePaint.measureText(displayTitle) <= availableWidth) displayTitle else {
+            val count = titlePaint.breakText(displayTitle, true, availableWidth - titlePaint.measureText("…"), null)
+            displayTitle.take(count.coerceAtLeast(1)).trimEnd() + "…"
+        }
+        canvas.drawText(fittedTitle, width / 2f, 72f * scale, titlePaint)
+        val date = DATE_FORMAT.format(position.point.instant.atZone(ZoneId.systemDefault()))
+        val distance = position.distanceKm
         canvas.drawText("$date  ·  ${String.format(Locale.US, "%,.0f", distance)} km", width / 2f, 108f * scale, bodyPaint)
         canvas.drawText("© OpenStreetMap  © CARTO", width - 12f * scale, height - 12f * scale, attributionPaint)
     }
 
     private fun worldToScreen(point: WorldPoint, viewport: Viewport, width: Int, height: Int): Pair<Float, Float> {
-        var x = point.x
-        if (viewport.minX > 0.5 && x < 0.5) x += 1.0
+        val x = unwrapNear(point.x, (viewport.minX + viewport.maxX) / 2.0)
         val sx = ((x - viewport.minX) / (viewport.maxX - viewport.minX) * width).toFloat()
         val sy = ((point.y - viewport.minY) / (viewport.maxY - viewport.minY) * height).toFloat()
         return sx to sy
     }
 
-    private fun lowerBound(values: DoubleArray, target: Double): Int {
-        var low = 0
-        var high = values.size
-        while (low < high) {
-            val mid = (low + high) ushr 1
-            if (values[mid] < target) low = mid + 1 else high = mid
+    private fun drawSamplePath(
+        canvas: Canvas,
+        indices: Iterable<Int>,
+        screen: List<Pair<Float, Float>>,
+        paint: Paint,
+        end: Pair<Float, Float>? = null,
+        start: Pair<Float, Float>? = null,
+    ) {
+        val path = Path()
+        var moved = false
+        if (start != null) {
+            path.moveTo(start.first, start.second)
+            moved = true
         }
-        return low.coerceIn(0, max(0, values.lastIndex))
+        for (index in indices) {
+            val point = screen[index]
+            if (!moved) path.moveTo(point.first, point.second) else path.lineTo(point.first, point.second)
+            moved = true
+        }
+        if (end != null) {
+            if (!moved) path.moveTo(end.first, end.second) else path.lineTo(end.first, end.second)
+            moved = true
+        }
+        if (moved) canvas.drawPath(path, paint)
+    }
+
+    private fun screenPoint(
+        position: JourneyPosition,
+        journey: Journey,
+        viewport: Viewport,
+        width: Int,
+        height: Int,
+    ): Pair<Float, Float> {
+        val projected = WebMercator.project(position.point)
+        val reference = routeReferenceX(journey, position.distanceKm)
+        return worldToScreen(WorldPoint(unwrapNear(projected.x, reference), projected.y), viewport, width, height)
+    }
+
+    private fun routeReferenceX(journey: Journey, distanceKm: Double): Double {
+        val path = journey.renderPath
+        if (path.isEmpty()) return 0.5
+        val projectedX = unwrapRoute(path.map { WebMercator.project(it.point).x })
+        val nearest = path.indices.minByOrNull { kotlin.math.abs(path[it].distanceKm - distanceKm) } ?: 0
+        return projectedX[nearest]
+    }
+
+    private fun unwrapRoute(values: List<Double>): List<Double> {
+        if (values.isEmpty()) return emptyList()
+        return buildList {
+            add(values.first())
+            for (index in 1..values.lastIndex) add(unwrapNear(values[index], last()))
+        }
+    }
+
+    private fun unwrapNear(value: Double, reference: Double): Double {
+        var result = value
+        while (result - reference > 0.5) result -= 1.0
+        while (result - reference < -0.5) result += 1.0
+        return result
     }
 
     companion object {
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMMM yyyy")
+        private const val CAMERA_CONTEXT_KM = 650.0
+        private const val TRAIL_KM = 650.0
     }
 }

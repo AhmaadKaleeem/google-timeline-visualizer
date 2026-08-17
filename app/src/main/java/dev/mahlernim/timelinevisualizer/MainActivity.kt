@@ -1,12 +1,15 @@
 package dev.mahlernim.timelinevisualizer
 
 import android.animation.ValueAnimator
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
 import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.SeekBar
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -15,6 +18,7 @@ import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import dev.mahlernim.timelinevisualizer.data.TileRepository
 import dev.mahlernim.timelinevisualizer.data.TimelineParser
@@ -26,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.text.DateFormatSymbols
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -33,6 +38,13 @@ class MainActivity : AppCompatActivity() {
     private var journey: Journey? = null
     private var animation: ValueAnimator? = null
     private var pendingExport: ExportRequest? = null
+    private var lastVideoUri: Uri? = null
+    private var selectedYear: Int? = null
+    private var selectedStartMonth = 1
+    private var selectedEndMonth = 12
+    private var titleIsAutomatic = true
+    private var updatingTitle = false
+    private val monthNames by lazy { DateFormatSymbols.getInstance().months.take(12) }
 
     private val openTimeline = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importTimeline(uri)
@@ -55,8 +67,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.importButton.setOnClickListener { openTimeline.launch(arrayOf("application/json", "text/json", "text/plain")) }
+        binding.exportHelpButton.setOnClickListener { showExportHelp() }
         binding.playButton.setOnClickListener { togglePlayback() }
         binding.exportButton.setOnClickListener { chooseExportDestination() }
+        binding.shareButton.setOnClickListener { lastVideoUri?.let(::shareVideo) }
         binding.timelineSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -67,13 +81,24 @@ class MainActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
             override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
         })
-        binding.titleInput.doAfterTextChanged { binding.timelineView.videoTitle = it?.toString().orEmpty() }
+        binding.titleInput.doAfterTextChanged {
+            binding.timelineView.videoTitle = it?.toString().orEmpty()
+            if (!updatingTitle && timeline != null) titleIsAutomatic = false
+        }
+        val preferences = getSharedPreferences("display", MODE_PRIVATE)
+        val savedOwner = preferences.getString("owner_name", null)
+        binding.ownerInput.setText(savedOwner ?: deviceName())
+        binding.ownerInput.doAfterTextChanged {
+            preferences.edit().putString("owner_name", it?.toString().orEmpty()).apply()
+            if (titleIsAutomatic) updateAutomaticTitle()
+        }
 
-        val durations = listOf("15 seconds", "30 seconds", "60 seconds", "90 seconds")
+        val durations = listOf(15, 30, 60, 90).map { resources.getQuantityString(R.plurals.duration_seconds, it, it) }
         binding.durationDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, durations))
-        binding.durationDropdown.setText(getString(R.string.default_duration), false)
-        binding.durationDropdown.threshold = 0
-        binding.durationDropdown.setOnClickListener { binding.durationDropdown.showDropDown() }
+        binding.durationDropdown.setText(resources.getQuantityString(R.plurals.duration_seconds, 30, 30), false)
+        makeDropdownOpenReliably(binding.durationDropdown)
+
+        configureMonthDropdowns()
 
         intent?.data?.let(::importTimeline)
     }
@@ -103,7 +128,7 @@ class MainActivity : AppCompatActivity() {
             }.onFailure { error ->
                 timeline = null
                 binding.statusText.text = error.message ?: "This Timeline export could not be read"
-                Snackbar.make(binding.root, "Import failed", Snackbar.LENGTH_LONG).show()
+                Snackbar.make(binding.root, R.string.import_failed, Snackbar.LENGTH_LONG).show()
             }
         }
     }
@@ -112,29 +137,62 @@ class MainActivity : AppCompatActivity() {
         val years = loaded.years
         val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, years.map(Int::toString))
         binding.yearDropdown.setAdapter(adapter)
-        binding.yearDropdown.threshold = 0
-        binding.yearDropdown.setOnClickListener { binding.yearDropdown.showDropDown() }
+        makeDropdownOpenReliably(binding.yearDropdown)
         binding.yearDropdown.setOnItemClickListener { _, _, position, _ -> selectYear(years[position]) }
         binding.yearDropdown.setText(String.format(Locale.getDefault(), "%d", years.first()), false)
         selectYear(years.first())
     }
 
     private fun selectYear(year: Int) {
-        val selected = timeline?.forYear(year) ?: return
+        selectedYear = year
+        if (titleIsAutomatic) updateAutomaticTitle()
+        selectRange()
+    }
+
+    private fun selectRange() {
+        val year = selectedYear ?: return
+        val selected = timeline?.forRange(year, selectedStartMonth, selectedEndMonth) ?: return
         journey = selected
         binding.timelineView.journey = selected
         binding.timelineSeek.progress = 0
         showProgress(0f)
         binding.statusText.text = String.format(
             Locale.US,
-            "%,d points · %,.0f km · %d",
+            "%,d points · %,.0f km · %s",
             selected.points.size,
             selected.totalDistanceKm,
-            year,
+            if (selectedStartMonth == 1 && selectedEndMonth == 12) year.toString()
+            else "${monthNames[selectedStartMonth - 1]}–${monthNames[selectedEndMonth - 1]} $year",
         )
         val canExport = selected.points.size >= 2 && selected.totalDistanceKm > 0
         binding.playButton.isEnabled = canExport
         binding.exportButton.isEnabled = canExport
+    }
+
+    private fun configureMonthDropdowns() {
+        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, monthNames)
+        binding.startMonthDropdown.setAdapter(adapter)
+        binding.endMonthDropdown.setAdapter(adapter)
+        binding.startMonthDropdown.setText(monthNames.first(), false)
+        binding.endMonthDropdown.setText(monthNames.last(), false)
+        makeDropdownOpenReliably(binding.startMonthDropdown)
+        makeDropdownOpenReliably(binding.endMonthDropdown)
+        binding.startMonthDropdown.setOnItemClickListener { _, _, position, _ ->
+            selectedStartMonth = position + 1
+            if (selectedStartMonth > selectedEndMonth) {
+                selectedEndMonth = selectedStartMonth
+                binding.endMonthDropdown.setText(monthNames[selectedEndMonth - 1], false)
+            }
+            selectRange()
+        }
+        binding.endMonthDropdown.setOnItemClickListener { _, _, position, _ ->
+            selectedEndMonth = position + 1
+            if (selectedEndMonth < selectedStartMonth) {
+                selectedStartMonth = selectedEndMonth
+                binding.startMonthDropdown.setText(monthNames[selectedStartMonth - 1], false)
+            }
+            selectRange()
+        }
     }
 
     private fun togglePlayback() {
@@ -149,7 +207,11 @@ class MainActivity : AppCompatActivity() {
             binding.playButton.text = getString(R.string.play)
             return
         }
-        val start = binding.timelineSeek.progress
+        val start = if (binding.timelineSeek.progress >= 1000) {
+            binding.timelineSeek.progress = 0
+            showProgress(0f)
+            0
+        } else binding.timelineSeek.progress
         val durationMs = selectedDurationSeconds() * 1000L
         animation = ValueAnimator.ofInt(start, 1000).apply {
             duration = ((1000 - start) / 1000f * durationMs).toLong().coerceAtLeast(250)
@@ -180,7 +242,7 @@ class MainActivity : AppCompatActivity() {
     private fun chooseExportDestination() {
         val selected = journey ?: return
         animation?.cancel()
-        val title = binding.titleInput.text?.toString().orEmpty().ifBlank { "My Trips" }
+        val title = binding.titleInput.text?.toString().orEmpty().ifBlank { getString(R.string.default_title) }
         val request = ExportRequest(selected, title, selectedDurationSeconds())
         pendingExport = request
         val slug = title.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "timeline" }
@@ -201,22 +263,26 @@ class MainActivity : AppCompatActivity() {
             }
             setExporting(false)
             result.onSuccess {
+                lastVideoUri = uri
+                binding.shareButton.isEnabled = true
                 binding.statusText.text = getString(R.string.video_saved)
-                Snackbar.make(binding.root, "Video saved", Snackbar.LENGTH_LONG)
-                    .setAction("Share") { shareVideo(uri) }
+                Snackbar.make(binding.root, R.string.video_saved, Snackbar.LENGTH_LONG)
+                    .setAction(R.string.share) { shareVideo(uri) }
                     .show()
             }.onFailure { error ->
                 binding.statusText.text = error.message ?: "Video export failed"
-                Snackbar.make(binding.root, "Video export failed", Snackbar.LENGTH_LONG).show()
+                Snackbar.make(binding.root, R.string.video_export_failed, Snackbar.LENGTH_LONG).show()
             }
         }
     }
 
     private fun setExporting(exporting: Boolean) {
+        val canAnimate = journey?.let { it.points.size >= 2 && it.totalDistanceKm > 0 } == true
         binding.exportProgress.visibility = if (exporting) View.VISIBLE else View.GONE
         binding.importButton.isEnabled = !exporting
-        binding.playButton.isEnabled = !exporting
-        binding.exportButton.isEnabled = !exporting
+        binding.playButton.isEnabled = !exporting && canAnimate
+        binding.exportButton.isEnabled = !exporting && canAnimate
+        binding.shareButton.isEnabled = !exporting && lastVideoUri != null
         binding.yearDropdown.isEnabled = !exporting
         if (exporting) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -226,14 +292,58 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
             type = "video/mp4"
             putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newRawUri("Timeline video", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }, "Share travel video"))
+        }, getString(R.string.share_travel_video)))
     }
 
-    private fun selectedDurationSeconds(): Int = binding.durationDropdown.text.toString()
-        .substringBefore(' ')
-        .toIntOrNull()
+    private fun showExportHelp() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.export_help_title)
+            .setMessage(R.string.export_help_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.open_location_settings) { _, _ ->
+                val settingsIntent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                runCatching { startActivity(settingsIntent) }
+                    .onFailure {
+                        Snackbar.make(binding.root, R.string.location_settings_unavailable, Snackbar.LENGTH_LONG).show()
+                    }
+            }
+            .show()
+    }
+
+    private fun updateAutomaticTitle() {
+        val year = selectedYear ?: return
+        val owner = binding.ownerInput.text?.toString()?.trim().orEmpty().ifBlank { getString(R.string.traveler) }
+        updatingTitle = true
+        binding.titleInput.setText(getString(R.string.automatic_title, year, owner))
+        binding.titleInput.setSelection(binding.titleInput.text?.length ?: 0)
+        updatingTitle = false
+    }
+
+    private fun deviceName(): String {
+        val name = Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)
+            ?.replace('_', ' ')
+            ?.replace(Regex("\\s+"), " ")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+        return name?.takeUnless {
+            it.startsWith("sdk ", ignoreCase = true) ||
+                it.startsWith("generic", ignoreCase = true) ||
+                it.equals("Android", ignoreCase = true)
+        } ?: getString(R.string.traveler)
+    }
+
+    private fun selectedDurationSeconds(): Int = Regex("\\d+")
+        .find(binding.durationDropdown.text.toString())
+        ?.value
+        ?.toIntOrNull()
         ?: 30
+
+    private fun makeDropdownOpenReliably(dropdown: AutoCompleteTextView) {
+        dropdown.threshold = 0
+        dropdown.setOnClickListener { dropdown.showDropDown() }
+    }
 
     private data class ExportRequest(val journey: Journey, val title: String, val durationSeconds: Int)
 }

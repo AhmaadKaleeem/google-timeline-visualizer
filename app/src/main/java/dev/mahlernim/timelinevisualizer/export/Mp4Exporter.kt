@@ -17,6 +17,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
 import kotlin.coroutines.coroutineContext
+import kotlin.math.ceil
+import kotlin.math.max
 
 class Mp4Exporter(
     private val contentResolver: ContentResolver,
@@ -36,7 +38,8 @@ class Mp4Exporter(
         val painter = TimelinePainter()
 
         onProgress(0f, "Preparing map tiles…")
-        val sampleCount = durationSeconds.coerceAtLeast(10)
+        val sampleCount = max(durationSeconds * 2, ceil(journey.totalDistanceKm / 250.0).toInt())
+            .coerceIn(20, durationSeconds * 8)
         val requiredTiles = buildSet {
             for (sample in 0..sampleCount) {
                 val progress = sample.toFloat() / sampleCount

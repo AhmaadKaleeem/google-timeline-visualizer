@@ -62,12 +62,17 @@ class TimelineView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val data = journey ?: return
-        val viewport = painter.viewport(data, progress, width, height)
-        painter.requiredTiles(viewport).forEach { visible ->
-            if (tiles.cached(visible.id) == null && loading.add(visible.id)) {
+        if (data.points.isEmpty()) return
+        val tilesToLoad = buildSet {
+            listOf(progress, (progress + 0.015f).coerceAtMost(1f), (progress + 0.03f).coerceAtMost(1f)).forEach {
+                addAll(painter.requiredTiles(painter.viewport(data, it, width, height)).map { tile -> tile.id })
+            }
+        }
+        tilesToLoad.forEach { tile ->
+            if (tiles.cached(tile) == null && loading.add(tile)) {
                 scope.launch {
-                    tiles.load(visible.id)
-                    loading.remove(visible.id)
+                    tiles.load(tile)
+                    loading.remove(tile)
                     invalidate()
                 }
             }
