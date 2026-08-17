@@ -15,7 +15,6 @@ import dev.mahlernim.timelinevisualizer.model.WorldPoint
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.log2
@@ -40,18 +39,27 @@ class TimelinePainter {
     private var cachedCameraWidth = 0
     private var cachedCameraHeight = 0
     private var cachedCameraTrack: CameraTrack? = null
-    private val routePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val oldTrailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(233, 0, 100)
         style = Paint.Style.STROKE
         strokeWidth = 4f
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
-        alpha = 125
+        alpha = 55
     }
-    private val tailPaint = Paint(routePaint).apply {
+    private val middleTrailPaint = Paint(oldTrailPaint).apply {
+        strokeWidth = 6f
+        alpha = 135
+    }
+    private val recentTrailPaint = Paint(oldTrailPaint).apply {
         strokeWidth = 8f
         alpha = 255
     }
+    private val overviewRoutePaint = Paint(oldTrailPaint).apply {
+        strokeWidth = 3.5f
+        alpha = 255
+    }
+    private val overviewCompositePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val headPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(36, 25, 29)
         style = Paint.Style.FILL
@@ -81,8 +89,20 @@ class TimelinePainter {
     }
 
     fun viewport(journey: Journey, progress: Float, width: Int, height: Int): Viewport {
-        if (width <= 0 || height <= 0) return rawViewport(journey, progress, width, height)
-        return cameraTrack(journey, width, height).viewportAt(progress)
+        return viewport(journey, TimelineFrame(progress, 0f), width, height)
+    }
+
+    fun viewport(journey: Journey, frame: TimelineFrame, width: Int, height: Int): Viewport {
+        if (width <= 0 || height <= 0) return rawViewport(journey, frame.journeyProgress, width, height)
+        val journeyViewport = cameraTrack(journey, width, height).viewportAt(frame.journeyProgress)
+        if (frame.outroProgress <= 0f) return journeyViewport
+        return blendViewport(
+            journeyViewport,
+            overviewViewport(journey, width, height),
+            easeOutCubic(frame.outroProgress),
+            width,
+            height,
+        )
     }
 
     private fun rawViewport(journey: Journey, progress: Float, width: Int, height: Int): Viewport {
@@ -196,6 +216,82 @@ class TimelinePainter {
         return if (half >= 0.5) 0.5 else centerY.coerceIn(half, 1.0 - half)
     }
 
+    private fun overviewViewport(journey: Journey, width: Int, height: Int): Viewport {
+        val prepared = prepare(journey)
+        val aspect = width.toDouble() / height.coerceAtLeast(1)
+        val minX = prepared.unwrappedX.minOrNull() ?: 0.5
+        val maxX = prepared.unwrappedX.maxOrNull() ?: minX
+        val minY = prepared.projected.minOfOrNull { it.y } ?: 0.5
+        val maxY = prepared.projected.maxOfOrNull { it.y } ?: minY
+        val centerX = (minX + maxX) / 2.0
+        val contentCenterY = (minY + maxY) / 2.0
+        val contentSpanX = (maxX - minX).coerceAtLeast(MIN_VIEWPORT_SPAN)
+        val contentSpanY = (maxY - minY).coerceAtLeast(MIN_VIEWPORT_SPAN)
+        val spanY = max(contentSpanY, contentSpanX / aspect)
+            .times(OVERVIEW_PADDING)
+            .coerceIn(MIN_VIEWPORT_SPAN, MAX_OVERVIEW_VIEWPORT_SPAN)
+        val spanX = spanY * aspect
+        val centerY = clampCenterY(contentCenterY, spanY)
+        val zoom = floor(log2(width.coerceAtLeast(1) / (256.0 * spanX))).toInt()
+            .coerceIn(MIN_TILE_ZOOM, MAX_TILE_ZOOM)
+        return Viewport(
+            centerX - spanX / 2.0,
+            centerX + spanX / 2.0,
+            centerY - spanY / 2.0,
+            centerY + spanY / 2.0,
+            zoom,
+        )
+    }
+
+    private fun blendViewport(
+        from: Viewport,
+        to: Viewport,
+        fraction: Float,
+        width: Int,
+        height: Int,
+    ): Viewport {
+        val amount = fraction.coerceIn(0f, 1f).toDouble()
+        val aspect = width.toDouble() / height.coerceAtLeast(1)
+        val fromCenterX = (from.minX + from.maxX) / 2.0
+        val toCenterX = unwrapNear((to.minX + to.maxX) / 2.0, fromCenterX)
+        val centerX = lerp(fromCenterX, toCenterX, amount)
+        val centerY = lerp((from.minY + from.maxY) / 2.0, (to.minY + to.maxY) / 2.0, amount)
+        val fromSpanY = (from.maxY - from.minY).coerceAtLeast(MIN_VIEWPORT_SPAN)
+        val toSpanY = (to.maxY - to.minY).coerceAtLeast(MIN_VIEWPORT_SPAN)
+        val spanY = kotlin.math.exp(lerp(ln(fromSpanY), ln(toSpanY), amount))
+            .coerceIn(MIN_VIEWPORT_SPAN, MAX_OVERVIEW_VIEWPORT_SPAN)
+        val spanX = spanY * aspect
+        val adjustedCenterY = clampCenterY(centerY, spanY)
+        val zoom = floor(log2(width.coerceAtLeast(1) / (256.0 * spanX))).toInt()
+            .coerceIn(MIN_TILE_ZOOM, MAX_TILE_ZOOM)
+        return Viewport(
+            centerX - spanX / 2.0,
+            centerX + spanX / 2.0,
+            adjustedCenterY - spanY / 2.0,
+            adjustedCenterY + spanY / 2.0,
+            zoom,
+        )
+    }
+
+    private fun trailWindowDistance(journey: Journey, journeyDurationSeconds: Int): Double {
+        if (journey.totalDistanceKm <= 0.0) return 0.0
+        val distance = journey.totalDistanceKm * TRAIL_VISIBLE_SECONDS / journeyDurationSeconds.coerceAtLeast(1)
+        return min(journey.totalDistanceKm, distance.coerceIn(MIN_TRAIL_KM, MAX_TRAIL_KM))
+    }
+
+    private fun easeOutCubic(value: Float): Float {
+        val inverse = 1f - value.coerceIn(0f, 1f)
+        return 1f - inverse * inverse * inverse
+    }
+
+    private fun easeInOutCubic(value: Float): Float {
+        val amount = value.coerceIn(0f, 1f)
+        return if (amount < 0.5f) 4f * amount * amount * amount else {
+            val inverse = -2f * amount + 2f
+            1f - inverse * inverse * inverse / 2f
+        }
+    }
+
     private fun lerp(start: Double, end: Double, fraction: Double): Double =
         start + (end - start) * fraction
 
@@ -222,31 +318,85 @@ class TimelinePainter {
         title: String,
         tiles: (TileId) -> Bitmap?,
     ) {
+        draw(
+            canvas,
+            width,
+            height,
+            journey,
+            TimelineFrame(progress.coerceIn(0f, 1f), 0f),
+            DEFAULT_JOURNEY_DURATION_SECONDS,
+            title,
+            tiles,
+        )
+    }
+
+    fun draw(
+        canvas: Canvas,
+        width: Int,
+        height: Int,
+        journey: Journey,
+        frame: TimelineFrame,
+        journeyDurationSeconds: Int,
+        title: String,
+        tiles: (TileId) -> Bitmap?,
+    ) {
         if (journey.points.isEmpty() || width <= 0 || height <= 0) return
-        val viewport = viewport(journey, progress, width, height)
+        val viewport = viewport(journey, frame, width, height)
         val prepared = prepare(journey)
         drawBackground(canvas, width, height)
         drawTiles(canvas, width, height, viewport, tiles)
 
-        val screen = prepared.projected.mapIndexed { index, point ->
-            worldToScreen(WorldPoint(prepared.unwrappedX[index], point.y), viewport, width, height)
-        }
-        val current = journey.positionAt(progress)
-        val traveledEnd = prepared.upperBound(current.distanceKm)
-        val traveledIndices = if (traveledEnd >= 0) 0..traveledEnd else IntRange.EMPTY
+        val current = journey.positionAt(frame.journeyProgress)
         val currentScreen = screenPoint(current, prepared, viewport, width, height)
-        drawSamplePath(canvas, traveledIndices, screen, routePaint, currentScreen)
+        val trailWindow = trailWindowDistance(journey, journeyDurationSeconds)
+        val trailStart = max(0.0, current.distanceKm - trailWindow)
+        val visibleTrail = current.distanceKm - trailStart
+        val oldEnd = trailStart + visibleTrail * 0.45
+        val middleEnd = trailStart + visibleTrail * 0.75
+        val activeAlpha = (255 * (1f - easeOutCubic(frame.outroProgress))).toInt().coerceIn(0, 255)
+        drawRouteRange(
+            canvas, journey, prepared, viewport, width, height,
+            trailStart, min(oldEnd, current.distanceKm), oldTrailPaint, activeAlpha,
+        )
+        drawRouteRange(
+            canvas, journey, prepared, viewport, width, height,
+            min(oldEnd, current.distanceKm), min(middleEnd, current.distanceKm), middleTrailPaint, activeAlpha,
+        )
+        drawRouteRange(
+            canvas, journey, prepared, viewport, width, height,
+            min(middleEnd, current.distanceKm), current.distanceKm, recentTrailPaint, activeAlpha,
+        )
 
-        val tailDistance = max(0.0, current.distanceKm - TRAIL_KM)
-        val tailStartScreen = screenPoint(journey.positionAtDistance(tailDistance), prepared, viewport, width, height)
-        val tailStart = prepared.lowerBound(tailDistance)
-        val tailEnd = prepared.upperBound(current.distanceKm)
-        val tailIndices = if (tailStart <= tailEnd) tailStart..tailEnd else IntRange.EMPTY
-        drawSamplePath(canvas, tailIndices, screen, tailPaint, currentScreen, tailStartScreen)
+        if (frame.outroProgress > 0f) {
+            overviewCompositePaint.alpha = (OVERVIEW_ROUTE_ALPHA * easeInOutCubic(frame.outroProgress))
+                .toInt()
+                .coerceIn(0, 255)
+            val layer = canvas.saveLayer(
+                0f,
+                0f,
+                width.toFloat(),
+                height.toFloat(),
+                overviewCompositePaint,
+            )
+            drawRouteRange(
+                canvas, journey, prepared, viewport, width, height,
+                0.0, journey.totalDistanceKm, overviewRoutePaint, 255,
+            )
+            canvas.restoreToCount(layer)
+        }
 
         val head = currentScreen
-        canvas.drawCircle(head.first, head.second, width * 0.013f, headPaint)
-        canvas.drawCircle(head.first, head.second, width * 0.017f, headRingPaint)
+        val markerAlpha = (255 * (1f - easeOutCubic(frame.outroProgress))).toInt().coerceIn(0, 255)
+        val previousHeadAlpha = headPaint.alpha
+        val previousRingAlpha = headRingPaint.alpha
+        headPaint.alpha = markerAlpha
+        headRingPaint.alpha = markerAlpha
+        if (markerAlpha > 0) {
+            canvas.drawCircle(head.first, head.second, width * 0.013f, headPaint)
+            canvas.drawCircle(head.first, head.second, width * 0.017f, headRingPaint)
+        }
+        headPaint.alpha = previousHeadAlpha
+        headRingPaint.alpha = previousRingAlpha
         drawOverlay(canvas, width, height, current, title)
     }
 
@@ -315,30 +465,52 @@ class TimelinePainter {
         return sx to sy
     }
 
-    private fun drawSamplePath(
+    private fun drawRouteRange(
         canvas: Canvas,
-        indices: Iterable<Int>,
-        screen: List<Pair<Float, Float>>,
+        journey: Journey,
+        prepared: PreparedJourney,
+        viewport: Viewport,
+        width: Int,
+        height: Int,
+        startDistance: Double,
+        endDistance: Double,
         paint: Paint,
-        end: Pair<Float, Float>? = null,
-        start: Pair<Float, Float>? = null,
+        alphaScale: Int,
     ) {
+        if (endDistance <= startDistance || prepared.distances.isEmpty() || alphaScale <= 0) return
+        val start = journey.positionAtDistance(startDistance)
+        val end = journey.positionAtDistance(endDistance)
+        val startScreen = screenPoint(start, prepared, viewport, width, height)
+        val endScreen = screenPoint(end, prepared, viewport, width, height)
+        val firstIndex = prepared.lowerBound(startDistance)
+        val lastIndex = prepared.upperBound(endDistance)
         val path = Path()
-        var moved = false
-        if (start != null) {
-            path.moveTo(start.first, start.second)
-            moved = true
+        path.moveTo(startScreen.first, startScreen.second)
+        var lastX = startScreen.first
+        var lastY = startScreen.second
+        var index = firstIndex
+        while (index <= lastIndex && index in prepared.projected.indices) {
+            val projected = prepared.projected[index]
+            val screen = worldToScreen(
+                WorldPoint(prepared.unwrappedX[index], projected.y),
+                viewport,
+                width,
+                height,
+            )
+            val dx = screen.first - lastX
+            val dy = screen.second - lastY
+            if (dx * dx + dy * dy >= MIN_ROUTE_PIXEL_SPACING * MIN_ROUTE_PIXEL_SPACING) {
+                path.lineTo(screen.first, screen.second)
+                lastX = screen.first
+                lastY = screen.second
+            }
+            index++
         }
-        for (index in indices) {
-            val point = screen[index]
-            if (!moved) path.moveTo(point.first, point.second) else path.lineTo(point.first, point.second)
-            moved = true
-        }
-        if (end != null) {
-            if (!moved) path.moveTo(end.first, end.second) else path.lineTo(end.first, end.second)
-            moved = true
-        }
-        if (moved) canvas.drawPath(path, paint)
+        path.lineTo(endScreen.first, endScreen.second)
+        val previousAlpha = paint.alpha
+        paint.alpha = (previousAlpha * alphaScale / 255f).toInt().coerceIn(0, 255)
+        canvas.drawPath(path, paint)
+        paint.alpha = previousAlpha
     }
 
     private fun screenPoint(
@@ -456,7 +628,13 @@ class TimelinePainter {
     companion object {
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMMM yyyy")
         private const val CAMERA_CONTEXT_KM = 650.0
-        private const val TRAIL_KM = 650.0
+        private const val DEFAULT_JOURNEY_DURATION_SECONDS = 30
+        private const val TRAIL_VISIBLE_SECONDS = 2.5
+        private const val MIN_TRAIL_KM = 80.0
+        private const val MAX_TRAIL_KM = 2_000.0
+        private const val MIN_ROUTE_PIXEL_SPACING = 1.35f
+        private const val OVERVIEW_ROUTE_ALPHA = 190
+        private const val OVERVIEW_PADDING = 1.22
         private const val CAMERA_TRACK_SAMPLES = 480
         private const val CAMERA_DEAD_ZONE_HALF = 0.20
         private const val ZOOM_OUT_ALPHA = 0.32
@@ -464,6 +642,7 @@ class TimelinePainter {
         private const val TILE_ZOOM_HYSTERESIS = 0.15
         private const val MIN_VIEWPORT_SPAN = 0.0003
         private const val MAX_VIEWPORT_SPAN = 0.72
+        private const val MAX_OVERVIEW_VIEWPORT_SPAN = 1.0
         private const val MIN_TILE_ZOOM = 2
         private const val MAX_TILE_ZOOM = 15
     }

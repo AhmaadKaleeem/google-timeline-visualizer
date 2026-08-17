@@ -12,7 +12,7 @@
     <string name="video_title_template">영상 제목 템플릿</string>
     <string name="title_template_help">{year}와 {name}을 사용할 수 있으며 다음 영상에도 저장됩니다.</string>
     <string name="year">연도</string>
-    <string name="duration">영상 길이</string>
+    <string name="duration">이동 재생 길이</string>
     <string name="start_month">시작 월</string>
     <string name="end_month">종료 월</string>
     <string name="owner_name">자동 제목에 표시할 이름</string>
@@ -48,6 +48,7 @@
     <string name="journey_summary">위치 %1$s개 · %2$s km · %3$s</string>
     <string name="preparing_map_progress">지도 준비 중 · 타일 %1$d/%2$d</string>
     <string name="creating_video_progress">영상 만드는 중 · %1$d%%</string>
+    <string name="finishing_video_progress">영상 마무리 중 · %1$d%%</string>
     <string name="progress_with_eta">%1$s · 약 %2$s 남음</string>
     <plurals name="remaining_seconds">
         <item quantity="other">%1$d초</item>

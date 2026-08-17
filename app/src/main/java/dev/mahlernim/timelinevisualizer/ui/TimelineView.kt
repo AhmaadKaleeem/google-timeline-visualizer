@@ -8,6 +8,7 @@ import android.view.View
 import dev.mahlernim.timelinevisualizer.data.TileRepository
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.render.TileId
+import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import dev.mahlernim.timelinevisualizer.render.TimelinePainter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +39,13 @@ class TimelineView @JvmOverloads constructor(
     var progress: Float = 0f
         set(value) {
             val next = value.coerceIn(0f, 1f)
+            if (field == next) return
+            field = next
+            markFrameDirty()
+        }
+    var journeyDurationSeconds: Int = 30
+        set(value) {
+            val next = value.coerceAtLeast(1)
             if (field == next) return
             field = next
             markFrameDirty()
@@ -84,9 +92,11 @@ class TimelineView @JvmOverloads constructor(
             frame?.let { canvas.drawBitmap(it, 0f, 0f, null) }
             return
         }
+        val animationFrame = TimelineAnimation.frameAtOverallProgress(progress, journeyDurationSeconds)
         val tilesToLoad = buildSet {
             listOf(progress, (progress + 0.015f).coerceAtMost(1f), (progress + 0.03f).coerceAtMost(1f)).forEach {
-                addAll(painter.requiredTiles(painter.viewport(data, it, width, height)).map { tile -> tile.id })
+                val lookahead = TimelineAnimation.frameAtOverallProgress(it, journeyDurationSeconds)
+                addAll(painter.requiredTiles(painter.viewport(data, lookahead, width, height)).map { tile -> tile.id })
             }
         }
         tilesToLoad.forEach { tile ->
@@ -100,7 +110,16 @@ class TimelineView @JvmOverloads constructor(
         }
         val target = frame ?: return
         val targetCanvas = frameCanvas ?: return
-        painter.draw(targetCanvas, width, height, data, progress, videoTitle, tiles::cached)
+        painter.draw(
+            targetCanvas,
+            width,
+            height,
+            data,
+            animationFrame,
+            journeyDurationSeconds,
+            videoTitle,
+            tiles::cached,
+        )
         frameDirty = false
         canvas.drawBitmap(target, 0f, 0f, null)
     }

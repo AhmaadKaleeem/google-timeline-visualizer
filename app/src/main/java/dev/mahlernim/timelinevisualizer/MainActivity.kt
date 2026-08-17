@@ -46,6 +46,7 @@ import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.Timeline
 import dev.mahlernim.timelinevisualizer.model.TitleTemplate
+import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -141,9 +142,17 @@ class MainActivity : AppCompatActivity() {
         binding.ownerInput.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commitTitlePreferences() }
         binding.titleInput.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commitTitlePreferences() }
 
-        val durations = listOf(15, 30, 60, 90).map { resources.getQuantityString(R.plurals.duration_seconds, it, it) }
+        val durations = listOf(15, 30, 45, 60, 75, 90).map {
+            resources.getQuantityString(R.plurals.duration_seconds, it, it)
+        }
         binding.durationDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, durations))
         binding.durationDropdown.setText(resources.getQuantityString(R.plurals.duration_seconds, 30, 30), false)
+        binding.timelineView.journeyDurationSeconds = 30
+        binding.durationDropdown.setOnItemClickListener { _, _, _, _ ->
+            animation?.cancel()
+            binding.timelineView.journeyDurationSeconds = selectedDurationSeconds()
+            showProgress(binding.timelineSeek.progress / 1000f)
+        }
         makeDropdownOpenReliably(binding.durationDropdown)
         configureMonthDropdowns()
         renderCreations()
@@ -301,7 +310,8 @@ class MainActivity : AppCompatActivity() {
             showProgress(0f)
             0
         } else binding.timelineSeek.progress
-        val durationMs = selectedDurationSeconds() * 1000L
+        binding.timelineView.journeyDurationSeconds = selectedDurationSeconds()
+        val durationMs = (TimelineAnimation.totalDurationSeconds(selectedDurationSeconds()) * 1000f).toLong()
         animation = ValueAnimator.ofInt(start, 1000).apply {
             duration = ((1000 - start) / 1000f * durationMs).toLong().coerceAtLeast(250)
             addUpdateListener { value ->
@@ -436,6 +446,10 @@ class MainActivity : AppCompatActivity() {
             )
             ExportPhase.CREATING_VIDEO -> getString(
                 R.string.creating_video_progress,
+                (progress.completed * 100f / progress.total.coerceAtLeast(1)).toInt(),
+            )
+            ExportPhase.FINISHING_VIDEO -> getString(
+                R.string.finishing_video_progress,
                 (progress.completed * 100f / progress.total.coerceAtLeast(1)).toInt(),
             )
             ExportPhase.COMPLETE -> return

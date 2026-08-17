@@ -49,4 +49,19 @@ class VideoExportStateStoreTest {
         assertEquals(VideoExportStatus.IDLE, VideoExportCoordinator.state.value.status)
         assertEquals(VideoExportStatus.IDLE, store.load().status)
     }
+
+    @Test
+    fun finishingProgressSurvivesCoordinatorRecreation() {
+        val expected = VideoExportSnapshot(
+            status = VideoExportStatus.RUNNING,
+            progress = ExportProgress(0.99f, ExportPhase.FINISHING_VIDEO, 12, 36),
+            startedAtMillis = 1_786_900_000_000L,
+        )
+        store.save(expected)
+
+        VideoExportCoordinator.resetForTest()
+        VideoExportCoordinator.restore(context)
+
+        assertEquals(expected, VideoExportCoordinator.state.value)
+    }
 }

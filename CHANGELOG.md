@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.0
+
+- Keep video creation responsive on dense yearly Timelines by drawing a bounded,
+  pixel-simplified trail instead of reprocessing the complete route every frame.
+- Fade older travel behind the moving marker while keeping the newest route clear.
+- Add a 1.5-second ending that zooms out, reveals the complete journey, and holds
+  the finished overview for half a second.
+- Add 45-second and 75-second journey durations.
+- Prefer a device-reported hardware H.264 encoder when a compatible one is available.
+- Show a separate finishing stage while the overview ending is rendered.
+
 ## 1.6.1
 
 - Start videos with a clean map instead of drawing the entire future route.

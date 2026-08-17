@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.view.View
 import android.widget.LinearLayout
+import android.widget.AutoCompleteTextView
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.creations.CreationRecord
 import dev.mahlernim.timelinevisualizer.creations.CreationStore
@@ -149,6 +150,20 @@ class MainActivityTest {
         controller.pause().stop().destroy()
 
         assertEquals(VideoExportStatus.RUNNING, VideoExportStateStore(context).load().status)
+    }
+
+    @Test
+    fun durationMenuIncludesFortyFiveAndSeventyFiveSeconds() {
+        val activity = launchActivity()
+        val dropdown = activity.findViewById<AutoCompleteTextView>(R.id.durationDropdown)
+        val values = (0 until dropdown.adapter.count).map { dropdown.adapter.getItem(it).toString() }
+
+        assertEquals(
+            listOf(15, 30, 45, 60, 75, 90).map {
+                activity.resources.getQuantityString(R.plurals.duration_seconds, it, it)
+            },
+            values,
+        )
     }
 
     private fun launchActivity(): MainActivity {
