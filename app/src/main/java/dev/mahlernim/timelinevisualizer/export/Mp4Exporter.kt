@@ -9,8 +9,11 @@ import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
+import android.os.Build
 import dev.mahlernim.timelinevisualizer.data.TileRepository
 import dev.mahlernim.timelinevisualizer.model.Journey
+import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
+import dev.mahlernim.timelinevisualizer.render.TimelineFrame
 import dev.mahlernim.timelinevisualizer.render.TimelinePainter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -20,7 +23,7 @@ import kotlin.coroutines.coroutineContext
 import kotlin.math.ceil
 import kotlin.math.max
 
-enum class ExportPhase { PREPARING_MAP, CREATING_VIDEO, COMPLETE }
+enum class ExportPhase { PREPARING_MAP, CREATING_VIDEO, FINISHING_VIDEO, COMPLETE }
 
 data class ExportProgress(
     val fraction: Float,
@@ -53,6 +56,11 @@ class Mp4Exporter(
                 val progress = sample.toFloat() / sampleCount
                 addAll(painter.requiredTiles(painter.viewport(journey, progress, width, height)).map { it.id })
             }
+            for (sample in 0..OUTRO_TILE_SAMPLES) {
+                val outroProgress = sample.toFloat() / OUTRO_TILE_SAMPLES
+                val frame = TimelineFrame(1f, outroProgress)
+                addAll(painter.requiredTiles(painter.viewport(journey, frame, width, height)).map { it.id })
+            }
         }
         onProgress(ExportProgress(0f, ExportPhase.PREPARING_MAP, 0, requiredTiles.size))
         requiredTiles.forEachIndexed { index, tile ->
@@ -60,7 +68,7 @@ class Mp4Exporter(
             tileRepository.load(tile)
             onProgress(
                 ExportProgress(
-                    (index + 1f) / requiredTiles.size.coerceAtLeast(1) * 0.15f,
+                    (index + 1f) / requiredTiles.size.coerceAtLeast(1) * PREPARING_PROGRESS_WEIGHT,
                     ExportPhase.PREPARING_MAP,
                     index + 1,
                     requiredTiles.size,
@@ -117,10 +125,22 @@ class Mp4Exporter(
         try {
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             codec.start()
-            val frameCount = durationSeconds * fps
+            val journeyFrameCount = durationSeconds * fps
+            val outroFrameCount = (TimelineAnimation.OUTRO_SECONDS * fps).toInt()
+            val frameCount = journeyFrameCount + outroFrameCount
             for (frame in 0 until frameCount) {
                 coroutineContext.ensureActive()
-                val progress = if (frameCount == 1) 1f else frame.toFloat() / (frameCount - 1)
+                val animationFrame = if (frame < journeyFrameCount) {
+                    val progress = if (journeyFrameCount == 1) 1f else frame.toFloat() / (journeyFrameCount - 1)
+                    TimelineFrame(progress, 0f)
+                } else {
+                    val outroFrame = frame - journeyFrameCount
+                    val outroElapsed = outroFrame.toFloat() / fps
+                    TimelineFrame(
+                        1f,
+                        (outroElapsed / TimelineAnimation.OUTRO_TRANSITION_SECONDS).coerceIn(0f, 1f),
+                    )
+                }
                 var inputIndex: Int
                 do {
                     inputIndex = codec.dequeueInputBuffer(10_000)
@@ -128,7 +148,16 @@ class Mp4Exporter(
                 } while (inputIndex < 0)
 
                 val canvas = Canvas(bitmap)
-                painter.draw(canvas, width, height, journey, progress, title, tileRepository::cached)
+                painter.draw(
+                    canvas,
+                    width,
+                    height,
+                    journey,
+                    animationFrame,
+                    durationSeconds,
+                    title,
+                    tileRepository::cached,
+                )
                 bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
                 argbToYuv420(pixels, yuv, width, height, encoder.colorFormat)
                 val input = codec.getInputBuffer(inputIndex) ?: error("Encoder input buffer is unavailable")
@@ -137,13 +166,27 @@ class Mp4Exporter(
                 input.put(yuv)
                 codec.queueInputBuffer(inputIndex, 0, yuv.size, frame * 1_000_000L / fps, 0)
                 drain(false)
-                if (frame % fps == 0 || frame == frameCount - 1) {
+                val phase = if (frame < journeyFrameCount) ExportPhase.CREATING_VIDEO else ExportPhase.FINISHING_VIDEO
+                val phaseChanged = frame == journeyFrameCount
+                if (frame % fps == 0 || phaseChanged || frame == frameCount - 1) {
+                    val phaseCompleted = if (phase == ExportPhase.CREATING_VIDEO) {
+                        frame + 1
+                    } else {
+                        frame - journeyFrameCount + 1
+                    }
+                    val phaseTotal = if (phase == ExportPhase.CREATING_VIDEO) journeyFrameCount else outroFrameCount
                     onProgress(
                         ExportProgress(
-                            0.15f + 0.85f * (frame + 1f) / frameCount,
-                            ExportPhase.CREATING_VIDEO,
-                            frame + 1,
-                            frameCount,
+                            if (phase == ExportPhase.CREATING_VIDEO) {
+                                PREPARING_PROGRESS_WEIGHT +
+                                    JOURNEY_PROGRESS_WEIGHT * phaseCompleted / phaseTotal.coerceAtLeast(1)
+                            } else {
+                                PREPARING_PROGRESS_WEIGHT + JOURNEY_PROGRESS_WEIGHT +
+                                    FINISHING_PROGRESS_WEIGHT * phaseCompleted / phaseTotal.coerceAtLeast(1)
+                            },
+                            phase,
+                            phaseCompleted,
+                            phaseTotal,
                         ),
                     )
                 }
@@ -176,7 +219,11 @@ class Mp4Exporter(
             MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar,
             MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar,
         )
-        for (info in MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos) {
+        val codecs = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.toList()
+            .sortedByDescending { info ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && info.isHardwareAccelerated) 1 else 0
+            }
+        for (info in codecs) {
             if (!info.isEncoder || !info.supportedTypes.any { it.equals(MediaFormat.MIMETYPE_VIDEO_AVC, true) }) continue
             val formats = info.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC).colorFormats.toSet()
             preferredFormats.firstOrNull(formats::contains)?.let { return EncoderChoice(info.name, it) }
@@ -214,4 +261,11 @@ class Mp4Exporter(
     }
 
     private data class EncoderChoice(val name: String, val colorFormat: Int)
+
+    companion object {
+        private const val OUTRO_TILE_SAMPLES = 12
+        private const val PREPARING_PROGRESS_WEIGHT = 0.10f
+        private const val JOURNEY_PROGRESS_WEIGHT = 0.80f
+        private const val FINISHING_PROGRESS_WEIGHT = 0.10f
+    }
 }

@@ -7,7 +7,8 @@ Create your story
 • Select a whole year or a custom range of months
 • Personalize a reusable title such as “2026 Mina's Timeline”
 • Preview the animation before creating the full-quality video
-• Choose a 15, 30, 60, or 90-second video
+• Choose a 15, 30, 45, 60, 75, or 90-second journey
+• Finish with a smooth zoom-out and complete-route overview
 • Keep creating in the background with progress and completion notifications
 
 Keep your videos together

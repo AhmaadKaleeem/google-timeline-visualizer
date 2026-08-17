@@ -39,6 +39,19 @@ class TimelinePainterTest {
         )
     }
 
+    @Test
+    fun endingOverviewFitsAWorldwideJourney() {
+        val points = listOf(
+            GeoPoint(Instant.parse("2025-01-01T00:00:00Z"), 10.0, -150.0),
+            GeoPoint(Instant.parse("2025-06-01T00:00:00Z"), 10.0, 0.0),
+            GeoPoint(Instant.parse("2025-12-01T00:00:00Z"), 10.0, 150.0),
+        )
+        val journey = Journey.from(points, 2025)
+        val viewport = TimelinePainter().viewport(journey, TimelineFrame(1f, 1f), SIZE, SIZE)
+
+        assertTrue("The ending should fit the complete worldwide route", viewport.maxX - viewport.minX > 0.8)
+    }
+
     private fun render(journey: Journey, progress: Float): Bitmap {
         val bitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
         TimelinePainter().draw(Canvas(bitmap), SIZE, SIZE, journey, progress, "Timeline") { null }

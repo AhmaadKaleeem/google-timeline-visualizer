@@ -51,14 +51,20 @@ Export Timeline data**, then move the JSON file to your Android phone.
 1. Select **Load Timeline** and choose the exported file.
 2. Choose a year. The full year is selected by default; change **Start month** and
    **End month** if you want a shorter period.
-3. Confirm the name and title template, then choose a 15, 30, 60, or 90-second
-   video. The template is saved for next time and supports `{year}` and `{name}`.
+3. Confirm the name and title template, then choose a 15, 30, 45, 60, 75, or
+   90-second journey. The template is saved for next time and supports `{year}`
+   and `{name}`.
 4. Select **Preview** to check the animated map. This is an interactive preview;
    the saved video uses the same design with map tiles prepared before rendering.
 5. Select **Create video** and choose where to save it. The app shows each stage,
    an estimated time when enough progress has been measured, and a cancel button.
    You can switch apps or turn off the screen while it continues.
 6. When the video is ready, choose **Watch video**, **Share**, or **Create another**.
+
+Older travel fades behind the moving marker so long, detailed Timelines remain
+clear and efficient to render. After the selected journey duration, the video adds
+a 1.5-second ending that zooms out, reveals the complete route, and holds the final
+overview for half a second.
 
 If you cancel, the app removes the incomplete output file. After a preview reaches
 the end, selecting **Preview** again starts it from the beginning. On Android 13

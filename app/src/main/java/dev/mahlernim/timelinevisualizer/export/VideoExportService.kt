@@ -23,6 +23,7 @@ import dev.mahlernim.timelinevisualizer.creations.CreationMedia
 import dev.mahlernim.timelinevisualizer.creations.CreationRecord
 import dev.mahlernim.timelinevisualizer.creations.CreationStore
 import dev.mahlernim.timelinevisualizer.data.TileRepository
+import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -228,7 +229,8 @@ class VideoExportService : Service() {
                 title = request.title,
                 fileName = metadata?.fileName ?: "${request.title}.mp4",
                 createdAtMillis = System.currentTimeMillis(),
-                durationSeconds = metadata?.durationSeconds?.takeIf { it > 0 } ?: request.durationSeconds,
+                durationSeconds = metadata?.durationSeconds?.takeIf { it > 0 }
+                    ?: ceil(TimelineAnimation.totalDurationSeconds(request.durationSeconds).toDouble()).toInt(),
                 year = request.journey.year,
                 startMonth = request.startMonth,
                 endMonth = request.endMonth,
@@ -322,6 +324,10 @@ class VideoExportService : Service() {
             )
             ExportPhase.CREATING_VIDEO -> getString(
                 R.string.creating_video_progress,
+                (progress.completed * 100f / progress.total.coerceAtLeast(1)).toInt(),
+            )
+            ExportPhase.FINISHING_VIDEO -> getString(
+                R.string.finishing_video_progress,
                 (progress.completed * 100f / progress.total.coerceAtLeast(1)).toInt(),
             )
             ExportPhase.COMPLETE -> getString(R.string.video_saved)
