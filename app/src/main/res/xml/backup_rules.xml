@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
     <exclude domain="file" path="timeline-imports/" />
+    <exclude domain="file" path="creation-thumbnails/" />
+    <exclude domain="sharedpref" path="creations.xml" />
 </full-backup-content>

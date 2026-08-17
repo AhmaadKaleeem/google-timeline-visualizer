@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.0
+
+- Add a persistent Creations library for generated and imported MP4 videos.
+- Keep durable access to user-selected videos and show thumbnails, titles, dates,
+  durations, and Timeline periods when available.
+- Add Watch, Share, Remove from list, and separately confirmed Delete video actions.
+- Detect moved or deleted files without removing their library entries automatically.
+- Add multi-select import for videos made before the Creations library was added.
+- Add a user-facing link to check the latest GitHub release.
+- Keep movement processing unchanged; small valid movements remain part of the route.
+
 ## 1.2.0
 
 - Make page scrolling responsive by caching preview frames and prepared route geometry.

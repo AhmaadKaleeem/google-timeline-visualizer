@@ -5,9 +5,9 @@ locally.
 
 ## Data the app can access
 
-The app reads only a Timeline JSON document that the user explicitly chooses in
-Android's system document picker. It does not request device location, Google
-account access, contacts, photos, advertising identifiers, or broad storage
+The app reads only Timeline JSON and MP4 documents that the user explicitly
+chooses in Android's system document picker. It does not request device location,
+Google account access, contacts, photos, advertising identifiers, or broad storage
 permission.
 
 ## Data storage
@@ -17,7 +17,13 @@ not copied into app storage. Generated videos are written to the destination the
 user chooses. Cached basemap image tiles may remain in the app's temporary cache
 and can be removed by clearing the app cache or uninstalling the app.
 
-Android backup rules exclude imported-location and cache directories.
+For the Creations library, the app stores a local index containing the selected
+video URI, title, filename, duration, creation date, and Timeline period when
+available. A small thumbnail is stored in private app storage. The app requests
+persistent access only to MP4 files that the user creates or explicitly adds.
+
+Android backup and device-transfer rules exclude the Creations index and thumbnails
+so video references and preview images are not copied to another device.
 
 ## Network use
 
@@ -34,8 +40,10 @@ developer-operated server.
 
 Use Android's **Settings → Apps → Timeline Visualizer → Storage & cache → Clear
 cache** to remove cached map tiles. Clear storage or uninstall the app to remove
-all application data. Delete exported MP4 files from the destination in which
-you saved them.
+the Creations index and thumbnails along with all other application data. Removing
+an entry from Creations does not delete the MP4. Use the separately confirmed
+**Delete video** action, or delete the file from its saved location, to remove the
+actual video.
 
 ## Third-party map sources
 
