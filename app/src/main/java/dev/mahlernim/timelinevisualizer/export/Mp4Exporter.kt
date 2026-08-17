@@ -20,6 +20,15 @@ import kotlin.coroutines.coroutineContext
 import kotlin.math.ceil
 import kotlin.math.max
 
+enum class ExportPhase { PREPARING_MAP, CREATING_VIDEO, COMPLETE }
+
+data class ExportProgress(
+    val fraction: Float,
+    val phase: ExportPhase,
+    val completed: Int,
+    val total: Int,
+)
+
 class Mp4Exporter(
     private val contentResolver: ContentResolver,
     private val tileRepository: TileRepository,
@@ -29,7 +38,7 @@ class Mp4Exporter(
         journey: Journey,
         title: String,
         durationSeconds: Int,
-        onProgress: (Float, String) -> Unit,
+        onProgress: (ExportProgress) -> Unit,
     ) = withContext(Dispatchers.Default) {
         require(journey.points.size >= 2) { "At least two location points are needed" }
         val width = 480
@@ -37,7 +46,6 @@ class Mp4Exporter(
         val fps = 24
         val painter = TimelinePainter()
 
-        onProgress(0f, "Preparing map tiles…")
         val sampleCount = max(durationSeconds * 2, ceil(journey.totalDistanceKm / 250.0).toInt())
             .coerceIn(20, durationSeconds * 8)
         val requiredTiles = buildSet {
@@ -46,10 +54,18 @@ class Mp4Exporter(
                 addAll(painter.requiredTiles(painter.viewport(journey, progress, width, height)).map { it.id })
             }
         }
+        onProgress(ExportProgress(0f, ExportPhase.PREPARING_MAP, 0, requiredTiles.size))
         requiredTiles.forEachIndexed { index, tile ->
             coroutineContext.ensureActive()
             tileRepository.load(tile)
-            onProgress(index.toFloat() / requiredTiles.size.coerceAtLeast(1) * 0.15f, "Preparing map ${index + 1}/${requiredTiles.size}")
+            onProgress(
+                ExportProgress(
+                    (index + 1f) / requiredTiles.size.coerceAtLeast(1) * 0.15f,
+                    ExportPhase.PREPARING_MAP,
+                    index + 1,
+                    requiredTiles.size,
+                ),
+            )
         }
 
         val encoder = selectEncoder()
@@ -122,7 +138,14 @@ class Mp4Exporter(
                 codec.queueInputBuffer(inputIndex, 0, yuv.size, frame * 1_000_000L / fps, 0)
                 drain(false)
                 if (frame % fps == 0 || frame == frameCount - 1) {
-                    onProgress(0.15f + 0.85f * (frame + 1f) / frameCount, "Rendering video ${frame + 1}/$frameCount")
+                    onProgress(
+                        ExportProgress(
+                            0.15f + 0.85f * (frame + 1f) / frameCount,
+                            ExportPhase.CREATING_VIDEO,
+                            frame + 1,
+                            frameCount,
+                        ),
+                    )
                 }
             }
 
@@ -137,7 +160,7 @@ class Mp4Exporter(
                 }
             }
             while (!drain(true)) coroutineContext.ensureActive()
-            onProgress(1f, "Video saved")
+            onProgress(ExportProgress(1f, ExportPhase.COMPLETE, 1, 1))
         } finally {
             runCatching { codec.stop() }
             codec.release()

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0
+
+- Make page scrolling responsive by caching preview frames and prepared route geometry.
+- Save reusable title templates with `{year}` and `{name}` placeholders, and apply
+  typing changes after a short delay or when the field loses focus.
+- Rename the main actions to Load Timeline, Preview, and Create video.
+- Add cancellation with incomplete-file cleanup during video creation.
+- Show phase-aware progress and an estimated time remaining once enough progress
+  has been measured.
+- Add a Video ready panel for watching, sharing, or creating another video.
+- Refine and proofread the English and Korean guidance.
+
 ## 1.1.0
 
 - Add smooth great-circle interpolation and camera tracking for long trips.

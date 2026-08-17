@@ -2,6 +2,7 @@ package dev.mahlernim.timelinevisualizer.ui
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Bitmap
 import android.util.AttributeSet
 import android.view.View
 import dev.mahlernim.timelinevisualizer.data.TileRepository
@@ -24,21 +25,28 @@ class TimelineView @JvmOverloads constructor(
     private val tiles = TileRepository(context.applicationContext)
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val loading = ConcurrentHashMap.newKeySet<TileId>()
+    private var frame: Bitmap? = null
+    private var frameCanvas: Canvas? = null
+    private var frameDirty = true
+    private var redrawPosted = false
 
     var journey: Journey? = null
         set(value) {
             field = value
-            invalidate()
+            markFrameDirty()
         }
     var progress: Float = 0f
         set(value) {
-            field = value.coerceIn(0f, 1f)
-            invalidate()
+            val next = value.coerceIn(0f, 1f)
+            if (field == next) return
+            field = next
+            markFrameDirty()
         }
     var videoTitle: String = "My Trips"
         set(value) {
+            if (field == value) return
             field = value
-            invalidate()
+            markFrameDirty()
         }
 
     override fun onAttachedToWindow() {
@@ -46,11 +54,20 @@ class TimelineView @JvmOverloads constructor(
         if (!scope.coroutineContext[Job]!!.isActive) {
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         }
+        if (frame == null && width > 0 && height > 0) allocateFrame(width, height)
     }
 
     override fun onDetachedFromWindow() {
         scope.cancel()
+        frame?.recycle()
+        frame = null
+        frameCanvas = null
         super.onDetachedFromWindow()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        allocateFrame(w, h)
+        frameDirty = true
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -63,6 +80,10 @@ class TimelineView @JvmOverloads constructor(
         super.onDraw(canvas)
         val data = journey ?: return
         if (data.points.isEmpty()) return
+        if (!frameDirty) {
+            frame?.let { canvas.drawBitmap(it, 0f, 0f, null) }
+            return
+        }
         val tilesToLoad = buildSet {
             listOf(progress, (progress + 0.015f).coerceAtMost(1f), (progress + 0.03f).coerceAtMost(1f)).forEach {
                 addAll(painter.requiredTiles(painter.viewport(data, it, width, height)).map { tile -> tile.id })
@@ -73,10 +94,35 @@ class TimelineView @JvmOverloads constructor(
                 scope.launch {
                     tiles.load(tile)
                     loading.remove(tile)
-                    invalidate()
+                    markFrameDirty()
                 }
             }
         }
-        painter.draw(canvas, width, height, data, progress, videoTitle, tiles::cached)
+        val target = frame ?: return
+        val targetCanvas = frameCanvas ?: return
+        painter.draw(targetCanvas, width, height, data, progress, videoTitle, tiles::cached)
+        frameDirty = false
+        canvas.drawBitmap(target, 0f, 0f, null)
+    }
+
+    private fun allocateFrame(width: Int, height: Int) {
+        frame?.recycle()
+        if (width <= 0 || height <= 0) {
+            frame = null
+            frameCanvas = null
+            return
+        }
+        frame = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        frameCanvas = Canvas(frame!!)
+    }
+
+    private fun markFrameDirty() {
+        frameDirty = true
+        if (redrawPosted) return
+        redrawPosted = true
+        postInvalidateOnAnimation()
+        post {
+            redrawPosted = false
+        }
     }
 }

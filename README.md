@@ -15,7 +15,7 @@ an MP4 ready to share.
 The app is not yet on Google Play. Install it from this repository's
 [latest release](https://github.com/mahlernim/google-timeline-visualizer/releases/latest):
 
-1. Under **Assets**, download `TimelineVisualizer-v1.1.0.apk` on your phone.
+1. Under **Assets**, download `TimelineVisualizer-v1.2.0.apk` on your phone.
 2. Open the downloaded file.
 3. If Android blocks the installation, select **Settings**, allow your browser or
    file manager to **Install unknown apps**, then return and try again.
@@ -48,13 +48,19 @@ Export Timeline data**, then move the JSON file to your Android phone.
 
 ## Create and share a video
 
-1. Select **Open Timeline JSON** and choose the exported file.
+1. Select **Load Timeline** and choose the exported file.
 2. Choose a year. The full year is selected by default; change **Start month** and
    **End month** if you want a shorter period.
-3. Confirm the name and title, then choose a 15, 30, 60, or 90-second video.
-4. Preview with **Play**. After playback ends, **Play** starts again from the beginning.
-5. Select **Export MP4**, choose where to save it, then use **Share** to open your
-   phone's social and messaging apps.
+3. Confirm the name and title template, then choose a 15, 30, 60, or 90-second
+   video. The template is saved for next time and supports `{year}` and `{name}`.
+4. Select **Preview** to check the animated map. This is an interactive preview;
+   the saved video uses the same design with map tiles prepared before rendering.
+5. Select **Create video** and choose where to save it. The app shows each stage,
+   an estimated time when enough progress has been measured, and a cancel button.
+6. When the video is ready, choose **Watch video**, **Share**, or **Create another**.
+
+If you cancel, the app removes the incomplete output file. After a preview reaches
+the end, selecting **Preview** again starts it from the beginning.
 
 Long flights and other sparse routes are interpolated along a great-circle path,
 so the camera follows the trip smoothly instead of jumping to the destination.
