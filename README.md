@@ -15,7 +15,7 @@ an MP4 ready to share.
 The app is not yet on Google Play. Install it from this repository's
 [latest release](https://github.com/mahlernim/google-timeline-visualizer/releases/latest):
 
-1. Under **Assets**, download `TimelineVisualizer-v1.2.0.apk` on your phone.
+1. Under **Assets**, download `TimelineVisualizer-v1.3.0.apk` on your phone.
 2. Open the downloaded file.
 3. If Android blocks the installation, select **Settings**, allow your browser or
    file manager to **Install unknown apps**, then return and try again.
@@ -62,6 +62,22 @@ Export Timeline data**, then move the JSON file to your Android phone.
 If you cancel, the app removes the incomplete output file. After a preview reaches
 the end, selecting **Preview** again starts it from the beginning.
 
+## Keep your creations
+
+Completed videos are added to **Creations** automatically. Each entry keeps its
+thumbnail, title, Timeline period, duration, and creation date, with quick actions
+to watch or share it. The MP4 remains in the folder you selected; the app stores
+only a small local index and thumbnail.
+
+Use **Add videos** to include MP4s made before this library was introduced. You can
+select several videos at once. If a file is moved or deleted outside the app, its
+entry is marked **File unavailable** so you can remove it from the list.
+
+**Remove from list** leaves the MP4 untouched. **Delete video** is a separate,
+confirmed action that permanently deletes the file when its storage provider allows
+it. Use **Check for updates on GitHub** at the bottom of the app to open the latest
+official release.
+
 Long flights and other sparse routes are interpolated along a great-circle path,
 so the camera follows the trip smoothly instead of jumping to the destination.
 
@@ -76,8 +92,8 @@ so the camera follows the trip smoothly instead of jumping to the destination.
 ## Privacy
 
 No Google sign-in, location permission, account permission, analytics, or broad
-storage permission is used. The app reads only the JSON file you choose, and video
-rendering stays on the device.
+storage permission is used. The app reads only the JSON and video files you choose,
+and video rendering stays on the device.
 
 Google Sign-In could provide a profile name, but Google does not expose the
 phone's Timeline history through Sign-In. Requiring it would add account access

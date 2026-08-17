@@ -52,4 +52,31 @@
     <string name="timeline_preview">Animated map preview of the selected year</string>
     <string name="playback_position">Timeline playback position</string>
     <string name="privacy_summary">Private by design: the JSON stays on this device. CARTO receives tile requests for the map areas shown; no analytics or account is used.</string>
+    <string name="creations">Creations</string>
+    <string name="add_existing_videos">Add videos</string>
+    <string name="adding_videos">Adding…</string>
+    <string name="no_creations">Videos you create or add will stay available here.</string>
+    <string name="show_all_creations">Show all (%1$d)</string>
+    <string name="show_fewer_creations">Show fewer</string>
+    <string name="watch">Watch</string>
+    <string name="more">More</string>
+    <string name="video_thumbnail">Video thumbnail</string>
+    <string name="file_unavailable">File unavailable</string>
+    <string name="remove_from_list">Remove from list</string>
+    <string name="delete_video">Delete video</string>
+    <string name="delete_video_title">Delete this video?</string>
+    <string name="delete_video_message">This permanently deletes the MP4 from its saved location. This cannot be undone.</string>
+    <string name="delete">Delete</string>
+    <string name="video_deleted">Video deleted</string>
+    <string name="video_removed">Removed from Creations</string>
+    <string name="undo">Undo</string>
+    <string name="delete_video_failed">This storage location did not allow the video to be deleted</string>
+    <string name="video_import_failed">One or more videos could not be added</string>
+    <plurals name="videos_added">
+        <item quantity="one">%1$d video added</item>
+        <item quantity="other">%1$d videos added</item>
+    </plurals>
+    <string name="unknown_duration">Unknown length</string>
+    <string name="check_for_updates">Check for updates on GitHub</string>
+    <string name="github_unavailable">Could not open the GitHub releases page</string>
 </resources>
