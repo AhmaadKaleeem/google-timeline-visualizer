@@ -2,5 +2,8 @@
 <full-backup-content>
     <exclude domain="file" path="timeline-imports/" />
     <exclude domain="file" path="creation-thumbnails/" />
+    <exclude domain="file" path="pending-video-export.bin" />
+    <exclude domain="file" path="pending-video-export.tmp" />
     <exclude domain="sharedpref" path="creations.xml" />
+    <exclude domain="sharedpref" path="video_export_state.xml" />
 </full-backup-content>

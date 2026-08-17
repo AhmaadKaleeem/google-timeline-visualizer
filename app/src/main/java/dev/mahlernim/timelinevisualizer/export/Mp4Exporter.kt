@@ -76,7 +76,7 @@ class Mp4Exporter(
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
         }
         val codec = MediaCodec.createByCodecName(encoder.name)
-        val descriptor = contentResolver.openFileDescriptor(destination, "rw")
+        val descriptor = contentResolver.openFileDescriptor(destination, "rwt")
             ?: error("Could not open the selected output file")
         val muxer = MediaMuxer(descriptor.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
         var muxerStarted = false

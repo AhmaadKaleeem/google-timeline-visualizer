@@ -36,6 +36,15 @@
     <string name="create_another">Create another</string>
     <string name="cancel_video_creation">Cancel video creation</string>
     <string name="video_creation_cancelled">Video creation cancelled</string>
+    <string name="cancel">Cancel</string>
+    <string name="not_now">Not now</string>
+    <string name="background_video_title">Keep creating in the background</string>
+    <string name="background_video_message">Allow notifications to see video progress after leaving the app and get an alert when your video is ready. Video creation continues even if notifications are not allowed.</string>
+    <string name="video_request_unavailable">Video creation could not be started. Please choose a save location again.</string>
+    <string name="creating_video_notification_title">Creating your timeline video</string>
+    <string name="starting_video_creation">Starting video creation…</string>
+    <string name="video_creation_notification_channel">Video creation</string>
+    <string name="video_creation_notification_channel_description">Progress and completion alerts for timeline videos</string>
     <string name="no_video_player">No app is available to play this video</string>
     <string name="journey_summary">%1$s points · %2$s km · %3$s</string>
     <string name="preparing_map_progress">Preparing map · %1$d/%2$d</string>

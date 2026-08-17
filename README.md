@@ -15,7 +15,7 @@ an MP4 ready to share.
 The app is not yet on Google Play. Install it from this repository's
 [latest release](https://github.com/mahlernim/google-timeline-visualizer/releases/latest):
 
-1. Under **Assets**, download `TimelineVisualizer-v1.5.0.apk` on your phone.
+1. Under **Assets**, download `TimelineVisualizer-v1.6.0.apk` on your phone.
 2. Open the downloaded file.
 3. If Android blocks the installation, select **Settings**, allow your browser or
    file manager to **Install unknown apps**, then return and try again.
@@ -57,10 +57,13 @@ Export Timeline data**, then move the JSON file to your Android phone.
    the saved video uses the same design with map tiles prepared before rendering.
 5. Select **Create video** and choose where to save it. The app shows each stage,
    an estimated time when enough progress has been measured, and a cancel button.
+   You can switch apps or turn off the screen while it continues.
 6. When the video is ready, choose **Watch video**, **Share**, or **Create another**.
 
 If you cancel, the app removes the incomplete output file. After a preview reaches
-the end, selecting **Preview** again starts it from the beginning.
+the end, selecting **Preview** again starts it from the beginning. On Android 13
+or newer, allow notifications to follow progress outside the app and receive a
+ready alert. Video creation continues even if you decline notification access.
 
 ## Keep your creations
 

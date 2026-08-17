@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.0
+
+- Continue video creation in a foreground media-processing service when the user
+  switches apps or turns off the screen.
+- Show progress and estimated time in an optional Android notification, with a
+  Cancel action and Watch and Share actions when the video is ready.
+- Preserve the pending route and progress in private app storage so interrupted
+  work can restart after Android recreates the app process.
+- Remove incomplete output and temporary route data after cancellation or failure.
+
 ## 1.5.0
 
 - Add a central camera dead zone so routine back-and-forth travel does not move

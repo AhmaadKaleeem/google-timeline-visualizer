@@ -19,10 +19,18 @@ permission.
 
 ## Data storage
 
-Timeline points are held in memory while the app is open. The selected JSON is
-not copied into app storage. Generated videos are written to the destination the
+The selected JSON is not copied into app storage. While a video is being created,
+the selected route points and export settings are temporarily stored in private
+app storage so creation can continue when the app is no longer on screen and can
+restart if Android recreates the app process. This temporary export data is
+deleted after completion, cancellation, or failure and is excluded from Android
+backup and device transfer. Generated videos are written to the destination the
 user chooses. Cached basemap image tiles may remain in the app's temporary cache
 and can be removed by clearing the app cache or uninstalling the app.
+
+On Android 13 and newer, the app may request notification permission so it can
+show video progress and a completion alert. Declining this permission does not
+stop video creation and does not grant access to any personal data.
 
 For the Creations library, the app stores a local index containing the selected
 video URI, title, filename, duration, creation date, and Timeline period when

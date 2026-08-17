@@ -42,6 +42,21 @@ content, gambling, controlled substances, user interaction, or unrestricted web
 browsing. It opens only the privacy policy, project page, update destination, and
 the phone's Location settings through explicit buttons.
 
+## Foreground service and notifications
+
+- Foreground service type: **Media processing** on Android 15 and newer;
+  **Data sync** is the compatibility type on older Android versions for the same
+  user-requested local file-processing task
+- Purpose: encode the user-requested Timeline animation into an MP4 after the app
+  is no longer visible or the screen is off
+- User initiation: the service starts only after the user selects **Create video**
+  and chooses an output file
+- User awareness and control: the ongoing notification shows progress and a
+  **Cancel** action; the completed notification offers **Watch** and **Share**
+- `POST_NOTIFICATIONS`: requested on Android 13 and newer only to show progress
+  and completion alerts in the notification drawer; video creation still works
+  if the user declines
+
 ## Reviewer instructions
 
 Timeline Visualizer does not require login. To test it, select **Load Timeline**,
