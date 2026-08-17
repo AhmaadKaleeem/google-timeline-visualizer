@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1
+
+- Start videos with a clean map instead of drawing the entire future route.
+- Reveal the traveled route progressively behind the moving position marker.
+- Keep the stronger recent trail, stabilized camera, and long-distance tracking.
+
 ## 1.6.0
 
 - Continue video creation in a foreground media-processing service when the user
