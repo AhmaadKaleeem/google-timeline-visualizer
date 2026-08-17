@@ -8,6 +8,7 @@ Create your story
 • Personalize a reusable title such as “2026 Mina's Timeline”
 • Preview the animation before creating the full-quality video
 • Choose a 15, 30, 60, or 90-second video
+• Keep creating in the background with progress and completion notifications
 
 Keep your videos together
 Completed videos appear in Creations with a thumbnail, title, date, duration, and Timeline period. You can also add older MP4 files, then watch or share them from one place.

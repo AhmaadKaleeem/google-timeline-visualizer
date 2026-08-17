@@ -34,3 +34,7 @@
 - Complete Data safety, content rating, target audience, ads, and app-access forms
 - Confirm the public privacy policy and support address work without signing in
 - Confirm the Play build opens Google Play, not GitHub Releases, for updates
+- Complete the foreground-service declarations for **Media processing** and the
+  older-Android **Data sync** compatibility path, explaining user-initiated
+  on-device MP4 encoding and the ongoing Cancel notification
+- Declare notification permission use for background progress and completion alerts

@@ -1,46 +1,52 @@
 package dev.mahlernim.timelinevisualizer
 
 import android.animation.ValueAnimator
+import android.Manifest
 import android.content.ClipData
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.provider.Settings
 import android.view.View
-import android.view.WindowManager
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.SeekBar
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.Insets
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doAfterTextChanged
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import dev.mahlernim.timelinevisualizer.creations.CreationMedia
 import dev.mahlernim.timelinevisualizer.creations.CreationRecord
 import dev.mahlernim.timelinevisualizer.creations.CreationStore
-import dev.mahlernim.timelinevisualizer.data.TileRepository
 import dev.mahlernim.timelinevisualizer.data.TimelineParser
 import dev.mahlernim.timelinevisualizer.databinding.ActivityMainBinding
 import dev.mahlernim.timelinevisualizer.databinding.ItemCreationBinding
-import dev.mahlernim.timelinevisualizer.export.ExportPhase
 import dev.mahlernim.timelinevisualizer.export.ExportProgress
-import dev.mahlernim.timelinevisualizer.export.Mp4Exporter
+import dev.mahlernim.timelinevisualizer.export.ExportPhase
+import dev.mahlernim.timelinevisualizer.export.VideoExportCoordinator
+import dev.mahlernim.timelinevisualizer.export.VideoExportRequest
+import dev.mahlernim.timelinevisualizer.export.VideoExportRequestStore
+import dev.mahlernim.timelinevisualizer.export.VideoExportService
+import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
+import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.Timeline
 import dev.mahlernim.timelinevisualizer.model.TitleTemplate
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.DateFormatSymbols
@@ -55,8 +61,7 @@ class MainActivity : AppCompatActivity() {
     private var timeline: Timeline? = null
     private var journey: Journey? = null
     private var animation: ValueAnimator? = null
-    private var exportJob: Job? = null
-    private var pendingExport: ExportRequest? = null
+    private var pendingExport: VideoExportRequest? = null
     private var lastVideoUri: Uri? = null
     private var selectedYear: Int? = null
     private var selectedStartMonth = 1
@@ -69,6 +74,7 @@ class MainActivity : AppCompatActivity() {
     private val applyTitleChanges = Runnable { commitTitlePreferences() }
     private var creationRenderGeneration = 0
     private var creationsExpanded = false
+    private var lastRenderedExportStatus = VideoExportStatus.IDLE
 
     private val openTimeline = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importTimeline(uri)
@@ -77,8 +83,12 @@ class MainActivity : AppCompatActivity() {
     private val createVideo = registerForActivityResult(ActivityResultContracts.CreateDocument("video/mp4")) { uri ->
         val request = pendingExport
         pendingExport = null
-        if (uri != null && request != null) exportVideo(uri, request)
+        if (uri != null && request != null) startVideoExport(uri, request)
     }
+
+    private val requestNotificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { openExportDestination() }
 
     private val addExistingVideos = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) importExistingVideos(uris)
@@ -98,7 +108,7 @@ class MainActivity : AppCompatActivity() {
         binding.exportHelpButton.setOnClickListener { showExportHelp() }
         binding.playButton.setOnClickListener { togglePreview() }
         binding.exportButton.setOnClickListener { chooseExportDestination() }
-        binding.cancelExportButton.setOnClickListener { exportJob?.cancel() }
+        binding.cancelExportButton.setOnClickListener { VideoExportService.cancel(applicationContext) }
         binding.shareButton.setOnClickListener { lastVideoUri?.let(::shareVideo) }
         binding.watchVideoButton.setOnClickListener { lastVideoUri?.let(::watchVideo) }
         binding.createAnotherButton.setOnClickListener { prepareAnotherVideo() }
@@ -137,6 +147,9 @@ class MainActivity : AppCompatActivity() {
         makeDropdownOpenReliably(binding.durationDropdown)
         configureMonthDropdowns()
         renderCreations()
+        VideoExportCoordinator.restore(applicationContext)
+        observeVideoExport()
+        VideoExportService.resumeIfNeeded(applicationContext)
 
         intent?.data?.let { requestTimelineImport(it) }
     }
@@ -144,7 +157,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         titleHandler.removeCallbacks(applyTitleChanges)
         animation?.cancel()
-        exportJob?.cancel()
         super.onDestroy()
     }
 
@@ -319,58 +331,101 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun chooseExportDestination() {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED &&
+            !preferences.getBoolean(NOTIFICATION_PROMPTED, false)
+        ) {
+            preferences.edit { putBoolean(NOTIFICATION_PROMPTED, true) }
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.background_video_title)
+                .setMessage(R.string.background_video_message)
+                .setNegativeButton(R.string.not_now) { _, _ -> openExportDestination() }
+                .setPositiveButton(R.string.continue_action) { _, _ ->
+                    requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                .show()
+            return
+        }
+        openExportDestination()
+    }
+
+    private fun openExportDestination() {
         val selected = journey ?: return
         animation?.cancel()
         commitTitlePreferences()
         val title = resolvedTitle(selected.year)
-        pendingExport = ExportRequest(
-            selected,
-            title,
-            selectedDurationSeconds(),
-            selectedStartMonth,
-            selectedEndMonth,
+        pendingExport = VideoExportRequest(
+            outputUri = "",
+            journey = selected,
+            title = title,
+            durationSeconds = selectedDurationSeconds(),
+            startMonth = selectedStartMonth,
+            endMonth = selectedEndMonth,
         )
         val slug = title.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "timeline" }
         createVideo.launch("$slug-${selected.year}.mp4")
     }
 
-    private fun exportVideo(uri: Uri, request: ExportRequest) {
-        val startedAt = SystemClock.elapsedRealtime()
-        setExporting(true)
-        exportJob = lifecycleScope.launch {
-            try {
-                Mp4Exporter(contentResolver, TileRepository(applicationContext)).export(
-                    uri,
-                    request.journey,
-                    request.title,
-                    request.durationSeconds,
-                ) { progress ->
-                    runOnUiThread { showExportProgress(progress, startedAt) }
-                }
-                persistUriAccess(uri, includeWrite = true)
-                registerCreatedVideo(uri, request)
-                lastVideoUri = uri
-                binding.videoReadyGroup.visibility = View.VISIBLE
-                binding.statusText.text = getString(R.string.video_saved)
-                Snackbar.make(binding.root, R.string.video_saved, Snackbar.LENGTH_LONG)
-                    .setAction(R.string.watch_video) { watchVideo(uri) }
-                    .show()
-            } catch (_: CancellationException) {
-                deleteIncompleteVideo(uri)
-                binding.statusText.text = getString(R.string.video_creation_cancelled)
-                Snackbar.make(binding.root, R.string.video_creation_cancelled, Snackbar.LENGTH_LONG).show()
-            } catch (error: Throwable) {
-                deleteIncompleteVideo(uri)
-                binding.statusText.text = error.message ?: getString(R.string.video_export_failed)
-                Snackbar.make(binding.root, R.string.video_export_failed, Snackbar.LENGTH_LONG).show()
-            } finally {
-                setExporting(false)
-                exportJob = null
+    private fun startVideoExport(uri: Uri, request: VideoExportRequest) {
+        val completeRequest = request.copy(outputUri = uri.toString())
+        persistUriAccess(uri, includeWrite = true)
+        val saved = runCatching { VideoExportRequestStore(applicationContext).save(completeRequest) }
+        if (saved.isFailure) {
+            runCatching { contentResolver.delete(uri, null, null) }
+            binding.statusText.text = getString(R.string.video_request_unavailable)
+            Snackbar.make(binding.root, R.string.video_export_failed, Snackbar.LENGTH_LONG).show()
+            return
+        }
+        val snapshot = VideoExportSnapshot(
+            status = VideoExportStatus.RUNNING,
+            progress = ExportProgress(0f, ExportPhase.PREPARING_MAP, 0, 0),
+            startedAtMillis = System.currentTimeMillis(),
+            outputUri = completeRequest.outputUri,
+            title = completeRequest.title,
+        )
+        VideoExportCoordinator.publish(applicationContext, snapshot)
+        VideoExportService.start(applicationContext)
+    }
+
+    private fun observeVideoExport() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                VideoExportCoordinator.state.collect(::renderVideoExport)
             }
         }
     }
 
-    private fun showExportProgress(progress: ExportProgress, startedAt: Long) {
+    private fun renderVideoExport(snapshot: VideoExportSnapshot) {
+        when (snapshot.status) {
+            VideoExportStatus.IDLE -> setExporting(false)
+            VideoExportStatus.RUNNING -> {
+                setExporting(true)
+                snapshot.progress?.let { showExportProgress(it, snapshot.startedAtMillis) }
+            }
+            VideoExportStatus.COMPLETE -> {
+                setExporting(false)
+                snapshot.outputUri?.toUri()?.let { uri ->
+                    lastVideoUri = uri
+                    binding.videoReadyGroup.visibility = View.VISIBLE
+                }
+                binding.statusText.text = getString(R.string.video_saved)
+                if (lastRenderedExportStatus != VideoExportStatus.COMPLETE) renderCreations()
+            }
+            VideoExportStatus.CANCELLED -> {
+                setExporting(false)
+                binding.statusText.text = getString(R.string.video_creation_cancelled)
+            }
+            VideoExportStatus.FAILED -> {
+                setExporting(false)
+                binding.statusText.text = snapshot.errorMessage ?: getString(R.string.video_export_failed)
+            }
+        }
+        lastRenderedExportStatus = snapshot.status
+    }
+
+    private fun showExportProgress(progress: ExportProgress, startedAtMillis: Long) {
         binding.exportProgress.progress = (progress.fraction * 1000).toInt()
         if (progress.phase == ExportPhase.COMPLETE) return
         val base = when (progress.phase) {
@@ -385,7 +440,7 @@ class MainActivity : AppCompatActivity() {
             )
             ExportPhase.COMPLETE -> return
         }
-        val elapsedMs = SystemClock.elapsedRealtime() - startedAt
+        val elapsedMs = (System.currentTimeMillis() - startedAtMillis).coerceAtLeast(0L)
         val remaining = if (elapsedMs >= 3_000 && progress.fraction in 0.05f..0.98f) {
             ceil(elapsedMs / 1000.0 * (1.0 - progress.fraction) / progress.fraction).toInt()
         } else null
@@ -399,10 +454,6 @@ class MainActivity : AppCompatActivity() {
     } else {
         val minutes = ceil(seconds / 60.0).toInt()
         resources.getQuantityString(R.plurals.remaining_minutes, minutes, minutes)
-    }
-
-    private fun deleteIncompleteVideo(uri: Uri) {
-        runCatching { contentResolver.delete(uri, null, null) }
     }
 
     private fun setExporting(exporting: Boolean) {
@@ -421,48 +472,15 @@ class MainActivity : AppCompatActivity() {
         binding.endMonthDropdown.isEnabled = !exporting
         binding.ownerInput.isEnabled = !exporting
         binding.titleInput.isEnabled = !exporting
-        if (exporting) {
-            binding.videoReadyGroup.visibility = View.GONE
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
+        if (exporting) binding.videoReadyGroup.visibility = View.GONE
     }
 
     private fun prepareAnotherVideo() {
+        VideoExportCoordinator.clear(applicationContext)
         binding.videoReadyGroup.visibility = View.GONE
         binding.timelineSeek.progress = 0
         showProgress(0f)
         journey?.let { binding.statusText.text = journeySummary(it) }
-    }
-
-    private fun registerCreatedVideo(uri: Uri, request: ExportRequest) {
-        val record = CreationRecord(
-            uri = uri.toString(),
-            title = request.title,
-            fileName = "${request.title}.mp4",
-            createdAtMillis = System.currentTimeMillis(),
-            durationSeconds = request.durationSeconds,
-            year = request.journey.year,
-            startMonth = request.startMonth,
-            endMonth = request.endMonth,
-        )
-        creationStore.upsert(record)
-        renderCreations()
-        lifecycleScope.launch {
-            val metadata = withContext(Dispatchers.IO) {
-                runCatching { creationMedia.inspect(uri) }.getOrNull()
-            }
-            if (metadata != null) {
-                creationStore.upsert(
-                    record.copy(
-                        fileName = metadata.fileName,
-                        durationSeconds = metadata.durationSeconds.takeIf { it > 0 } ?: request.durationSeconds,
-                    ),
-                )
-                renderCreations()
-            }
-        }
     }
 
     private fun importExistingVideos(uris: List<Uri>) {
@@ -764,18 +782,11 @@ class MainActivity : AppCompatActivity() {
         dropdown.setOnClickListener { dropdown.showDropDown() }
     }
 
-    private data class ExportRequest(
-        val journey: Journey,
-        val title: String,
-        val durationSeconds: Int,
-        val startMonth: Int,
-        val endMonth: Int,
-    )
-
     companion object {
         private const val TITLE_UPDATE_DELAY_MS = 450L
         private const val COLLAPSED_CREATION_COUNT = 3
         private const val MAP_PRIVACY_ACCEPTED = "map_privacy_accepted_v1"
+        private const val NOTIFICATION_PROMPTED = "notification_prompted_v1"
         private const val PROJECT_URL = "https://github.com/mahlernim/google-timeline-visualizer"
         private const val PRIVACY_URL =
             "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/privacy.md"

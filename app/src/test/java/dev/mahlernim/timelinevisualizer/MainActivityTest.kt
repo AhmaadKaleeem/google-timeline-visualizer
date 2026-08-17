@@ -7,6 +7,10 @@ import android.widget.LinearLayout
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.creations.CreationRecord
 import dev.mahlernim.timelinevisualizer.creations.CreationStore
+import dev.mahlernim.timelinevisualizer.export.VideoExportCoordinator
+import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
+import dev.mahlernim.timelinevisualizer.export.VideoExportStateStore
+import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -30,6 +34,8 @@ class MainActivityTest {
     @Before
     fun setUp() {
         store.clear()
+        VideoExportStateStore(context).clear()
+        VideoExportCoordinator.resetForTest()
         context.getSharedPreferences("display", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
@@ -37,6 +43,8 @@ class MainActivityTest {
     fun tearDown() {
         if (::controller.isInitialized) controller.close()
         store.clear()
+        VideoExportStateStore(context).clear()
+        VideoExportCoordinator.resetForTest()
     }
 
     @Test
@@ -128,6 +136,19 @@ class MainActivityTest {
         assertEquals(View.VISIBLE, showAll.visibility)
         showAll.performClick()
         assertEquals(4, list.childCount)
+    }
+
+    @Test
+    fun leavingActivityDoesNotCancelRunningVideoCreation() {
+        launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(status = VideoExportStatus.RUNNING, startedAtMillis = 123L),
+        )
+
+        controller.pause().stop().destroy()
+
+        assertEquals(VideoExportStatus.RUNNING, VideoExportStateStore(context).load().status)
     }
 
     private fun launchActivity(): MainActivity {

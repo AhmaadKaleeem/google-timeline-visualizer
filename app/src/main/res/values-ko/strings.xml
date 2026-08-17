@@ -35,6 +35,15 @@
     <string name="create_another">다른 영상 만들기</string>
     <string name="cancel_video_creation">영상 만들기 취소</string>
     <string name="video_creation_cancelled">영상 만들기를 취소했습니다</string>
+    <string name="cancel">취소</string>
+    <string name="not_now">나중에</string>
+    <string name="background_video_title">백그라운드에서 영상 계속 만들기</string>
+    <string name="background_video_message">앱을 나간 뒤에도 영상 진행률을 확인하고 완성 알림을 받으려면 알림을 허용하세요. 알림을 허용하지 않아도 영상 만들기는 계속됩니다.</string>
+    <string name="video_request_unavailable">영상 만들기를 시작할 수 없습니다. 저장 위치를 다시 선택해 주세요.</string>
+    <string name="creating_video_notification_title">타임라인 영상 만드는 중</string>
+    <string name="starting_video_creation">영상 만들기를 시작하는 중…</string>
+    <string name="video_creation_notification_channel">영상 만들기</string>
+    <string name="video_creation_notification_channel_description">타임라인 영상의 진행률과 완성 알림</string>
     <string name="no_video_player">이 영상을 재생할 앱이 없습니다</string>
     <string name="journey_summary">위치 %1$s개 · %2$s km · %3$s</string>
     <string name="preparing_map_progress">지도 준비 중 · 타일 %1$d/%2$d</string>
