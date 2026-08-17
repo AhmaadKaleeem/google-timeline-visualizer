@@ -1,0 +1,194 @@
+package dev.mahlernim.timelinevisualizer.export
+
+import android.content.ContentResolver
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
+import android.media.MediaCodecList
+import android.media.MediaFormat
+import android.media.MediaMuxer
+import android.net.Uri
+import dev.mahlernim.timelinevisualizer.data.TileRepository
+import dev.mahlernim.timelinevisualizer.model.Journey
+import dev.mahlernim.timelinevisualizer.render.TimelinePainter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import java.nio.ByteBuffer
+import kotlin.coroutines.coroutineContext
+import kotlin.math.ceil
+import kotlin.math.max
+
+class Mp4Exporter(
+    private val contentResolver: ContentResolver,
+    private val tileRepository: TileRepository,
+) {
+    suspend fun export(
+        destination: Uri,
+        journey: Journey,
+        title: String,
+        durationSeconds: Int,
+        onProgress: (Float, String) -> Unit,
+    ) = withContext(Dispatchers.Default) {
+        require(journey.points.size >= 2) { "At least two location points are needed" }
+        val width = 480
+        val height = 480
+        val fps = 24
+        val painter = TimelinePainter()
+
+        onProgress(0f, "Preparing map tiles…")
+        val sampleCount = max(durationSeconds * 2, ceil(journey.totalDistanceKm / 250.0).toInt())
+            .coerceIn(20, durationSeconds * 8)
+        val requiredTiles = buildSet {
+            for (sample in 0..sampleCount) {
+                val progress = sample.toFloat() / sampleCount
+                addAll(painter.requiredTiles(painter.viewport(journey, progress, width, height)).map { it.id })
+            }
+        }
+        requiredTiles.forEachIndexed { index, tile ->
+            coroutineContext.ensureActive()
+            tileRepository.load(tile)
+            onProgress(index.toFloat() / requiredTiles.size.coerceAtLeast(1) * 0.15f, "Preparing map ${index + 1}/${requiredTiles.size}")
+        }
+
+        val encoder = selectEncoder()
+        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
+            setInteger(MediaFormat.KEY_COLOR_FORMAT, encoder.colorFormat)
+            setInteger(MediaFormat.KEY_BIT_RATE, 2_500_000)
+            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+        }
+        val codec = MediaCodec.createByCodecName(encoder.name)
+        val descriptor = contentResolver.openFileDescriptor(destination, "rw")
+            ?: error("Could not open the selected output file")
+        val muxer = MediaMuxer(descriptor.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        var muxerStarted = false
+        var trackIndex = -1
+        val bufferInfo = MediaCodec.BufferInfo()
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val pixels = IntArray(width * height)
+        val yuv = ByteArray(width * height * 3 / 2)
+
+        fun drain(endOfStream: Boolean): Boolean {
+            while (true) {
+                val outputIndex = codec.dequeueOutputBuffer(bufferInfo, if (endOfStream) 10_000 else 0)
+                when {
+                    outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> return false
+                    outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        check(!muxerStarted) { "Encoder format changed twice" }
+                        trackIndex = muxer.addTrack(codec.outputFormat)
+                        muxer.start()
+                        muxerStarted = true
+                    }
+                    outputIndex >= 0 -> {
+                        val encoded = codec.getOutputBuffer(outputIndex)
+                            ?: error("Encoder returned an empty output buffer")
+                        if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) bufferInfo.size = 0
+                        if (bufferInfo.size > 0) {
+                            check(muxerStarted) { "Encoder produced data before its output format" }
+                            encoded.position(bufferInfo.offset)
+                            encoded.limit(bufferInfo.offset + bufferInfo.size)
+                            muxer.writeSampleData(trackIndex, encoded, bufferInfo)
+                        }
+                        codec.releaseOutputBuffer(outputIndex, false)
+                        if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return true
+                    }
+                }
+            }
+        }
+
+        try {
+            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            codec.start()
+            val frameCount = durationSeconds * fps
+            for (frame in 0 until frameCount) {
+                coroutineContext.ensureActive()
+                val progress = if (frameCount == 1) 1f else frame.toFloat() / (frameCount - 1)
+                var inputIndex: Int
+                do {
+                    inputIndex = codec.dequeueInputBuffer(10_000)
+                    drain(false)
+                } while (inputIndex < 0)
+
+                val canvas = Canvas(bitmap)
+                painter.draw(canvas, width, height, journey, progress, title, tileRepository::cached)
+                bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+                argbToYuv420(pixels, yuv, width, height, encoder.colorFormat)
+                val input = codec.getInputBuffer(inputIndex) ?: error("Encoder input buffer is unavailable")
+                input.clear()
+                check(input.capacity() >= yuv.size) { "Encoder input buffer is too small" }
+                input.put(yuv)
+                codec.queueInputBuffer(inputIndex, 0, yuv.size, frame * 1_000_000L / fps, 0)
+                drain(false)
+                if (frame % fps == 0 || frame == frameCount - 1) {
+                    onProgress(0.15f + 0.85f * (frame + 1f) / frameCount, "Rendering video ${frame + 1}/$frameCount")
+                }
+            }
+
+            var eosQueued = false
+            while (!eosQueued) {
+                val inputIndex = codec.dequeueInputBuffer(10_000)
+                if (inputIndex >= 0) {
+                    codec.queueInputBuffer(inputIndex, 0, 0, frameCount * 1_000_000L / fps, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                    eosQueued = true
+                } else {
+                    drain(false)
+                }
+            }
+            while (!drain(true)) coroutineContext.ensureActive()
+            onProgress(1f, "Video saved")
+        } finally {
+            runCatching { codec.stop() }
+            codec.release()
+            if (muxerStarted) runCatching { muxer.stop() }
+            muxer.release()
+            descriptor.close()
+            bitmap.recycle()
+        }
+    }
+
+    private fun selectEncoder(): EncoderChoice {
+        val preferredFormats = listOf(
+            MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar,
+            MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar,
+        )
+        for (info in MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos) {
+            if (!info.isEncoder || !info.supportedTypes.any { it.equals(MediaFormat.MIMETYPE_VIDEO_AVC, true) }) continue
+            val formats = info.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC).colorFormats.toSet()
+            preferredFormats.firstOrNull(formats::contains)?.let { return EncoderChoice(info.name, it) }
+        }
+        error("This device does not expose a compatible H.264 encoder")
+    }
+
+    private fun argbToYuv420(pixels: IntArray, output: ByteArray, width: Int, height: Int, colorFormat: Int) {
+        val frameSize = width * height
+        var yIndex = 0
+        var uIndex = frameSize
+        var vIndex = frameSize + frameSize / 4
+        var uvIndex = frameSize
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val color = pixels[y * width + x]
+                val r = color shr 16 and 0xff
+                val g = color shr 8 and 0xff
+                val b = color and 0xff
+                val yValue = ((66 * r + 129 * g + 25 * b + 128 shr 8) + 16).coerceIn(0, 255)
+                output[yIndex++] = yValue.toByte()
+                if (y % 2 == 0 && x % 2 == 0) {
+                    val u = ((-38 * r - 74 * g + 112 * b + 128 shr 8) + 128).coerceIn(0, 255).toByte()
+                    val v = ((112 * r - 94 * g - 18 * b + 128 shr 8) + 128).coerceIn(0, 255).toByte()
+                    if (colorFormat == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar) {
+                        output[uIndex++] = u
+                        output[vIndex++] = v
+                    } else {
+                        output[uvIndex++] = u
+                        output[uvIndex++] = v
+                    }
+                }
+            }
+        }
+    }
+
+    private data class EncoderChoice(val name: String, val colorFormat: Int)
+}

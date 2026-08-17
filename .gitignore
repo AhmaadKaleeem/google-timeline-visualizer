@@ -1,0 +1,11 @@
+/.gradle/
+/.idea/
+/local.properties
+**/build/
+*.iml
+*.jks
+*.keystore
+Timeline.json
+*.mp4
+__pycache__/
+.pytest_cache/
