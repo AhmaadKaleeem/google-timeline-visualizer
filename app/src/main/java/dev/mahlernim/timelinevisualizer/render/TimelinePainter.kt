@@ -231,8 +231,6 @@ class TimelinePainter {
         val screen = prepared.projected.mapIndexed { index, point ->
             worldToScreen(WorldPoint(prepared.unwrappedX[index], point.y), viewport, width, height)
         }
-        drawSamplePath(canvas, screen.indices, screen, routePaint)
-
         val current = journey.positionAt(progress)
         val traveledEnd = prepared.upperBound(current.distanceKm)
         val traveledIndices = if (traveledEnd >= 0) 0..traveledEnd else IntRange.EMPTY
