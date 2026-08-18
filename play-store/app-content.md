@@ -17,7 +17,7 @@ Play bundle before submitting.
 
 ## Data safety
 
-The Timeline JSON, route list, user-entered name and title, Creations index,
+The Timeline file, Journey, user-entered name and title, Videos index,
 thumbnails, and MP4 videos are processed only on the device. Do not declare those
 items as collected solely because the app accesses them locally.
 
@@ -49,8 +49,9 @@ the phone's Location settings through explicit buttons.
   user-requested local file-processing task
 - Purpose: encode the user-requested Timeline animation into an MP4 after the app
   is no longer visible or the screen is off
-- User initiation: the service starts only after the user selects **Create video**
-  and chooses an output file
+- User initiation: the service starts only after the user selects **Create video**.
+  Android 10 and later create a pending MediaStore item automatically. Android 8
+  and 9 use the system Save As picker.
 - User awareness and control: the ongoing notification shows progress and a
   **Cancel** action; the completed notification offers **Watch** and **Share**
 - `POST_NOTIFICATIONS`: requested on Android 13 and newer only to show progress
@@ -59,7 +60,7 @@ the phone's Location settings through explicit buttons.
 
 ## Reviewer instructions
 
-Timeline Visualizer does not require login. To test it, select **Load Timeline**,
+Timeline Visualizer does not require login. To test it, open **New video**, select **Choose file**,
 accept or cancel the map privacy disclosure, and choose a compatible Timeline JSON.
 The repository includes `test-fixtures/seoul-bohol-sample.json` as a synthetic test
 file containing no real user's location history.

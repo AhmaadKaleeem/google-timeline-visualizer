@@ -2,27 +2,27 @@
 
 ## English (United States)
 
-- App icon: Pink map pin above a dark curved travel route on a pale background.
-- Feature graphic: A pink route leads to a map pin beside the words “Your year. One moving map.”
-- 01 Start: Timeline Visualizer start screen with Load Timeline, Get JSON, Creations, and privacy links.
-- 02 Privacy: First-load dialog explaining CARTO map tile coordinates and network information, with Cancel and Continue actions.
-- 03 Create: Video editor showing year, duration, month range, title template, and an animated route map.
-- 04 Preview: Travel map with playback slider, Preview and Create video actions, and the Creations section.
+- App icon: Magenta map pin above a dark plum curved travel route on a pale background.
+- Feature graphic: A magenta route leads to a map pin beside the words “Your year. One moving map.”
+- 01 Videos: Videos library with three realistic travel video cards plus Create video and Add videos actions.
+- 02 Timeline file: New video source section and privacy disclosure explaining that the Timeline file is not uploaded and map-area requests go to CARTO.
+- 03 Selected period: New video form with date selectors, live point and approximate-distance summary, title settings, and Journey preview.
+- 04 Video saved: Completed automatically saved video with preview, Watch, Share, Save as, and optional Journey overview actions.
 
 ## 한국어
 
-- 앱 아이콘: 연한 배경 위에서 진한 곡선 이동 경로와 분홍색 지도 핀이 만나는 모습.
-- 그래픽 이미지: 분홍색 이동 경로가 지도 핀으로 이어지고 “한 해의 여행을 움직이는 지도로”라는 문구가 표시된 화면.
-- 01 시작: 타임라인 불러오기, JSON 받기, 만든 영상, 개인정보 링크가 표시된 시작 화면.
-- 02 개인정보: CARTO 지도 타일 좌표와 네트워크 정보 전송을 설명하고 취소 또는 계속을 선택하는 첫 실행 안내.
-- 03 만들기: 연도, 영상 길이, 월 범위, 제목 템플릿과 움직이는 이동 지도가 표시된 영상 편집 화면.
-- 04 미리보기: 이동 지도, 재생 슬라이더, 미리보기와 영상 만들기 버튼, 만든 영상 목록이 표시된 화면.
+- 앱 아이콘: 연한 배경 위에서 진한 자두색 곡선 이동 경로와 마젠타 지도 핀이 만나는 모습.
+- 그래픽 이미지: 마젠타 이동 경로가 지도 핀으로 이어지고 “한 해의 여행을 움직이는 지도로”라는 문구가 표시된 화면.
+- 01 영상: 사실적인 여행 영상 카드 세 개와 영상 만들기, 영상 추가 버튼이 표시된 영상 목록.
+- 02 타임라인 파일: 타임라인 파일은 업로드되지 않고 CARTO에 지도 영역 요청이 전송됨을 설명하는 새 영상 화면의 개인정보 안내.
+- 03 선택 기간: 기간 선택, 위치 수와 대략적인 거리 요약, 제목 설정, 이동 경로 미리보기가 표시된 새 영상 화면.
+- 04 영상 저장 완료: 자동 저장된 영상의 미리보기와 보기, 공유, 다른 이름으로 저장, 선택적 전체 이동 경로 이미지 버튼.
 
 ## 日本語
 
-- アプリアイコン: 淡い背景の上で、濃い曲線の移動経路とピンクの地図ピンがつながるデザイン。
-- フィーチャーグラフィック: ピンクの経路が地図ピンへ続き、「旅の一年を、動く地図に。」と表示された画像。
-- 01 開始: タイムラインの読み込み、JSONの取得方法、作成した動画、プライバシーへのリンクを表示した開始画面。
-- 02 プライバシー: CARTOへ送られる地図タイル座標とネットワーク情報を説明し、キャンセルまたは続行を選ぶ初回ダイアログ。
-- 03 作成: 開始年と終了年、月範囲、動画時間、タイトルテンプレート、アニメーション地図を表示した編集画面。
-- 04 プレビュー: 移動地図、再生位置、プレビューと動画作成ボタン、作成した動画の一覧を表示した画面。
+- アプリアイコン: 淡い背景の上で、濃いプラム色の曲線経路とマゼンタの地図ピンがつながるデザイン。
+- フィーチャーグラフィック: マゼンタの経路が地図ピンへ続き、「旅の一年を、動く地図に。」と表示された画像。
+- 01 動画: 3本の旅行動画カードと動画を作成、動画を追加の操作を表示した動画一覧。
+- 02 タイムライン ファイル: ファイルはアップロードされず、地図地域の要求がCARTOへ送信されることを説明するプライバシー表示。
+- 03 選択期間: 期間選択、位置件数と概算距離、タイトル設定、移動経路プレビューを表示した新しい動画画面。
+- 04 動画を保存: 自動保存された動画のプレビュー、再生、共有、別名で保存、任意の移動経路の全体図の操作。

@@ -3,7 +3,7 @@ Bring a year of travel to life.
 Timeline Visualizer turns a Google Maps Timeline export into an animated map video on your Android phone. Choose a start and end month across one or more years, preview the route, and create an MP4 that is ready to watch or share.
 
 Create your story
-• Load a Timeline.json export from Android or iPhone
+• Choose a Timeline file exported from Android or iPhone
 • Select an inclusive month range within one year or across multiple years
 • Personalize a reusable title such as “2026 Mina's Timeline”
 • Preview the animation before creating the full-quality video
@@ -11,16 +11,17 @@ Create your story
 • Finish with a smooth zoom-out and complete-route overview
 • Keep creating in the background with progress and completion notifications
 • Reopen the most recently used Timeline file when Android retains access
+• Save videos automatically to Movies/Timeline Visualizer on Android 10 and later
 • Save or share the final 1080 × 1080 route overview
 
 Need to restore older trips first?
 Open the localized restoration guide from the app. It explains how to import an existing encrypted Timeline backup in Google Maps, then export a new JSON file for Timeline Visualizer. The app never accesses your Google account or encrypted backup.
 
 Keep your videos together
-Completed videos appear in Creations with a thumbnail, title, date, duration, and Timeline period. You can also add older MP4 files, then watch or share them from one place.
+Completed videos appear in Videos with a thumbnail, title, date, duration, and Selected period. You can also add older MP4 files, then watch or share them from one place.
 
 Designed for privacy
-Your Timeline.json, route list, titles, and generated videos are processed on your device and are not uploaded to the developer. No Google sign-in, analytics, advertising, or location permission is used.
+Your Timeline file is never uploaded. The Journey, titles, and generated videos are processed on your device. No Google sign-in, analytics, advertising, or location permission is used.
 
 To draw the map, the app requests map tiles from CARTO. Those requests include map-area tile coordinates and normal network information, which may reveal places in your Timeline to CARTO. The app explains this before the first Timeline is loaded and lets you cancel.
 

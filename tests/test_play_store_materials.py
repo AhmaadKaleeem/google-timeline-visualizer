@@ -48,9 +48,9 @@ def test_phone_screenshots_are_current_play_recommended_size():
 
 def test_play_release_metadata_is_consistent():
     build_file = (ROOT / "app" / "build.gradle.kts").read_text(encoding="utf-8")
-    assert 'versionCode = 11' in build_file
-    assert 'versionName = "1.8.1"' in build_file
-    assert (ROOT / "docs" / "release-notes-v1.8.1.md").is_file()
+    assert 'versionCode = 12' in build_file
+    assert 'versionName = "1.9.0"' in build_file
+    assert (ROOT / "docs" / "release-notes-v1.9.0.md").is_file()
 
 
 def test_android_locales_have_matching_resources_and_placeholders():
@@ -99,3 +99,38 @@ def test_localized_restoration_guides_are_complete_and_accessible():
     assert "docs/restore-google-maps-timeline.md" in (ROOT / "README.md").read_text(encoding="utf-8")
     assert "docs/restore-google-maps-timeline.ko.md" in (ROOT / "README.ko.md").read_text(encoding="utf-8")
     assert "docs/restore-google-maps-timeline.ja.md" in (ROOT / "README.ja.md").read_text(encoding="utf-8")
+
+
+def test_canonical_terminology_and_compact_buttons():
+    glossary = (ROOT / "docs/terminology.md").read_text(encoding="utf-8")
+    for term in ("Timeline file", "Journey", "Video", "Selected period", "Journey overview"):
+        assert term in glossary
+
+    current_copy = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            ROOT / "app/src/main/res/values/strings.xml",
+            ROOT / "README.md",
+            ROOT / "play-store/listing/en-US/full-description.txt",
+            ROOT / "play-store/assets/alt-text.md",
+        )
+    )
+    assert "Get JSON" not in current_copy
+    assert "Creations" not in current_copy
+    assert "Export Timeline data" in current_copy
+
+    for layout_name in ("screen_videos.xml", "screen_new_video.xml"):
+        root = ET.parse(ROOT / "app/src/main/res/layout" / layout_name).getroot()
+        for element in root.iter():
+            if element.tag.endswith("MaterialButton"):
+                assert element.attrib.get("{http://schemas.android.com/apk/res/android}maxLines") == "1"
+
+
+def test_screenshot_alt_text_covers_every_localized_image():
+    alt_text = (PLAY_STORE / "assets/alt-text.md").read_text(encoding="utf-8")
+    for stem in ("01 Videos", "02 Timeline file", "03 Selected period", "04 Video saved"):
+        assert stem in alt_text
+    for stem in ("01 영상", "02 타임라인 파일", "03 선택 기간", "04 영상 저장 완료"):
+        assert stem in alt_text
+    for stem in ("01 動画", "02 タイムライン ファイル", "03 選択期間", "04 動画を保存"):
+        assert stem in alt_text

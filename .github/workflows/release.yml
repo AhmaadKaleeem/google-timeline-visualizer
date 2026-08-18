@@ -40,6 +40,25 @@ jobs:
           ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
           ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
         run: ./gradlew test lint assembleGithubRelease bundlePlayRelease --stacktrace
+      - name: Verify signed GitHub APK
+        run: |
+          apk_path="app/build/outputs/apk/github/release/app-github-release.apk"
+          build_tools_dir="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -n "$build_tools_dir"
+          "$build_tools_dir/apksigner" verify --verbose --print-certs "$apk_path"
+
+          package_line="$("$build_tools_dir/aapt" dump badging "$apk_path" | head -n 1)"
+          package_name="$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" <<< "$package_line")"
+          version_code="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" <<< "$package_line")"
+          version_name="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<< "$package_line")"
+          expected_version_code="$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*$/\1/p' app/build.gradle.kts)"
+          expected_version_name="$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*$/\1/p' app/build.gradle.kts)"
+
+          test "$package_name" = "dev.mahlernim.timelinevisualizer"
+          test "$version_code" = "$expected_version_code"
+          test "$version_name" = "$expected_version_name"
+          test "$version_name" = "${RELEASE_TAG#v}"
+          sha256sum "$apk_path"
       - name: Save Play Console bundle
         uses: actions/upload-artifact@v4
         with:

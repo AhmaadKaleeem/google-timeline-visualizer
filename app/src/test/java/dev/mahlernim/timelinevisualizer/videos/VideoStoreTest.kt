@@ -1,4 +1,4 @@
-package dev.mahlernim.timelinevisualizer.creations
+package dev.mahlernim.timelinevisualizer.videos
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
@@ -12,9 +12,9 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
-class CreationStoreTest {
+class VideoStoreTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val store = CreationStore(context).also(CreationStore::clear)
+    private val store = VideoStore(context).also(VideoStore::clear)
 
     @After
     fun tearDown() = store.clear()
@@ -31,8 +31,8 @@ class CreationStoreTest {
             ),
         )
 
-        val restored = CreationStore(context).list()
-        assertEquals(listOf("New", "Old"), restored.map(CreationRecord::title))
+        val restored = VideoStore(context).list()
+        assertEquals(listOf("New", "Old"), restored.map(VideoRecord::title))
         assertEquals(2025, restored.first().startYear)
         assertEquals(12, restored.first().startMonth)
         assertEquals(2026, restored.first().endYear)
@@ -45,9 +45,9 @@ class CreationStoreTest {
         store.upsert(record("content://other", "Other", 150L))
         store.upsert(record("content://same", "Updated", 200L))
 
-        assertEquals(listOf("Updated", "Other"), store.list().map(CreationRecord::title))
+        assertEquals(listOf("Updated", "Other"), store.list().map(VideoRecord::title))
         store.remove("content://same")
-        assertEquals(listOf("Other"), store.list().map(CreationRecord::title))
+        assertEquals(listOf("Other"), store.list().map(VideoRecord::title))
     }
 
     @Test
@@ -59,7 +59,7 @@ class CreationStoreTest {
             )
         }
 
-        val restored = CreationStore(context).list().single()
+        val restored = VideoStore(context).list().single()
 
         assertEquals(2024, restored.startYear)
         assertEquals(2, restored.startMonth)
@@ -67,7 +67,7 @@ class CreationStoreTest {
         assertEquals(10, restored.endMonth)
     }
 
-    private fun record(uri: String, title: String, createdAt: Long) = CreationRecord(
+    private fun record(uri: String, title: String, createdAt: Long) = VideoRecord(
         uri = uri,
         title = title,
         fileName = "$title.mp4",
@@ -75,3 +75,4 @@ class CreationStoreTest {
         durationSeconds = 30,
     )
 }
+

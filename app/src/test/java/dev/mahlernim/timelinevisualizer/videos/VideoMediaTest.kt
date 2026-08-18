@@ -1,4 +1,4 @@
-package dev.mahlernim.timelinevisualizer.creations
+package dev.mahlernim.timelinevisualizer.videos
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -18,9 +18,9 @@ import org.robolectric.annotation.GraphicsMode
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-class CreationMediaTest {
+class VideoMediaTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val media = CreationMedia(context)
+    private val media = VideoMedia(context)
 
     @Test
     fun generatedOverviewProvidesPngAndDeterministicThumbnail() {
@@ -52,3 +52,4 @@ class CreationMediaTest {
         )
     }
 }
+

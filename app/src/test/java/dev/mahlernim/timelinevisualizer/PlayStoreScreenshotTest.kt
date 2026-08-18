@@ -4,20 +4,25 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.net.Uri
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.widget.NestedScrollView
 import androidx.test.core.app.ApplicationProvider
-import dev.mahlernim.timelinevisualizer.creations.CreationStore
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
+import dev.mahlernim.timelinevisualizer.export.VideoExportCoordinator
+import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
+import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
+import dev.mahlernim.timelinevisualizer.videos.VideoRecord
+import dev.mahlernim.timelinevisualizer.videos.VideoMedia
+import dev.mahlernim.timelinevisualizer.videos.VideoStore
 import java.io.File
 import java.io.FileOutputStream
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -28,63 +33,115 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], qualifiers = "ja-w360dp-h640dp-xxhdpi")
+@Config(sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class PlayStoreScreenshotTest {
-    private val context = ApplicationProvider.getApplicationContext<Context>()
-
-    @Before
-    fun setUp() {
-        assumeTrue("Set GENERATE_STORE_SCREENSHOTS=true to render store screenshots", shouldGenerate())
-        context.getSharedPreferences("display", Context.MODE_PRIVATE).edit().clear().commit()
-        CreationStore(context).clear()
-        TimelineSourceStore(context).clearForTest()
-    }
-
-    @After
-    fun tearDown() {
-        if (!shouldGenerate()) return
-        context.getSharedPreferences("display", Context.MODE_PRIVATE).edit().clear().commit()
-        CreationStore(context).clear()
-        TimelineSourceStore(context).clearForTest()
-    }
+    @Test
+    @Config(qualifiers = "en-rUS-w360dp-h640dp-xxhdpi")
+    fun renderEnglishStoreScreenshots() = renderLocale("en-US")
 
     @Test
-    fun renderJapaneseStoreScreenshots() {
-        val output = repoRoot().resolve("play-store/assets/screenshots/ja-JP").apply { mkdirs() }
-        repoRoot().resolve("play-store/assets/screenshots/en-US/01-start.png")
-            .copyTo(output.resolve("01-start.png"), overwrite = true)
+    @Config(qualifiers = "ko-rKR-w360dp-h640dp-xxhdpi")
+    fun renderKoreanStoreScreenshots() = renderLocale("ko-KR")
 
-        val privacyController = Robolectric.buildActivity(MainActivity::class.java).setup()
-        val privacyActivity = privacyController.get()
-        privacyActivity.findViewById<View>(R.id.importButton).performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-        render(privacyActivity.window.decorView, output.resolve("02-privacy.png"), ShadowDialog.getLatestDialog()?.window?.decorView)
-        privacyController.close()
+    @Test
+    @Config(qualifiers = "ja-rJP-w360dp-h640dp-xxhdpi")
+    fun renderJapaneseStoreScreenshots() = renderLocale("ja-JP")
 
+    private fun renderLocale(localeDirectory: String) {
+        assumeTrue("Set GENERATE_STORE_SCREENSHOTS=true to render store screenshots", shouldGenerate())
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        reset(context)
+        val output = repoRoot().resolve("play-store/assets/screenshots/$localeDirectory").apply { mkdirs() }
+
+        seedVideos(context)
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+            render(controller.get().window.decorView, output.resolve("01-videos.png"))
+        }
+
+        reset(context)
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+            val activity = controller.get()
+            activity.findViewById<View>(R.id.createVideoButton).performClick()
+            activity.findViewById<View>(R.id.importButton).performClick()
+            shadowOf(Looper.getMainLooper()).idle()
+            render(activity.window.decorView, output.resolve("02-timeline-file.png"), ShadowDialog.getLatestDialog()?.window?.decorView)
+        }
+
+        reset(context)
+        acceptPrivacy(context)
+        val fixture = repoRoot().resolve("test-fixtures/seoul-bohol-sample.json")
+        val intent = Intent(Intent.ACTION_VIEW, Uri.fromFile(fixture))
+        Robolectric.buildActivity(MainActivity::class.java, intent).setup().use { controller ->
+            val activity = controller.get()
+            waitForEditor(activity)
+            findNestedScrollView(activity.findViewById(R.id.newVideoScreen))?.scrollTo(0, 0)
+            render(activity.window.decorView, output.resolve("03-selected-period.png"))
+
+            val completedUri = Uri.parse("content://synthetic/completed-video")
+            VideoMedia(context).saveGeneratedOverview(completedUri, syntheticOverview(3))
+            VideoExportCoordinator.publish(
+                context,
+                VideoExportSnapshot(
+                    status = VideoExportStatus.COMPLETE,
+                    outputUri = completedUri.toString(),
+                    title = "Seoul to Bohol 2025",
+                ),
+            )
+            shadowOf(Looper.getMainLooper()).idle()
+            findNestedScrollView(activity.findViewById(R.id.newVideoScreen))?.scrollTo(0, 2_350)
+            render(activity.window.decorView, output.resolve("04-video-saved.png"))
+        }
+
+        assertEquals(
+            listOf("01-videos.png", "02-timeline-file.png", "03-selected-period.png", "04-video-saved.png"),
+            output.listFiles()!!.map(File::getName).sorted(),
+        )
+        reset(context)
+    }
+
+    private fun seedVideos(context: Context) {
+        val records = listOf(
+            VideoRecord("", "Seoul to Bohol", "Seoul-to-Bohol.mp4", 1_787_000_000_000L, 34, 2025, 1, 2025, 8),
+            VideoRecord("", "Spring in Japan", "Spring-in-Japan.mp4", 1_780_000_000_000L, 22, 2024, 3, 2024, 4),
+            VideoRecord("", "My 2023 Timeline", "My-2023-Timeline.mp4", 1_770_000_000_000L, 45, 2023, 1, 2023, 12),
+        )
+        records.forEachIndexed { index, record ->
+            val file = File(context.cacheDir, "synthetic-video-$index.mp4").apply { writeBytes(byteArrayOf()) }
+            val uri = Uri.fromFile(file)
+            VideoMedia(context).saveGeneratedOverview(uri, syntheticOverview(index))
+            VideoStore(context).upsert(record.copy(uri = uri.toString()))
+        }
+    }
+
+    private fun syntheticOverview(index: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(listOf(0xFFF4E9EF, 0xFFE8F2F4, 0xFFF3EEE3, 0xFFEDEAF7)[index].toInt())
+        val route = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(208, 0, 90)
+            strokeWidth = 18f
+            style = Paint.Style.STROKE
+        }
+        canvas.drawLine(80f, 270f, 230f, 120f, route)
+        canvas.drawLine(230f, 120f, 410f, 230f, route)
+        canvas.drawLine(410f, 230f, 560f, 80f, route)
+        canvas.drawCircle(560f, 80f, 22f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(36, 25, 29) })
+        return bitmap
+    }
+
+    private fun acceptPrivacy(context: Context) {
         context.getSharedPreferences("display", Context.MODE_PRIVATE).edit()
             .putBoolean("map_privacy_accepted_v1", true)
             .commit()
-        val fixture = repoRoot().resolve("test-fixtures/seoul-bohol-sample.json")
-        val intent = Intent(Intent.ACTION_VIEW, Uri.fromFile(fixture))
-        val editorController = Robolectric.buildActivity(MainActivity::class.java, intent).setup()
-        val editorActivity = editorController.get()
-        waitForEditor(editorActivity)
-        editorActivity.currentFocus?.clearFocus()
-        val scroll = findNestedScrollView(editorActivity.window.decorView)
-        scroll?.scrollTo(0, 0)
-        shadowOf(Looper.getMainLooper()).idle()
-        render(editorActivity.window.decorView, output.resolve("03-create.png"))
+    }
 
-        scroll?.scrollTo(0, (390 * editorActivity.resources.displayMetrics.density).toInt())
-        shadowOf(Looper.getMainLooper()).idle()
-        render(editorActivity.window.decorView, output.resolve("04-preview.png"))
-        editorController.close()
-
-        assertEquals(
-            listOf("01-start.png", "02-privacy.png", "03-create.png", "04-preview.png"),
-            output.listFiles()!!.map(File::getName).sorted(),
-        )
+    private fun reset(context: Context) {
+        context.getSharedPreferences("display", Context.MODE_PRIVATE).edit().clear().commit()
+        VideoStore(context).clear()
+        TimelineSourceStore(context).clearForTest()
+        VideoExportCoordinator.clear(context)
+        VideoExportCoordinator.resetForTest()
     }
 
     private fun waitForEditor(activity: MainActivity) {
@@ -99,47 +156,34 @@ class PlayStoreScreenshotTest {
     private fun render(root: View, output: File, overlay: View? = null) {
         val width = 1080
         val height = 1920
-        val widthSpec = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY)
-        val heightSpec = View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
-        root.measure(widthSpec, heightSpec)
+        root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
         root.layout(0, 0, width, height)
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
         val canvas = Canvas(bitmap)
         root.draw(canvas)
         overlay?.let {
-            val overlayWidthSpec = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.AT_MOST)
-            val overlayHeightSpec = View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.AT_MOST)
-            it.measure(overlayWidthSpec, overlayHeightSpec)
+            it.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.AT_MOST))
             it.layout(0, 0, it.measuredWidth, it.measuredHeight)
             canvas.save()
             canvas.translate((width - it.measuredWidth) / 2f, (height - it.measuredHeight) / 2f)
             it.draw(canvas)
             canvas.restore()
         }
-        output.parentFile?.mkdirs()
         FileOutputStream(output).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
     }
 
-    private fun repoRoot(): File {
-        val workingDirectory = System.getProperty("user.dir")
-            ?: error("The working directory is unavailable")
-        var current = File(workingDirectory).absoluteFile
-        while (!current.resolve("settings.gradle.kts").isFile) {
-            current = current.parentFile ?: error("Repository root was not found")
-        }
-        return current
-    }
-
     private fun findNestedScrollView(view: View): NestedScrollView? {
         if (view is NestedScrollView) return view
-        if (view is ViewGroup) {
-            for (index in 0 until view.childCount) {
-                findNestedScrollView(view.getChildAt(index))?.let { return it }
-            }
-        }
+        if (view is ViewGroup) for (index in 0 until view.childCount) findNestedScrollView(view.getChildAt(index))?.let { return it }
         return null
     }
 
-    private fun shouldGenerate(): Boolean = System.getenv("GENERATE_STORE_SCREENSHOTS") == "true"
+    private fun repoRoot(): File {
+        var current = File(System.getProperty("user.dir") ?: error("Working directory unavailable")).absoluteFile
+        while (!current.resolve("settings.gradle.kts").isFile) current = current.parentFile ?: error("Repository root unavailable")
+        return current
+    }
+
+    private fun shouldGenerate() = System.getenv("GENERATE_STORE_SCREENSHOTS") == "true"
 }

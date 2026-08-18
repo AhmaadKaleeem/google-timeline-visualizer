@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.0
+
+- Implements issues #21, #23, and #24.
+- Split the Videos library from the focused New video workflow.
+- Add a live Selected period summary using the exact Journey used for preview and rendering.
+- Automatically save videos through MediaStore on Android 10 and later, with pending-item cleanup and collision-safe names.
+- Keep Android 8 and 9 on the permission-safe system Save As flow.
+- Add Save as copying and optional Journey overview saving without rerendering.
+- Standardize English, Korean, and Japanese terminology and state messages.
+- Refresh the Material 3 light identity, semantic palette, canonical SVG mark, and monochrome launcher icon.
+- Regenerate localized store screenshots and update privacy, listing, and release documentation.
+
 ## 1.8.1
 
 - Implements GitHub issue #19.

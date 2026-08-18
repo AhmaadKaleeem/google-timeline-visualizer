@@ -8,14 +8,18 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.AutoCompleteTextView
 import android.widget.TextView
+import com.google.android.material.button.MaterialButton
 import androidx.test.core.app.ApplicationProvider
-import dev.mahlernim.timelinevisualizer.creations.CreationRecord
-import dev.mahlernim.timelinevisualizer.creations.CreationStore
+import dev.mahlernim.timelinevisualizer.videos.VideoRecord
+import dev.mahlernim.timelinevisualizer.videos.VideoStore
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportCoordinator
 import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
 import dev.mahlernim.timelinevisualizer.export.VideoExportStateStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
+import dev.mahlernim.timelinevisualizer.model.GeoPoint
+import dev.mahlernim.timelinevisualizer.model.Journey
+import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -30,12 +34,13 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import java.io.File
+import java.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class MainActivityTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val store = CreationStore(context)
+    private val store = VideoStore(context)
     private val timelineSourceStore = TimelineSourceStore(context)
     private lateinit var controller: ActivityController<MainActivity>
 
@@ -60,7 +65,7 @@ class MainActivityTest {
     @Test
     fun savedCreationAppearsAfterActivityRestart() {
         store.upsert(
-            CreationRecord(
+            VideoRecord(
                 uri = "content://example/video",
                 title = "2026 Mina's Timeline",
                 fileName = "timeline.mp4",
@@ -74,13 +79,13 @@ class MainActivityTest {
         )
 
         val activity = launchActivity()
-        val list = activity.findViewById<LinearLayout>(R.id.creationsList)
+        val list = activity.findViewById<LinearLayout>(R.id.videosList)
 
         assertEquals(1, list.childCount)
-        assertEquals(View.GONE, activity.findViewById<View>(R.id.emptyCreationsText).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.emptyVideosText).visibility)
         assertEquals(
             "2026 Mina's Timeline",
-            list.getChildAt(0).findViewById<android.widget.TextView>(R.id.creationTitle).text.toString(),
+            list.getChildAt(0).findViewById<android.widget.TextView>(R.id.videoTitle).text.toString(),
         )
     }
 
@@ -165,7 +170,7 @@ class MainActivityTest {
     fun longCreationListStartsCompactAndCanExpand() {
         repeat(4) { index ->
             store.upsert(
-                CreationRecord(
+                VideoRecord(
                     uri = "content://example/video/$index",
                     title = "Video $index",
                     fileName = "video-$index.mp4",
@@ -176,8 +181,8 @@ class MainActivityTest {
         }
 
         val activity = launchActivity()
-        val list = activity.findViewById<LinearLayout>(R.id.creationsList)
-        val showAll = activity.findViewById<View>(R.id.showAllCreationsButton)
+        val list = activity.findViewById<LinearLayout>(R.id.videosList)
+        val showAll = activity.findViewById<View>(R.id.showAllVideosButton)
 
         assertEquals(3, list.childCount)
         assertEquals(View.VISIBLE, showAll.visibility)
@@ -219,14 +224,79 @@ class MainActivityTest {
         acceptPrivacyDisclosure()
 
         val activity = launchActivity()
+        assertEquals(missing, timelineSourceStore.load())
+        activity.findViewById<View>(R.id.createVideoButton).performClick()
         waitUntil { timelineSourceStore.load() == null }
 
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)
         assertEquals(true, activity.findViewById<View>(R.id.importButton).isEnabled)
         assertEquals(
-            activity.getString(R.string.remembered_timeline_unavailable),
+            activity.getString(R.string.timeline_file_unavailable),
             activity.findViewById<android.widget.TextView>(R.id.statusText).text.toString(),
         )
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "en-rUS-w360dp-h640dp-xxhdpi")
+    fun compactEnglishButtonsRemainSingleLine() = assertCompactButtons()
+
+    @Test
+    @Config(sdk = [35], qualifiers = "ko-rKR-w360dp-h640dp-xxhdpi")
+    fun compactKoreanButtonsRemainSingleLine() = assertCompactButtons()
+
+    @Test
+    @Config(sdk = [35], qualifiers = "ja-rJP-w360dp-h640dp-xxhdpi")
+    fun compactJapaneseButtonsRemainSingleLine() = assertCompactButtons()
+
+    @Test
+    fun normalLaunchOpensVideosAndDefersRememberedTimeline() {
+        val remembered = Uri.fromFile(File(context.cacheDir, "missing-deferred.json"))
+        assertTrue(timelineSourceStore.replace(remembered))
+        acceptPrivacyDisclosure()
+
+        val activity = launchActivity()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
+        assertEquals(remembered, timelineSourceStore.load())
+    }
+
+    @Test
+    fun backFromNewVideoReturnsToVideosWithoutCancellingExport() {
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.createVideoButton).performClick()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(status = VideoExportStatus.RUNNING, startedAtMillis = 123L),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        activity.onBackPressedDispatcher.onBackPressed()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.homeExportGroup).visibility)
+        assertEquals(VideoExportStatus.RUNNING, VideoExportStateStore(context).load().status)
+    }
+
+    @Test
+    fun selectedPeriodStatesUseTheSameJourneyAvailabilityRule() {
+        val activity = launchActivity()
+        val period = TimelinePeriod.sameYear(2026)
+        val first = GeoPoint(Instant.parse("2026-01-01T00:00:00Z"), 37.5, 127.0)
+        val samePlace = GeoPoint(Instant.parse("2026-02-01T00:00:00Z"), 37.5, 127.0)
+        val moved = GeoPoint(Instant.parse("2026-03-01T00:00:00Z"), 35.1, 129.0)
+        val empty = Journey.from(emptyList(), period)
+        val one = Journey.from(listOf(first), period)
+        val still = Journey.from(listOf(first, samePlace), period)
+        val moving = Journey.from(listOf(first, moved), period)
+
+        assertEquals(activity.getString(R.string.selected_period_empty), activity.selectedPeriodSummary(empty))
+        assertEquals(activity.getString(R.string.selected_period_one_point), activity.selectedPeriodSummary(one))
+        assertTrue(activity.selectedPeriodSummary(still).contains(activity.getString(R.string.selected_period_no_movement, "2")))
+        assertTrue(!activity.canCreateVideo(empty))
+        assertTrue(!activity.canCreateVideo(one))
+        assertTrue(!activity.canCreateVideo(still))
+        assertTrue(activity.canCreateVideo(moving))
     }
 
     @Test
@@ -247,6 +317,39 @@ class MainActivityTest {
         context.getSharedPreferences("display", Context.MODE_PRIVATE).edit()
             .putBoolean("map_privacy_accepted_v1", true)
             .commit()
+    }
+
+    private fun assertCompactButtons() {
+        val activity = launchActivity()
+        measureActivity(activity)
+        assertSingleLineButtons(activity.window.decorView)
+        activity.findViewById<View>(R.id.createVideoButton).performClick()
+        measureActivity(activity)
+        assertSingleLineButtons(activity.findViewById(R.id.newVideoScreen))
+        assertEquals(
+            activity.getString(R.string.back_to_videos),
+            activity.findViewById<View>(R.id.backButton).contentDescription,
+        )
+    }
+
+    private fun measureActivity(activity: MainActivity) {
+        val root = activity.window.decorView
+        val width = activity.resources.displayMetrics.widthPixels
+        val height = activity.resources.displayMetrics.heightPixels
+        root.measure(
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
+        )
+        root.layout(0, 0, width, height)
+    }
+
+    private fun assertSingleLineButtons(view: View) {
+        if (view is MaterialButton && view.visibility == View.VISIBLE) {
+            assertTrue("Button wrapped: ${view.text}", view.lineCount <= 1)
+        }
+        if (view is android.view.ViewGroup) {
+            for (index in 0 until view.childCount) assertSingleLineButtons(view.getChildAt(index))
+        }
     }
 
     private fun waitUntil(condition: () -> Boolean) {

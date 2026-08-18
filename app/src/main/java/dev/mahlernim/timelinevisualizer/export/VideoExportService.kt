@@ -20,9 +20,10 @@ import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import dev.mahlernim.timelinevisualizer.MainActivity
 import dev.mahlernim.timelinevisualizer.R
-import dev.mahlernim.timelinevisualizer.creations.CreationMedia
-import dev.mahlernim.timelinevisualizer.creations.CreationRecord
-import dev.mahlernim.timelinevisualizer.creations.CreationStore
+import dev.mahlernim.timelinevisualizer.videos.GeneratedMediaRepository
+import dev.mahlernim.timelinevisualizer.videos.VideoMedia
+import dev.mahlernim.timelinevisualizer.videos.VideoRecord
+import dev.mahlernim.timelinevisualizer.videos.VideoStore
 import dev.mahlernim.timelinevisualizer.data.TileRepository
 import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import kotlinx.coroutines.CancellationException
@@ -77,6 +78,9 @@ class VideoExportService : Service() {
         exportJob = serviceScope.launch {
             val request = withContext(Dispatchers.IO) { requestStore.load() }
             if (request == null) {
+                VideoExportStateStore(applicationContext).load().outputUri
+                    ?.toUri()
+                    ?.let { GeneratedMediaRepository(applicationContext).discard(it) }
                 finishWithFailure(null, getString(R.string.video_request_unavailable), startId)
                 return@launch
             }
@@ -127,13 +131,14 @@ class VideoExportService : Service() {
             }
             try {
                 withContext(Dispatchers.IO) {
-                    CreationMedia(applicationContext).saveGeneratedOverview(uri, overview)
+                    VideoMedia(applicationContext).saveGeneratedOverview(uri, overview)
                 }
             } finally {
                 overview.recycle()
             }
+            GeneratedMediaRepository(applicationContext).finalizeVideo(uri)
             persistUriAccess(uri)
-            registerCreation(uri, request)
+            registerVideo(uri, request)
             requestStore.clear()
             val completed = VideoExportSnapshot(
                 status = VideoExportStatus.COMPLETE,
@@ -146,7 +151,7 @@ class VideoExportService : Service() {
             finishForeground()
             notificationManager.notify(NOTIFICATION_ID, buildCompletedNotification(uri, request.title))
         } catch (_: CancellationException) {
-            deleteIncompleteVideo(uri)
+            GeneratedMediaRepository(applicationContext).discard(uri)
             requestStore.clear()
             publish(
                 VideoExportSnapshot(
@@ -160,7 +165,7 @@ class VideoExportService : Service() {
             notificationManager.notify(NOTIFICATION_ID, buildCancelledNotification())
         } catch (error: Throwable) {
             Log.e(TAG, "Video export failed", error)
-            deleteIncompleteVideo(uri)
+            GeneratedMediaRepository(applicationContext).discard(uri)
             requestStore.clear()
             finishWithFailure(request, getString(R.string.video_export_failed), startId)
             return
@@ -178,7 +183,7 @@ class VideoExportService : Service() {
         }
         serviceScope.launch {
             val request = withContext(Dispatchers.IO) { requestStore.load() }
-            request?.let { deleteIncompleteVideo(it.outputUri.toUri()) }
+            request?.let { GeneratedMediaRepository(applicationContext).discard(it.outputUri.toUri()) }
             requestStore.clear()
             publish(
                 VideoExportSnapshot(
@@ -229,12 +234,12 @@ class VideoExportService : Service() {
         }
     }
 
-    private suspend fun registerCreation(uri: Uri, request: VideoExportRequest) {
+    private suspend fun registerVideo(uri: Uri, request: VideoExportRequest) {
         val metadata = withContext(Dispatchers.IO) {
-            runCatching { CreationMedia(applicationContext).inspect(uri) }.getOrNull()
+            runCatching { VideoMedia(applicationContext).inspect(uri) }.getOrNull()
         }
-        CreationStore(applicationContext).upsert(
-            CreationRecord(
+        VideoStore(applicationContext).upsert(
+            VideoRecord(
                 uri = uri.toString(),
                 title = request.title,
                 fileName = metadata?.fileName ?: "${request.title}.mp4",
@@ -252,10 +257,6 @@ class VideoExportService : Service() {
     private fun persistUriAccess(uri: Uri) {
         val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         runCatching { contentResolver.takePersistableUriPermission(uri, flags) }
-    }
-
-    private fun deleteIncompleteVideo(uri: Uri) {
-        runCatching { contentResolver.delete(uri, null, null) }
     }
 
     private fun buildStartingNotification(): Notification = notificationBuilder()

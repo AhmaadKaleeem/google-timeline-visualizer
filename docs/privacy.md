@@ -12,7 +12,7 @@ Timeline Visualizer is designed to process sensitive location history locally.
 
 ## Data the app can access
 
-The app reads only Timeline JSON and MP4 documents that the user explicitly
+Your Timeline file is never uploaded. The app reads only the Timeline file and imported MP4 documents that the user explicitly
 chooses in Android's system document picker. It does not request device location,
 Google account access, contacts, photos, advertising identifiers, or broad storage
 permission.
@@ -25,7 +25,8 @@ app storage so creation can continue when the app is no longer on screen and can
 restart if Android recreates the app process. This temporary export data is
 deleted after completion, cancellation, or failure and is excluded from Android
 backup and device transfer. Generated videos are written to the destination the
-user chooses. Cached basemap image tiles may remain in the app's temporary cache
+On Android 10 and later, completed MP4 files are saved through MediaStore under
+`Movies/Timeline Visualizer`. Android 8 and 9 use the system Save As picker. Cached basemap image tiles may remain in the app's temporary cache
 and can be removed by clearing the app cache or uninstalling the app.
 
 After a successful Timeline import, the app stores only the selected document URI
@@ -36,7 +37,7 @@ On Android 13 and newer, the app may request notification permission so it can
 show video progress and a completion alert. Declining this permission does not
 stop video creation and does not grant access to any personal data.
 
-For the Creations library, the app stores a local index containing the selected
+For the Videos library, the app stores a local index containing the selected
 video URI, title, filename, duration, creation date, and Timeline period when
 available. A small thumbnail is stored in private app storage. The app requests
 persistent access only to MP4 files that the user creates or explicitly adds.
@@ -45,7 +46,7 @@ A 1080 × 1080 overview PNG may remain temporarily in app cache for the completi
 screen's save and share actions. No visible PNG is created unless the user chooses
 where to save it.
 
-Android backup and device-transfer rules exclude the Creations index and thumbnails
+Android backup and device-transfer rules exclude the Videos index and thumbnails
 so video references and preview images are not copied to another device.
 
 ## Network use
@@ -68,8 +69,8 @@ process network and tile-request information under its own privacy notice.
 
 Use Android's **Settings → Apps → Timeline Visualizer → Storage & cache → Clear
 cache** to remove cached map tiles. Clear storage or uninstall the app to remove
-the Creations index and thumbnails along with all other application data. Removing
-an entry from Creations does not delete the MP4. Use the separately confirmed
+the Videos index and thumbnails along with all other application data. Removing
+an entry from Videos does not delete the MP4. Use the separately confirmed
 **Delete video** action, or delete the file from its saved location, to remove the
 actual video.
 

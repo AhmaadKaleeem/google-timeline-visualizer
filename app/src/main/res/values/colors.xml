@@ -1,5 +1,9 @@
 <resources>
     <color name="brand">#E90064</color>
-    <color name="brand_dark">#9F0045</color>
+    <color name="interactive">#D0005A</color>
+    <color name="on_interactive">#FFFFFF</color>
     <color name="surface">#FFF8FA</color>
+    <color name="surface_container">#F7EEF1</color>
+    <color name="on_surface">#24191D</color>
+    <color name="map_surface">#EEE8EA</color>
 </resources>

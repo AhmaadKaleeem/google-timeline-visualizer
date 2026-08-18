@@ -1,10 +1,13 @@
-# Google Timeline Visualizer
+# Timeline Visualizer
 
 [한국어 안내](README.ko.md) · [日本語](README.ja.md)
 
-Create a polished travel animation from your Google Maps Timeline export, entirely
-on your Android phone. Choose a range of months across one or more years, preview the journey, and save
-an MP4 ready to share.
+Turn your Timeline file into an animated travel video on your Android phone. Choose
+a period, preview the Journey, and create an MP4 ready to watch or share.
+
+![Videos library](play-store/assets/screenshots/en-US/01-videos.png)
+
+![New video](play-store/assets/screenshots/en-US/03-selected-period.png)
 
 ![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 ![License](https://img.shields.io/github/license/mahlernim/google-timeline-visualizer)
@@ -15,7 +18,7 @@ an MP4 ready to share.
 The app is not yet on Google Play. Install it from this repository's
 [latest release](https://github.com/mahlernim/google-timeline-visualizer/releases/latest):
 
-1. Under **Assets**, download `TimelineVisualizer-v1.8.1.apk` on your phone.
+1. Under **Assets**, download `TimelineVisualizer-v1.9.0.apk` on your phone.
 2. Open the downloaded file.
 3. If Android blocks the installation, select **Settings**, allow your browser or
    file manager to **Install unknown apps**, then return and try again.
@@ -27,7 +30,7 @@ distributed APK. Future releases can be installed over this release.
 
 Requires Android 8.0 or newer.
 
-## Export your Timeline.json
+## Get your Timeline file
 
 On Android, the export is in the phone's Settings app, not in Google Maps:
 
@@ -39,7 +42,7 @@ On Android, the export is in the phone's Settings app, not in Google Maps:
 See [Google's Timeline Help](https://support.google.com/maps/answer/6258979) if the
 Timeline menu is missing or the labels differ on your phone.
 
-Names and menu locations can vary by phone. In Timeline Visualizer, **Get JSON**
+Names and menu locations can vary by phone. In Timeline Visualizer, **Get Timeline file**
 shows these instructions and can open Location settings for you. Android does not
 provide apps with a standard link directly to the Timeline page.
 
@@ -59,22 +62,23 @@ restore it directly.
 
 ## Create and share a video
 
-1. Select **Load Timeline** and choose the exported file.
-2. Choose the start year and month and the end year and month. The latest full
+1. Open **New video**, select **Choose file**, and choose your Timeline file.
+2. Choose the start year and month and the end year and month under **Selected period**. The latest full
    year is selected by default, and ranges may cross year boundaries.
 3. Confirm the name and title template, then choose a 10, 15, 20, 30, 45, or
    60-second journey. The template is saved for next time and supports `{year}`
    and `{name}`.
 4. Select **Preview** to check the animated map. This is an interactive preview.
    The saved video uses the same design with map tiles prepared before rendering.
-5. Select **Create video** and choose where to save it. The app shows each stage,
+5. Select **Create video**. On Android 10 and later, the app saves it automatically
+   under `Movies/Timeline Visualizer`. Android 8 and 9 use the system Save As picker. The app shows each stage,
    an estimated time when enough progress has been measured, and a cancel button.
    You can switch apps or turn off the screen while it continues.
-6. When the video is ready, watch or share it, save or share the 1080 × 1080
-   overview image, or create another video.
+6. When the video is saved, watch or share it, use **Save as** to copy it elsewhere,
+   optionally save or share the 1080 × 1080 Journey overview, or create another video.
 
 After a Timeline is loaded successfully, the app remembers its document reference
-and reopens it on the next launch when the storage provider retains access. It does
+and reopens it when New video opens and the storage provider retains access. It does
 not copy the Timeline data. If the file was moved or permission was lost, the app
 returns to the normal loading flow.
 
@@ -88,11 +92,11 @@ the end, selecting **Preview** again starts it from the beginning. On Android 13
 or newer, allow notifications to follow progress outside the app and receive a
 ready alert. Video creation continues even if you decline notification access.
 
-## Keep your creations
+## Keep your videos
 
-Completed videos are added to **Creations** automatically. Each entry keeps its
+Completed videos are added to **Videos** automatically. Each entry keeps its
 thumbnail, title, Timeline period, duration, and creation date, with quick actions
-to watch or share it. The MP4 remains in the folder you selected. The app stores
+to watch or share it. Automatically created MP4 files remain in `Movies/Timeline Visualizer`. The app stores
 only a small local index and a deterministic thumbnail made from the final journey overview.
 
 Use **Add videos** to include MP4s made before this library was introduced. You can
@@ -130,7 +134,7 @@ phone's Timeline history through Sign-In. Requiring it would add account access
 without removing the export step, so the app uses your editable phone name for
 the default title.
 
-The basemap is the only network feature. CARTO receives requests for the map areas
+Your Timeline file is never uploaded. The basemap is the only network feature. CARTO receives requests for the map areas
 shown and serves tiles based on OpenStreetMap data. This can reveal viewed areas to
 the tile provider, but the Timeline JSON is not uploaded. Before the first Timeline
 is loaded, the app explains this transfer and lets you cancel. See the full

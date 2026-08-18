@@ -17,6 +17,7 @@ import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.SeekBar
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -31,13 +32,12 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
-import dev.mahlernim.timelinevisualizer.creations.CreationMedia
-import dev.mahlernim.timelinevisualizer.creations.CreationRecord
-import dev.mahlernim.timelinevisualizer.creations.CreationStore
 import dev.mahlernim.timelinevisualizer.data.TimelineParser
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.databinding.ActivityMainBinding
-import dev.mahlernim.timelinevisualizer.databinding.ItemCreationBinding
+import dev.mahlernim.timelinevisualizer.databinding.ItemVideoBinding
+import dev.mahlernim.timelinevisualizer.databinding.ScreenNewVideoBinding
+import dev.mahlernim.timelinevisualizer.databinding.ScreenVideosBinding
 import dev.mahlernim.timelinevisualizer.export.ExportProgress
 import dev.mahlernim.timelinevisualizer.export.ExportPhase
 import dev.mahlernim.timelinevisualizer.export.VideoExportCoordinator
@@ -52,6 +52,10 @@ import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import dev.mahlernim.timelinevisualizer.model.TitleTemplate
 import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import dev.mahlernim.timelinevisualizer.render.RenderText
+import dev.mahlernim.timelinevisualizer.videos.GeneratedMediaRepository
+import dev.mahlernim.timelinevisualizer.videos.VideoMedia
+import dev.mahlernim.timelinevisualizer.videos.VideoRecord
+import dev.mahlernim.timelinevisualizer.videos.VideoStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -67,6 +71,8 @@ import kotlin.math.ceil
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
+    private lateinit var home: ScreenVideosBinding
+    private lateinit var editor: ScreenNewVideoBinding
     private var timeline: Timeline? = null
     private var journey: Journey? = null
     private var animation: ValueAnimator? = null
@@ -74,6 +80,7 @@ class MainActivity : AppCompatActivity() {
     private var lastVideoUri: Uri? = null
     private var lastVideoTitle: String? = null
     private var pendingOverviewVideoUri: Uri? = null
+    private var pendingVideoCopyUri: Uri? = null
     private var importJob: Job? = null
     private var selectedStartYear: Int? = null
     private var selectedEndYear: Int? = null
@@ -82,12 +89,15 @@ class MainActivity : AppCompatActivity() {
     private val titleHandler = Handler(Looper.getMainLooper())
     private val monthNames by lazy { DateFormatSymbols.getInstance().months.take(12) }
     private val preferences by lazy { getSharedPreferences("display", MODE_PRIVATE) }
-    private val creationStore by lazy { CreationStore(applicationContext) }
-    private val creationMedia by lazy { CreationMedia(applicationContext) }
+    private val videoStore by lazy { VideoStore(applicationContext) }
+    private val videoMedia by lazy { VideoMedia(applicationContext) }
+    private val generatedMedia by lazy { GeneratedMediaRepository(applicationContext) }
     private val timelineSourceStore by lazy { TimelineSourceStore(applicationContext) }
     private val applyTitleChanges = Runnable { commitTitlePreferences() }
-    private var creationRenderGeneration = 0
-    private var creationsExpanded = false
+    private var videoRenderGeneration = 0
+    private var videosExpanded = false
+    private var currentScreen = Screen.VIDEOS
+    private var rememberedTimelineLoaded = false
     private var lastRenderedExportStatus = VideoExportStatus.IDLE
 
     private val openTimeline = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -110,6 +120,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val copyCompletedVideo = registerForActivityResult(ActivityResultContracts.CreateDocument("video/mp4")) { uri ->
+        val source = pendingVideoCopyUri
+        pendingVideoCopyUri = null
+        if (uri != null && source != null) copyCompletedVideo(source, uri)
+    }
+
     private val requestNotificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { openExportDestination() }
@@ -122,32 +138,46 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        home = ScreenVideosBinding.bind(findViewById(R.id.videosScreen))
+        editor = ScreenNewVideoBinding.bind(findViewById(R.id.newVideoScreen))
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
             val bars: Insets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(0, bars.top, 0, bars.bottom)
             insets
         }
 
-        binding.importButton.setOnClickListener { requestTimelineImport() }
-        binding.exportHelpButton.setOnClickListener { showExportHelp() }
-        binding.restoreTimelineHelpLink.setOnClickListener { openRestoreGuide() }
-        binding.playButton.setOnClickListener { togglePreview() }
-        binding.exportButton.setOnClickListener { chooseExportDestination() }
-        binding.cancelExportButton.setOnClickListener { VideoExportService.cancel(applicationContext) }
-        binding.shareButton.setOnClickListener { lastVideoUri?.let(::shareVideo) }
-        binding.saveOverviewButton.setOnClickListener { lastVideoUri?.let(::chooseOverviewDestination) }
-        binding.shareOverviewButton.setOnClickListener { lastVideoUri?.let(::shareOverviewImage) }
-        binding.watchVideoButton.setOnClickListener { lastVideoUri?.let(::watchVideo) }
-        binding.createAnotherButton.setOnClickListener { prepareAnotherVideo() }
-        binding.addExistingVideoButton.setOnClickListener { addExistingVideos.launch(arrayOf("video/mp4")) }
-        binding.showAllCreationsButton.setOnClickListener {
-            creationsExpanded = !creationsExpanded
-            renderCreations()
+        home.createVideoButton.setOnClickListener { showNewVideo(loadRemembered = true) }
+        home.homeCancelExportButton.setOnClickListener { VideoExportService.cancel(applicationContext) }
+        editor.backButton.setOnClickListener { showVideos() }
+        editor.doneButton.setOnClickListener {
+            VideoExportCoordinator.clear(applicationContext)
+            editor.videoReadyGroup.visibility = View.GONE
+            showVideos()
         }
-        binding.privacyPolicyButton.setOnClickListener { openPrivacyPolicy() }
-        binding.githubProjectButton.setOnClickListener { openWebPage(PROJECT_URL, R.string.web_page_unavailable) }
-        binding.checkUpdatesButton.setOnClickListener { openUpdates() }
-        binding.timelineSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+        editor.saveAsButton.setOnClickListener { lastVideoUri?.let(::chooseVideoCopyDestination) }
+        editor.importButton.setOnClickListener { requestTimelineImport() }
+        editor.exportHelpButton.setOnClickListener { showExportHelp() }
+        editor.restoreTimelineHelpLink.setOnClickListener { openRestoreGuide() }
+        editor.playButton.setOnClickListener { togglePreview() }
+        editor.exportButton.setOnClickListener { chooseExportDestination() }
+        editor.cancelExportButton.setOnClickListener { VideoExportService.cancel(applicationContext) }
+        editor.shareButton.setOnClickListener { lastVideoUri?.let(::shareVideo) }
+        editor.saveOverviewButton.setOnClickListener { lastVideoUri?.let(::chooseOverviewDestination) }
+        editor.shareOverviewButton.setOnClickListener { lastVideoUri?.let(::shareOverviewImage) }
+        editor.watchVideoButton.setOnClickListener { lastVideoUri?.let(::watchVideo) }
+        editor.createAnotherButton.setOnClickListener { prepareAnotherVideo() }
+        home.addExistingVideoButton.setOnClickListener { addExistingVideos.launch(arrayOf("video/mp4")) }
+        home.showAllVideosButton.setOnClickListener {
+            videosExpanded = !videosExpanded
+            renderVideos()
+        }
+        home.privacyPolicyButton.setOnClickListener { openPrivacyPolicy() }
+        home.githubProjectButton.setOnClickListener { openWebPage(PROJECT_URL, R.string.web_page_unavailable) }
+        home.checkUpdatesButton.setOnClickListener { openUpdates() }
+        onBackPressedDispatcher.addCallback(this) {
+            if (currentScreen == Screen.NEW_VIDEO) showVideos() else finish()
+        }
+        editor.timelineSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
                     animation?.cancel()
@@ -159,39 +189,75 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
         })
 
-        binding.ownerInput.setText(preferences.getString("owner_name", null) ?: deviceName())
-        binding.titleInput.setText(
+        editor.ownerInput.setText(preferences.getString("owner_name", null) ?: deviceName())
+        editor.titleInput.setText(
             preferences.getString("title_template", null) ?: getString(R.string.default_title_template),
         )
-        binding.ownerInput.doAfterTextChanged { scheduleTitleUpdate() }
-        binding.titleInput.doAfterTextChanged { scheduleTitleUpdate() }
-        binding.ownerInput.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commitTitlePreferences() }
-        binding.titleInput.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commitTitlePreferences() }
+        editor.ownerInput.doAfterTextChanged { scheduleTitleUpdate() }
+        editor.titleInput.doAfterTextChanged { scheduleTitleUpdate() }
+        editor.ownerInput.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commitTitlePreferences() }
+        editor.titleInput.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commitTitlePreferences() }
 
         val durations = listOf(10, 15, 20, 30, 45, 60).map {
             resources.getQuantityString(R.plurals.duration_seconds, it, it)
         }
-        binding.durationDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, durations))
-        binding.durationDropdown.setText(resources.getQuantityString(R.plurals.duration_seconds, 30, 30), false)
-        binding.timelineView.journeyDurationSeconds = 30
-        binding.timelineView.renderText = currentRenderText()
-        binding.durationDropdown.setOnItemClickListener { _, _, _, _ ->
+        editor.durationDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, durations))
+        editor.durationDropdown.setText(resources.getQuantityString(R.plurals.duration_seconds, 30, 30), false)
+        editor.timelineView.journeyDurationSeconds = 30
+        editor.timelineView.renderText = currentRenderText()
+        editor.durationDropdown.setOnItemClickListener { _, _, _, _ ->
             animation?.cancel()
-            binding.timelineView.journeyDurationSeconds = selectedDurationSeconds()
-            showProgress(binding.timelineSeek.progress / 1000f)
+            editor.timelineView.journeyDurationSeconds = selectedDurationSeconds()
+            showProgress(editor.timelineSeek.progress / 1000f)
         }
-        makeDropdownOpenReliably(binding.durationDropdown)
+        makeDropdownOpenReliably(editor.durationDropdown)
         configureMonthDropdowns()
-        renderCreations()
-        lifecycleScope.launch(Dispatchers.IO) { creationMedia.pruneOverviewCache() }
+        renderVideos()
+        lifecycleScope.launch(Dispatchers.IO) { videoMedia.pruneOverviewCache() }
         VideoExportCoordinator.restore(applicationContext)
         observeVideoExport()
         VideoExportService.resumeIfNeeded(applicationContext)
 
         val incoming = intent?.data
         if (incoming != null) {
+            showNewVideo(loadRemembered = false)
             requestTimelineImport(incoming)
-        } else if (preferences.getBoolean(MAP_PRIVACY_ACCEPTED, false)) {
+        } else if (savedInstanceState?.getString(STATE_SCREEN) == Screen.NEW_VIDEO.name) {
+            showNewVideo(loadRemembered = true)
+        } else {
+            showVideos()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_SCREEN, currentScreen.name)
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.data?.let { uri ->
+            showNewVideo(loadRemembered = false)
+            requestTimelineImport(uri)
+        }
+    }
+
+    private fun showVideos() {
+        currentScreen = Screen.VIDEOS
+        home.root.visibility = View.VISIBLE
+        editor.root.visibility = View.GONE
+        renderVideos()
+    }
+
+    private fun showNewVideo(loadRemembered: Boolean) {
+        currentScreen = Screen.NEW_VIDEO
+        home.root.visibility = View.GONE
+        editor.root.visibility = View.VISIBLE
+        if (loadRemembered && !rememberedTimelineLoaded && timeline == null &&
+            preferences.getBoolean(MAP_PRIVACY_ACCEPTED, false)
+        ) {
+            rememberedTimelineLoaded = true
             timelineSourceStore.load()?.let { importTimeline(it, remembered = true) }
         }
     }
@@ -212,40 +278,41 @@ class MainActivity : AppCompatActivity() {
     private fun commitTitlePreferences() {
         titleHandler.removeCallbacks(applyTitleChanges)
         preferences.edit {
-            putString("owner_name", binding.ownerInput.text?.toString().orEmpty())
-            putString("title_template", binding.titleInput.text?.toString().orEmpty())
+            putString("owner_name", editor.ownerInput.text?.toString().orEmpty())
+            putString("title_template", editor.titleInput.text?.toString().orEmpty())
         }
         updateResolvedTitle()
     }
 
     private fun updateResolvedTitle() {
         val period = currentPeriod() ?: return
-        binding.timelineView.videoTitle = resolvedTitle(period)
+        editor.timelineView.videoTitle = resolvedTitle(period)
     }
 
     private fun resolvedTitle(period: TimelinePeriod): String = TitleTemplate.resolve(
-        template = binding.titleInput.text?.toString().orEmpty(),
+        template = editor.titleInput.text?.toString().orEmpty(),
         yearLabel = period.yearLabel,
-        name = binding.ownerInput.text?.toString().orEmpty().ifBlank { getString(R.string.traveler) },
+        name = editor.ownerInput.text?.toString().orEmpty().ifBlank { getString(R.string.traveler) },
         fallback = getString(R.string.default_title),
     )
 
     private fun importTimeline(uri: Uri, remembered: Boolean = false) {
         if (importJob?.isActive == true) return
         animation?.cancel()
-        binding.editorGroup.visibility = View.GONE
+        editor.editorGroup.visibility = View.GONE
         setTimelineLoading(true, R.string.opening_timeline)
         importJob = lifecycleScope.launch {
             try {
-                binding.loadingStageText.setText(R.string.reading_timeline)
+                editor.loadingStageText.setText(R.string.reading_timeline)
                 val loaded = withContext(Dispatchers.IO) {
                     contentResolver.openInputStream(uri)?.use(TimelineParser()::parse)
                         ?: throw java.io.FileNotFoundException()
                 }
-                binding.loadingStageText.setText(R.string.preparing_trips)
+                editor.loadingStageText.setText(R.string.preparing_trips)
                 timeline = loaded
                 configureYears(loaded)
-                binding.editorGroup.visibility = View.VISIBLE
+                editor.editorGroup.visibility = View.VISIBLE
+                editor.statusText.text = ""
                 if (!remembered) rememberTimelineSource(uri)
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -255,10 +322,10 @@ class MainActivity : AppCompatActivity() {
                 if (remembered) {
                     timelineSourceStore.clear()
                     releaseUriAccess(uri)
-                    binding.statusText.setText(R.string.remembered_timeline_unavailable)
+                    editor.statusText.setText(R.string.timeline_file_unavailable)
                     Snackbar.make(binding.root, R.string.choose_timeline_again, Snackbar.LENGTH_LONG).show()
                 } else {
-                    binding.statusText.setText(R.string.import_failed_detail)
+                    editor.statusText.setText(R.string.import_failed_detail)
                     Snackbar.make(binding.root, R.string.import_failed, Snackbar.LENGTH_LONG).show()
                 }
             } finally {
@@ -269,10 +336,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setTimelineLoading(loading: Boolean, stage: Int = R.string.opening_timeline) {
-        binding.loadingGroup.visibility = if (loading) View.VISIBLE else View.GONE
-        if (loading) binding.loadingStageText.setText(stage)
-        binding.importButton.isEnabled = !loading
-        binding.exportHelpButton.isEnabled = !loading
+        editor.loadingGroup.visibility = if (loading) View.VISIBLE else View.GONE
+        if (loading) editor.loadingStageText.setText(stage)
+        editor.importButton.isEnabled = !loading
+        editor.exportHelpButton.isEnabled = !loading
     }
 
     private fun rememberTimelineSource(uri: Uri) {
@@ -288,15 +355,15 @@ class MainActivity : AppCompatActivity() {
     private fun configureYears(loaded: Timeline) {
         val years = loaded.years
         val labels = years.map { NumberFormat.getIntegerInstance().apply { isGroupingUsed = false }.format(it) }
-        binding.startYearDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels))
-        binding.endYearDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels))
-        makeDropdownOpenReliably(binding.startYearDropdown)
-        makeDropdownOpenReliably(binding.endYearDropdown)
-        binding.startYearDropdown.setOnItemClickListener { _, _, position, _ ->
+        editor.startYearDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels))
+        editor.endYearDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels))
+        makeDropdownOpenReliably(editor.startYearDropdown)
+        makeDropdownOpenReliably(editor.endYearDropdown)
+        editor.startYearDropdown.setOnItemClickListener { _, _, position, _ ->
             selectedStartYear = years[position]
             normalizeRange(changedStart = true)
         }
-        binding.endYearDropdown.setOnItemClickListener { _, _, position, _ ->
+        editor.endYearDropdown.setOnItemClickListener { _, _, position, _ ->
             selectedEndYear = years[position]
             normalizeRange(changedStart = false)
         }
@@ -312,18 +379,23 @@ class MainActivity : AppCompatActivity() {
         val selected = timeline?.forRange(period) ?: return
         animation?.cancel()
         journey = selected
-        binding.timelineView.journey = selected
-        binding.timelineSeek.progress = 0
+        editor.timelineView.journey = selected
+        editor.timelineSeek.progress = 0
         showProgress(0f)
-        binding.videoReadyGroup.visibility = View.GONE
-        binding.statusText.text = journeySummary(selected)
-        val canCreate = selected.points.size >= 2 && selected.totalDistanceKm > 0
-        binding.playButton.isEnabled = canCreate
-        binding.exportButton.isEnabled = canCreate
+        editor.videoReadyGroup.visibility = View.GONE
+        editor.periodSummaryText.text = selectedPeriodSummary(selected)
+        val canCreate = canCreateVideo(selected)
+        editor.playButton.isEnabled = canCreate
+        editor.exportButton.isEnabled = canCreate
     }
 
-    private fun journeySummary(selected: Journey): String {
+    internal fun selectedPeriodSummary(selected: Journey): String {
         val number = NumberFormat.getNumberInstance().apply { maximumFractionDigits = 0 }
+        if (selected.points.isEmpty()) return getString(R.string.selected_period_empty)
+        if (selected.points.size == 1) return getString(R.string.selected_period_one_point)
+        if (selected.totalDistanceKm <= 0) {
+            return getString(R.string.selected_period_no_movement, number.format(selected.points.size))
+        }
         val range = selected.period
         val period = if (
             range.startYear == range.endYear &&
@@ -348,26 +420,29 @@ class MainActivity : AppCompatActivity() {
             )
         }
         return getString(
-            R.string.journey_summary,
+            R.string.selected_period_summary,
             number.format(selected.points.size),
             number.format(selected.totalDistanceKm),
             period,
         )
     }
 
+    internal fun canCreateVideo(selected: Journey): Boolean =
+        selected.points.size >= 2 && selected.totalDistanceKm > 0
+
     private fun configureMonthDropdowns() {
         val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, monthNames)
-        binding.startMonthDropdown.setAdapter(adapter)
-        binding.endMonthDropdown.setAdapter(adapter)
-        binding.startMonthDropdown.setText(monthNames.first(), false)
-        binding.endMonthDropdown.setText(monthNames.last(), false)
-        makeDropdownOpenReliably(binding.startMonthDropdown)
-        makeDropdownOpenReliably(binding.endMonthDropdown)
-        binding.startMonthDropdown.setOnItemClickListener { _, _, position, _ ->
+        editor.startMonthDropdown.setAdapter(adapter)
+        editor.endMonthDropdown.setAdapter(adapter)
+        editor.startMonthDropdown.setText(monthNames.first(), false)
+        editor.endMonthDropdown.setText(monthNames.last(), false)
+        makeDropdownOpenReliably(editor.startMonthDropdown)
+        makeDropdownOpenReliably(editor.endMonthDropdown)
+        editor.startMonthDropdown.setOnItemClickListener { _, _, position, _ ->
             selectedStartMonth = position + 1
             normalizeRange(changedStart = true)
         }
-        binding.endMonthDropdown.setOnItemClickListener { _, _, position, _ ->
+        editor.endMonthDropdown.setOnItemClickListener { _, _, position, _ ->
             selectedEndMonth = position + 1
             normalizeRange(changedStart = false)
         }
@@ -387,8 +462,8 @@ class MainActivity : AppCompatActivity() {
                 selectedStartMonth = end.monthValue
             }
             updateYearDropdowns()
-            binding.startMonthDropdown.setText(monthNames[selectedStartMonth - 1], false)
-            binding.endMonthDropdown.setText(monthNames[selectedEndMonth - 1], false)
+            editor.startMonthDropdown.setText(monthNames[selectedStartMonth - 1], false)
+            editor.endMonthDropdown.setText(monthNames[selectedEndMonth - 1], false)
         }
         updateResolvedTitle()
         selectRange()
@@ -396,8 +471,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateYearDropdowns() {
         val formatter = NumberFormat.getIntegerInstance().apply { isGroupingUsed = false }
-        selectedStartYear?.let { binding.startYearDropdown.setText(formatter.format(it), false) }
-        selectedEndYear?.let { binding.endYearDropdown.setText(formatter.format(it), false) }
+        selectedStartYear?.let { editor.startYearDropdown.setText(formatter.format(it), false) }
+        selectedEndYear?.let { editor.endYearDropdown.setText(formatter.format(it), false) }
     }
 
     private fun currentPeriod(): TimelinePeriod? {
@@ -413,39 +488,39 @@ class MainActivity : AppCompatActivity() {
         journey ?: return
         if (animation?.isPaused == true) {
             animation?.resume()
-            binding.playButton.text = getString(R.string.pause_preview)
+            editor.playButton.text = getString(R.string.pause_preview)
             return
         }
         if (animation?.isRunning == true) {
             animation?.pause()
-            binding.playButton.text = getString(R.string.preview)
+            editor.playButton.text = getString(R.string.preview)
             return
         }
-        val start = if (binding.timelineSeek.progress >= 1000) {
-            binding.timelineSeek.progress = 0
+        val start = if (editor.timelineSeek.progress >= 1000) {
+            editor.timelineSeek.progress = 0
             showProgress(0f)
             0
-        } else binding.timelineSeek.progress
-        binding.timelineView.journeyDurationSeconds = selectedDurationSeconds()
+        } else editor.timelineSeek.progress
+        editor.timelineView.journeyDurationSeconds = selectedDurationSeconds()
         val durationMs = (TimelineAnimation.totalDurationSeconds(selectedDurationSeconds()) * 1000f).toLong()
         animation = ValueAnimator.ofInt(start, 1000).apply {
             duration = ((1000 - start) / 1000f * durationMs).toLong().coerceAtLeast(250)
             addUpdateListener { value ->
                 val progress = value.animatedValue as Int
-                binding.timelineSeek.progress = progress
+                editor.timelineSeek.progress = progress
                 showProgress(progress / 1000f)
             }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationStart(animation: android.animation.Animator) {
-                    binding.playButton.text = getString(R.string.pause_preview)
+                    editor.playButton.text = getString(R.string.pause_preview)
                 }
 
                 override fun onAnimationEnd(animation: android.animation.Animator) {
-                    binding.playButton.text = getString(R.string.preview)
+                    editor.playButton.text = getString(R.string.preview)
                 }
 
                 override fun onAnimationCancel(animation: android.animation.Animator) {
-                    binding.playButton.text = getString(R.string.preview)
+                    editor.playButton.text = getString(R.string.preview)
                 }
             })
             start()
@@ -453,7 +528,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showProgress(progress: Float) {
-        binding.timelineView.progress = progress
+        editor.timelineView.progress = progress
     }
 
     private fun chooseExportDestination() {
@@ -489,18 +564,29 @@ class MainActivity : AppCompatActivity() {
             durationSeconds = selectedDurationSeconds(),
             renderText = currentRenderText(),
         )
-        val slug = title.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "timeline" }
-        val periodSuffix = periodFileSuffix(selected.period)
-        createVideo.launch("$slug-$periodSuffix.mp4")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val request = pendingExport ?: return
+            pendingExport = null
+            runCatching { generatedMedia.createVideoDestination(title, selected.period) }
+                .onSuccess { uri -> uri?.let { startVideoExport(it, request) } }
+                .onFailure {
+                    editor.statusText.setText(R.string.video_request_unavailable)
+                    Snackbar.make(binding.root, R.string.video_export_failed, Snackbar.LENGTH_LONG).show()
+                }
+        } else {
+            createVideo.launch("${generatedMedia.fileBaseName(title, selected.period)}.mp4")
+        }
     }
 
     private fun startVideoExport(uri: Uri, request: VideoExportRequest) {
         val completeRequest = request.copy(outputUri = uri.toString())
-        persistUriAccess(uri, includeWrite = true)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || uri.authority != android.provider.MediaStore.AUTHORITY) {
+            persistUriAccess(uri, includeWrite = true)
+        }
         val saved = runCatching { VideoExportRequestStore(applicationContext).save(completeRequest) }
         if (saved.isFailure) {
-            runCatching { contentResolver.delete(uri, null, null) }
-            binding.statusText.text = getString(R.string.video_request_unavailable)
+            generatedMedia.discard(uri)
+            editor.statusText.text = getString(R.string.video_request_unavailable)
             Snackbar.make(binding.root, R.string.video_export_failed, Snackbar.LENGTH_LONG).show()
             return
         }
@@ -512,7 +598,19 @@ class MainActivity : AppCompatActivity() {
             title = completeRequest.title,
         )
         VideoExportCoordinator.publish(applicationContext, snapshot)
-        VideoExportService.start(applicationContext)
+        runCatching { VideoExportService.start(applicationContext) }.onFailure {
+            VideoExportRequestStore(applicationContext).clear()
+            generatedMedia.discard(uri)
+            VideoExportCoordinator.publish(
+                applicationContext,
+                VideoExportSnapshot(
+                    status = VideoExportStatus.FAILED,
+                    outputUri = uri.toString(),
+                    title = completeRequest.title,
+                    errorMessage = getString(R.string.video_request_unavailable),
+                ),
+            )
+        }
     }
 
     private fun observeVideoExport() {
@@ -524,6 +622,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderVideoExport(snapshot: VideoExportSnapshot) {
+        home.homeExportGroup.visibility = if (snapshot.status == VideoExportStatus.RUNNING) View.VISIBLE else View.GONE
         when (snapshot.status) {
             VideoExportStatus.IDLE -> setExporting(false)
             VideoExportStatus.RUNNING -> {
@@ -535,28 +634,30 @@ class MainActivity : AppCompatActivity() {
                 snapshot.outputUri?.toUri()?.let { uri ->
                     lastVideoUri = uri
                     lastVideoTitle = snapshot.title
-                    binding.videoReadyGroup.visibility = View.VISIBLE
-                    val hasOverview = creationMedia.cachedOverview(uri) != null
-                    binding.saveOverviewButton.isEnabled = hasOverview
-                    binding.shareOverviewButton.isEnabled = hasOverview
+                    editor.videoReadyGroup.visibility = View.VISIBLE
+                    val hasOverview = videoMedia.cachedOverview(uri) != null
+                    editor.saveAsButton.isEnabled = true
+                    editor.saveOverviewButton.isEnabled = hasOverview
+                    editor.shareOverviewButton.isEnabled = hasOverview
                 }
-                binding.statusText.text = getString(R.string.video_saved)
-                if (lastRenderedExportStatus != VideoExportStatus.COMPLETE) renderCreations()
+                editor.statusText.text = getString(R.string.video_saved)
+                if (lastRenderedExportStatus != VideoExportStatus.COMPLETE) renderVideos()
             }
             VideoExportStatus.CANCELLED -> {
                 setExporting(false)
-                binding.statusText.text = getString(R.string.video_creation_cancelled)
+                editor.statusText.text = getString(R.string.video_creation_cancelled)
             }
             VideoExportStatus.FAILED -> {
                 setExporting(false)
-                binding.statusText.setText(R.string.video_export_failed)
+                editor.statusText.setText(R.string.video_export_failed)
             }
         }
         lastRenderedExportStatus = snapshot.status
     }
 
     private fun showExportProgress(progress: ExportProgress, startedAtMillis: Long) {
-        binding.exportProgress.progress = (progress.fraction * 1000).toInt()
+        editor.exportProgress.progress = (progress.fraction * 1000).toInt()
+        home.homeExportProgress.progress = (progress.fraction * 1000).toInt()
         if (progress.phase == ExportPhase.COMPLETE) return
         val base = when (progress.phase) {
             ExportPhase.PREPARING_MAP -> getString(
@@ -578,9 +679,11 @@ class MainActivity : AppCompatActivity() {
         val remaining = if (elapsedMs >= 3_000 && progress.fraction in 0.05f..0.98f) {
             ceil(elapsedMs / 1000.0 * (1.0 - progress.fraction) / progress.fraction).toInt()
         } else null
-        binding.statusText.text = if (remaining != null) {
+        val status = if (remaining != null) {
             getString(R.string.progress_with_eta, base, formatRemainingTime(remaining))
         } else base
+        editor.statusText.text = status
+        home.homeExportStatusText.text = status
     }
 
     private fun formatRemainingTime(seconds: Int): String = if (seconds < 90) {
@@ -591,39 +694,41 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setExporting(exporting: Boolean) {
-        val canCreate = journey?.let { it.points.size >= 2 && it.totalDistanceKm > 0 } == true
-        binding.exportProgress.visibility = if (exporting) View.VISIBLE else View.GONE
-        binding.cancelExportButton.visibility = if (exporting) View.VISIBLE else View.GONE
-        binding.importButton.isEnabled = !exporting
-        binding.playButton.isEnabled = !exporting && canCreate
-        binding.exportButton.isEnabled = !exporting && canCreate
-        binding.shareButton.isEnabled = !exporting
-        binding.watchVideoButton.isEnabled = !exporting
-        binding.createAnotherButton.isEnabled = !exporting
-        val hasOverview = lastVideoUri?.let { creationMedia.cachedOverview(it) != null } == true
-        binding.saveOverviewButton.isEnabled = !exporting && hasOverview
-        binding.shareOverviewButton.isEnabled = !exporting && hasOverview
-        binding.startYearDropdown.isEnabled = !exporting
-        binding.endYearDropdown.isEnabled = !exporting
-        binding.durationDropdown.isEnabled = !exporting
-        binding.startMonthDropdown.isEnabled = !exporting
-        binding.endMonthDropdown.isEnabled = !exporting
-        binding.ownerInput.isEnabled = !exporting
-        binding.titleInput.isEnabled = !exporting
-        if (exporting) binding.videoReadyGroup.visibility = View.GONE
+        val canCreate = journey?.let(::canCreateVideo) == true
+        editor.exportProgress.visibility = if (exporting) View.VISIBLE else View.GONE
+        editor.cancelExportButton.visibility = if (exporting) View.VISIBLE else View.GONE
+        home.createVideoButton.isEnabled = !exporting
+        editor.importButton.isEnabled = !exporting
+        editor.playButton.isEnabled = !exporting && canCreate
+        editor.exportButton.isEnabled = !exporting && canCreate
+        editor.shareButton.isEnabled = !exporting
+        editor.watchVideoButton.isEnabled = !exporting
+        editor.createAnotherButton.isEnabled = !exporting
+        editor.saveAsButton.isEnabled = !exporting && lastVideoUri != null
+        val hasOverview = lastVideoUri?.let { videoMedia.cachedOverview(it) != null } == true
+        editor.saveOverviewButton.isEnabled = !exporting && hasOverview
+        editor.shareOverviewButton.isEnabled = !exporting && hasOverview
+        editor.startYearDropdown.isEnabled = !exporting
+        editor.endYearDropdown.isEnabled = !exporting
+        editor.durationDropdown.isEnabled = !exporting
+        editor.startMonthDropdown.isEnabled = !exporting
+        editor.endMonthDropdown.isEnabled = !exporting
+        editor.ownerInput.isEnabled = !exporting
+        editor.titleInput.isEnabled = !exporting
+        if (exporting) editor.videoReadyGroup.visibility = View.GONE
     }
 
     private fun prepareAnotherVideo() {
         VideoExportCoordinator.clear(applicationContext)
-        binding.videoReadyGroup.visibility = View.GONE
-        binding.timelineSeek.progress = 0
+        editor.videoReadyGroup.visibility = View.GONE
+        editor.timelineSeek.progress = 0
         showProgress(0f)
-        journey?.let { binding.statusText.text = journeySummary(it) }
+        journey?.let { editor.periodSummaryText.text = selectedPeriodSummary(it) }
     }
 
     private fun importExistingVideos(uris: List<Uri>) {
-        binding.addExistingVideoButton.isEnabled = false
-        binding.addExistingVideoButton.setText(R.string.adding_videos)
+        home.addExistingVideoButton.isEnabled = false
+        home.addExistingVideoButton.setText(R.string.adding_videos)
         lifecycleScope.launch {
             var imported = 0
             var failed = 0
@@ -631,9 +736,9 @@ class MainActivity : AppCompatActivity() {
                 persistUriAccess(uri, includeWrite = true)
                 val result = withContext(Dispatchers.IO) {
                     runCatching {
-                        val metadata = creationMedia.inspect(uri)
-                        runCatching { creationMedia.createThumbnail(uri)?.recycle() }
-                        CreationRecord(
+                        val metadata = videoMedia.inspect(uri)
+                        runCatching { videoMedia.createThumbnail(uri)?.recycle() }
+                        VideoRecord(
                             uri = uri.toString(),
                             title = metadata.fileName.substringBeforeLast('.').ifBlank { getString(R.string.default_title) },
                             fileName = metadata.fileName,
@@ -644,13 +749,13 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 result.onSuccess { record ->
-                    creationStore.upsert(record)
+                    videoStore.upsert(record)
                     imported += 1
                 }.onFailure { failed += 1 }
             }
-            binding.addExistingVideoButton.isEnabled = true
-            binding.addExistingVideoButton.setText(R.string.add_existing_videos)
-            renderCreations()
+            home.addExistingVideoButton.isEnabled = true
+            home.addExistingVideoButton.setText(R.string.add_videos)
+            renderVideos()
             if (imported > 0) {
                 Snackbar.make(
                     binding.root,
@@ -662,57 +767,57 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun renderCreations() {
-        val records = creationStore.list()
-        val generation = ++creationRenderGeneration
-        binding.emptyCreationsText.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
-        binding.showAllCreationsButton.visibility = if (records.size > COLLAPSED_CREATION_COUNT) View.VISIBLE else View.GONE
-        binding.showAllCreationsButton.text = if (creationsExpanded) {
-            getString(R.string.show_fewer_creations)
+    private fun renderVideos() {
+        val records = videoStore.list()
+        val generation = ++videoRenderGeneration
+        home.emptyVideosText.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
+        home.showAllVideosButton.visibility = if (records.size > COLLAPSED_CREATION_COUNT) View.VISIBLE else View.GONE
+        home.showAllVideosButton.text = if (videosExpanded) {
+            getString(R.string.show_fewer_videos)
         } else {
-            getString(R.string.show_all_creations, records.size)
+            getString(R.string.show_all_videos, records.size)
         }
-        binding.creationsList.removeAllViews()
-        val visibleRecords = if (creationsExpanded) records else records.take(COLLAPSED_CREATION_COUNT)
+        home.videosList.removeAllViews()
+        val visibleRecords = if (videosExpanded) records else records.take(COLLAPSED_CREATION_COUNT)
         visibleRecords.forEach { record ->
-            val item = ItemCreationBinding.inflate(layoutInflater, binding.creationsList, false)
+            val item = ItemVideoBinding.inflate(layoutInflater, home.videosList, false)
             val uri = record.uri.toUri()
             item.root.tag = record.uri
-            item.creationTitle.text = record.title
-            item.creationDetails.text = creationDetails(record, available = true)
-            item.creationWatchButton.isEnabled = false
-            item.creationShareButton.isEnabled = false
+            item.videoTitle.text = record.title
+            item.videoDetails.text = videoDetails(record, available = true)
+            item.videoWatchButton.isEnabled = false
+            item.videoShareButton.isEnabled = false
             item.root.isClickable = false
-            item.creationWatchButton.setOnClickListener { watchVideo(uri) }
-            item.creationShareButton.setOnClickListener { shareVideo(uri) }
-            item.creationMoreButton.setOnClickListener { showCreationActions(record) }
+            item.videoWatchButton.setOnClickListener { watchVideo(uri) }
+            item.videoShareButton.setOnClickListener { shareVideo(uri) }
+            item.videoMoreButton.setOnClickListener { showVideoActions(record) }
             item.root.setOnClickListener { watchVideo(uri) }
-            binding.creationsList.addView(item.root)
+            home.videosList.addView(item.root)
 
             lifecycleScope.launch {
                 val mediaState = withContext(Dispatchers.IO) {
-                    val available = creationMedia.isAvailable(uri)
-                    val thumbnail = if (available) runCatching { creationMedia.createThumbnail(uri) }.getOrNull() else null
+                    val available = videoMedia.isAvailable(uri)
+                    val thumbnail = if (available) runCatching { videoMedia.createThumbnail(uri) }.getOrNull() else null
                     available to thumbnail
                 }
-                if (generation != creationRenderGeneration || item.root.tag != record.uri) {
+                if (generation != videoRenderGeneration || item.root.tag != record.uri) {
                     mediaState.second?.recycle()
                     return@launch
                 }
                 val available = mediaState.first
-                item.creationDetails.text = creationDetails(record, available)
-                item.creationWatchButton.isEnabled = available
-                item.creationShareButton.isEnabled = available
+                item.videoDetails.text = videoDetails(record, available)
+                item.videoWatchButton.isEnabled = available
+                item.videoShareButton.isEnabled = available
                 item.root.isClickable = available
                 mediaState.second?.let { thumbnail ->
-                    item.creationThumbnail.setPadding(0, 0, 0, 0)
-                    item.creationThumbnail.setImageBitmap(thumbnail)
+                    item.videoThumbnail.setPadding(0, 0, 0, 0)
+                    item.videoThumbnail.setImageBitmap(thumbnail)
                 }
             }
         }
     }
 
-    private fun creationDetails(record: CreationRecord, available: Boolean): String {
+    private fun videoDetails(record: VideoRecord, available: Boolean): String {
         val parts = mutableListOf<String>()
         if (
             record.startYear != null && record.startMonth != null &&
@@ -755,27 +860,27 @@ class MainActivity : AppCompatActivity() {
         else String.format(Locale.getDefault(), "%d:%02d", minutes, remainingSeconds)
     }
 
-    private fun showCreationActions(record: CreationRecord) {
+    private fun showVideoActions(record: VideoRecord) {
         MaterialAlertDialogBuilder(this)
             .setTitle(record.title)
             .setItems(arrayOf(getString(R.string.remove_from_list), getString(R.string.delete_video))) { _, which ->
-                if (which == 0) removeCreation(record) else confirmDeleteCreation(record)
+                if (which == 0) removeVideo(record) else confirmDeleteVideo(record)
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
-    private fun removeCreation(record: CreationRecord) {
+    private fun removeVideo(record: VideoRecord) {
         val uri = record.uri.toUri()
-        creationStore.remove(record.uri)
-        creationMedia.deleteThumbnail(uri)
-        renderCreations()
+        videoStore.remove(record.uri)
+        videoMedia.deleteThumbnail(uri)
+        renderVideos()
         var restored = false
         Snackbar.make(binding.root, R.string.video_removed, Snackbar.LENGTH_LONG)
             .setAction(R.string.undo) {
                 restored = true
-                creationStore.upsert(record)
-                renderCreations()
+                videoStore.upsert(record)
+                renderVideos()
             }
             .addCallback(object : Snackbar.Callback() {
                 override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
@@ -785,29 +890,29 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun confirmDeleteCreation(record: CreationRecord) {
+    private fun confirmDeleteVideo(record: VideoRecord) {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.delete_video_title)
             .setMessage(R.string.delete_video_message)
             .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.delete) { _, _ -> deleteCreation(record) }
+            .setPositiveButton(R.string.delete) { _, _ -> deleteVideo(record) }
             .show()
     }
 
-    private fun deleteCreation(record: CreationRecord) {
+    private fun deleteVideo(record: VideoRecord) {
         lifecycleScope.launch {
             val uri = record.uri.toUri()
-            val deleted = withContext(Dispatchers.IO) { creationMedia.delete(uri) }
+            val deleted = withContext(Dispatchers.IO) { videoMedia.delete(uri) }
             if (deleted) {
-                creationStore.remove(record.uri)
-                creationMedia.deleteThumbnail(uri)
-                creationMedia.deleteOverview(uri)
+                videoStore.remove(record.uri)
+                videoMedia.deleteThumbnail(uri)
+                videoMedia.deleteOverview(uri)
                 releaseUriAccess(uri)
                 if (lastVideoUri == uri) {
                     lastVideoUri = null
-                    binding.videoReadyGroup.visibility = View.GONE
+                    editor.videoReadyGroup.visibility = View.GONE
                 }
-                renderCreations()
+                renderVideos()
                 Snackbar.make(binding.root, R.string.video_deleted, Snackbar.LENGTH_LONG).show()
             } else {
                 Snackbar.make(binding.root, R.string.delete_video_failed, Snackbar.LENGTH_LONG).show()
@@ -913,31 +1018,68 @@ class MainActivity : AppCompatActivity() {
         }, getString(R.string.share_travel_video)))
     }
 
+    private fun chooseVideoCopyDestination(source: Uri) {
+        pendingVideoCopyUri = source
+        val record = videoStore.list().firstOrNull { it.uri == source.toString() }
+        copyCompletedVideo.launch(record?.fileName ?: getString(R.string.default_video_filename))
+    }
+
+    private fun copyCompletedVideo(source: Uri, destination: Uri) {
+        editor.saveAsButton.isEnabled = false
+        lifecycleScope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                runCatching { generatedMedia.copyVideo(source, destination) }.isSuccess
+            }
+            editor.saveAsButton.isEnabled = true
+            Snackbar.make(
+                binding.root,
+                if (saved) R.string.video_copy_saved else R.string.save_as_failed,
+                Snackbar.LENGTH_LONG,
+            ).show()
+        }
+    }
+
     private fun chooseOverviewDestination(videoUri: Uri) {
-        if (creationMedia.cachedOverview(videoUri) == null) {
+        if (videoMedia.cachedOverview(videoUri) == null) {
             Snackbar.make(binding.root, R.string.overview_unavailable, Snackbar.LENGTH_LONG).show()
             return
         }
-        pendingOverviewVideoUri = videoUri
         val title = lastVideoTitle.orEmpty().ifBlank { getString(R.string.default_title) }
-        val periodSuffix = creationStore.list()
+        val periodSuffix = videoStore.list()
             .firstOrNull { it.uri == videoUri.toString() }
             ?.let(::periodFileSuffix)
         val baseName = listOfNotNull(title, periodSuffix).joinToString("-")
-        createOverviewImage.launch(getString(R.string.overview_file_name, baseName))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val source = videoMedia.cachedOverview(videoUri) ?: return
+            editor.saveOverviewButton.isEnabled = false
+            lifecycleScope.launch {
+                val saved = withContext(Dispatchers.IO) {
+                    runCatching { generatedMedia.saveOverview(source, baseName) }.isSuccess
+                }
+                editor.saveOverviewButton.isEnabled = videoMedia.cachedOverview(videoUri) != null
+                Snackbar.make(
+                    binding.root,
+                    if (saved) R.string.overview_saved else R.string.overview_save_failed,
+                    Snackbar.LENGTH_LONG,
+                ).show()
+            }
+        } else {
+            pendingOverviewVideoUri = videoUri
+            createOverviewImage.launch(getString(R.string.overview_file_name, baseName))
+        }
     }
 
     private fun copyOverviewImage(videoUri: Uri, destination: Uri) {
-        binding.saveOverviewButton.isEnabled = false
+        editor.saveOverviewButton.isEnabled = false
         lifecycleScope.launch {
             val saved = withContext(Dispatchers.IO) {
                 runCatching {
                     contentResolver.openOutputStream(destination, "w")?.use { output ->
-                        check(creationMedia.copyOverview(videoUri, output))
+                        check(videoMedia.copyOverview(videoUri, output))
                     } ?: error("Overview destination is unavailable")
                 }.isSuccess
             }
-            binding.saveOverviewButton.isEnabled = creationMedia.cachedOverview(videoUri) != null
+            editor.saveOverviewButton.isEnabled = videoMedia.cachedOverview(videoUri) != null
             Snackbar.make(
                 binding.root,
                 if (saved) R.string.overview_saved else R.string.overview_save_failed,
@@ -947,7 +1089,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun shareOverviewImage(videoUri: Uri) {
-        val file = creationMedia.cachedOverview(videoUri)
+        val file = videoMedia.cachedOverview(videoUri)
         if (file == null) {
             Snackbar.make(binding.root, R.string.overview_unavailable, Snackbar.LENGTH_LONG).show()
             return
@@ -982,7 +1124,7 @@ class MainActivity : AppCompatActivity() {
         "${period.endYear}-${period.endMonth.toString().padStart(2, '0')}",
     ).joinToString("_")
 
-    private fun periodFileSuffix(record: CreationRecord): String? {
+    private fun periodFileSuffix(record: VideoRecord): String? {
         val startYear = record.startYear ?: return null
         val startMonth = record.startMonth ?: return null
         val endYear = record.endYear ?: return null
@@ -1022,7 +1164,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun selectedDurationSeconds(): Int = Regex("\\d+")
-        .find(binding.durationDropdown.text.toString())
+        .find(editor.durationDropdown.text.toString())
         ?.value
         ?.toIntOrNull()
         ?: 30
@@ -1032,11 +1174,14 @@ class MainActivity : AppCompatActivity() {
         dropdown.setOnClickListener { dropdown.showDropDown() }
     }
 
+    private enum class Screen { VIDEOS, NEW_VIDEO }
+
     companion object {
         private const val TITLE_UPDATE_DELAY_MS = 450L
         private const val COLLAPSED_CREATION_COUNT = 3
         private const val MAP_PRIVACY_ACCEPTED = "map_privacy_accepted_v1"
         private const val NOTIFICATION_PROMPTED = "notification_prompted_v1"
+        private const val STATE_SCREEN = "screen_v1"
         private const val PROJECT_URL = "https://github.com/mahlernim/google-timeline-visualizer"
         private const val PRIVACY_URL =
             "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/privacy.md"

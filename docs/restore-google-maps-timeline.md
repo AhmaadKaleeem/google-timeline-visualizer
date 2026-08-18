@@ -38,7 +38,7 @@ Confirm that your older visits are visible in Google Maps before continuing.
 
 On Android, open **Phone Settings → Location → Location services → Timeline →
 Export Timeline data**. Save the JSON file, return to Timeline Visualizer, and
-select **Load Timeline**.
+open **New video** and select **Choose file**.
 
 On iPhone or iPad, open **Google Maps → profile picture → Settings → Personal
 content → Export Timeline data**, save the file, then move it to the Android
