@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.8.1
+
+- Implements GitHub issue #19.
+- Add a localized in-app link for restoring an encrypted Google Maps Timeline
+  backup before exporting a new JSON file.
+- Add English, Korean, and Japanese restoration guides with accessible step
+  diagrams, official Google help links, and clear recovery limits.
+- Clarify that backup restoration, JSON export, and Timeline Visualizer import
+  are separate operations.
+- Polish user-facing app copy, installation instructions, listings, and release
+  documentation across all three supported languages.
+- Replace the rarely used 75-second and 90-second choices with 10-second and
+  20-second options. Available durations are now 10, 15, 20, 30, 45, and 60 seconds.
+
 ## 1.8.0
 
 - Implements GitHub issues #11 through #17 as one coordinated release.

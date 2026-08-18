@@ -48,9 +48,9 @@ def test_phone_screenshots_are_current_play_recommended_size():
 
 def test_play_release_metadata_is_consistent():
     build_file = (ROOT / "app" / "build.gradle.kts").read_text(encoding="utf-8")
-    assert 'versionCode = 10' in build_file
-    assert 'versionName = "1.8.0"' in build_file
-    assert (ROOT / "docs" / "release-notes-v1.8.0.md").is_file()
+    assert 'versionCode = 11' in build_file
+    assert 'versionName = "1.8.1"' in build_file
+    assert (ROOT / "docs" / "release-notes-v1.8.1.md").is_file()
 
 
 def test_android_locales_have_matching_resources_and_placeholders():
@@ -72,3 +72,30 @@ def test_android_locales_have_matching_resources_and_placeholders():
     localized = {locale: resources(path) for locale, path in files.items()}
     assert localized["ko"] == localized["en"]
     assert localized["ja"] == localized["en"]
+
+
+def test_localized_restoration_guides_are_complete_and_accessible():
+    guides = {
+        "en": ROOT / "docs/restore-google-maps-timeline.md",
+        "ko": ROOT / "docs/restore-google-maps-timeline.ko.md",
+        "ja": ROOT / "docs/restore-google-maps-timeline.ja.md",
+    }
+    diagrams = {
+        "en": ROOT / "docs/images/restore-timeline-en.svg",
+        "ko": ROOT / "docs/images/restore-timeline-ko.svg",
+        "ja": ROOT / "docs/images/restore-timeline-ja.svg",
+    }
+    for locale, guide in guides.items():
+        text = guide.read_text(encoding="utf-8")
+        assert f"images/restore-timeline-{locale}.svg" in text
+        assert "support.google.com/maps/answer/6258979" in text
+        assert "Timeline Visualizer" in text or "타임라인 비주얼라이저" in text or "タイムライン可視化" in text
+
+        svg = ET.parse(diagrams[locale]).getroot()
+        namespace = {"svg": "http://www.w3.org/2000/svg"}
+        assert svg.find("svg:title", namespace).text.strip()
+        assert svg.find("svg:desc", namespace).text.strip()
+
+    assert "docs/restore-google-maps-timeline.md" in (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "docs/restore-google-maps-timeline.ko.md" in (ROOT / "README.ko.md").read_text(encoding="utf-8")
+    assert "docs/restore-google-maps-timeline.ja.md" in (ROOT / "README.ja.md").read_text(encoding="utf-8")

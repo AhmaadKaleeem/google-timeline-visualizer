@@ -130,6 +130,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.importButton.setOnClickListener { requestTimelineImport() }
         binding.exportHelpButton.setOnClickListener { showExportHelp() }
+        binding.restoreTimelineHelpLink.setOnClickListener { openRestoreGuide() }
         binding.playButton.setOnClickListener { togglePreview() }
         binding.exportButton.setOnClickListener { chooseExportDestination() }
         binding.cancelExportButton.setOnClickListener { VideoExportService.cancel(applicationContext) }
@@ -167,7 +168,7 @@ class MainActivity : AppCompatActivity() {
         binding.ownerInput.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commitTitlePreferences() }
         binding.titleInput.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commitTitlePreferences() }
 
-        val durations = listOf(15, 30, 45, 60, 75, 90).map {
+        val durations = listOf(10, 15, 20, 30, 45, 60).map {
             resources.getQuantityString(R.plurals.duration_seconds, it, it)
         }
         binding.durationDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, durations))
@@ -878,6 +879,13 @@ class MainActivity : AppCompatActivity() {
         openWebPage(url, R.string.web_page_unavailable)
     }
 
+    private fun openRestoreGuide() {
+        openWebPage(
+            restoreGuideUrl(resources.configuration.locales[0]?.language),
+            R.string.web_page_unavailable,
+        )
+    }
+
     private fun openWebPage(url: String, errorMessage: Int) {
         runCatching {
             startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
@@ -1036,6 +1044,18 @@ class MainActivity : AppCompatActivity() {
             "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/privacy.ko.md"
         private const val PRIVACY_URL_JA =
             "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/privacy.ja.md"
+        private const val RESTORE_GUIDE_URL =
+            "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/restore-google-maps-timeline.md"
+        private const val RESTORE_GUIDE_URL_KO =
+            "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/restore-google-maps-timeline.ko.md"
+        private const val RESTORE_GUIDE_URL_JA =
+            "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/restore-google-maps-timeline.ja.md"
         private const val TAG = "TimelineVisualizer"
+
+        internal fun restoreGuideUrl(language: String?): String = when (language) {
+            Locale.KOREAN.language -> RESTORE_GUIDE_URL_KO
+            Locale.JAPANESE.language -> RESTORE_GUIDE_URL_JA
+            else -> RESTORE_GUIDE_URL
+        }
     }
 }

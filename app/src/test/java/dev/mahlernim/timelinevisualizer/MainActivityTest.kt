@@ -7,6 +7,7 @@ import android.os.Looper
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.AutoCompleteTextView
+import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.creations.CreationRecord
 import dev.mahlernim.timelinevisualizer.creations.CreationStore
@@ -125,6 +126,42 @@ class MainActivityTest {
     }
 
     @Test
+    fun restorationHelpOpensPublicEnglishGuide() {
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.restoreTimelineHelpLink).performClick()
+
+        val intent = shadowOf(activity).nextStartedActivity
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertEquals(MainActivity.restoreGuideUrl("en"), intent.dataString)
+    }
+
+    @Test
+    fun restorationGuideHasLocalizedUrlsAndEnglishFallback() {
+        assertTrue(MainActivity.restoreGuideUrl("ko").endsWith("restore-google-maps-timeline.ko.md"))
+        assertTrue(MainActivity.restoreGuideUrl("ja").endsWith("restore-google-maps-timeline.ja.md"))
+        assertTrue(MainActivity.restoreGuideUrl("fr").endsWith("restore-google-maps-timeline.md"))
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "ja-w360dp-h640dp-xxhdpi")
+    fun restorationLinkFitsTheSmallestJapaneseLayout() {
+        val activity = launchActivity()
+        val root = activity.window.decorView
+        val width = activity.resources.displayMetrics.widthPixels
+        val height = activity.resources.displayMetrics.heightPixels
+        root.measure(
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
+        )
+        root.layout(0, 0, width, height)
+        val link = activity.findViewById<TextView>(R.id.restoreTimelineHelpLink)
+
+        assertEquals(View.VISIBLE, link.visibility)
+        assertTrue(link.measuredWidth <= width)
+        assertTrue(link.lineCount <= 2)
+    }
+
+    @Test
     fun longCreationListStartsCompactAndCanExpand() {
         repeat(4) { index ->
             store.upsert(
@@ -162,13 +199,13 @@ class MainActivityTest {
     }
 
     @Test
-    fun durationMenuIncludesFortyFiveAndSeventyFiveSeconds() {
+    fun durationMenuOffersOnlyTheSupportedShorterChoices() {
         val activity = launchActivity()
         val dropdown = activity.findViewById<AutoCompleteTextView>(R.id.durationDropdown)
         val values = (0 until dropdown.adapter.count).map { dropdown.adapter.getItem(it).toString() }
 
         assertEquals(
-            listOf(15, 30, 45, 60, 75, 90).map {
+            listOf(10, 15, 20, 30, 45, 60).map {
                 activity.resources.getQuantityString(R.plurals.duration_seconds, it, it)
             },
             values,

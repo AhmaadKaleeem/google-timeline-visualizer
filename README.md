@@ -15,14 +15,14 @@ an MP4 ready to share.
 The app is not yet on Google Play. Install it from this repository's
 [latest release](https://github.com/mahlernim/google-timeline-visualizer/releases/latest):
 
-1. Under **Assets**, download `TimelineVisualizer-v1.8.0.apk` on your phone.
+1. Under **Assets**, download `TimelineVisualizer-v1.8.1.apk` on your phone.
 2. Open the downloaded file.
 3. If Android blocks the installation, select **Settings**, allow your browser or
    file manager to **Install unknown apps**, then return and try again.
 4. After installation, you can turn that permission off again.
 
 Only download the APK from this repository. Android may display a warning because
-the app is installed outside Google Play; that warning is expected for a directly
+the app is installed outside Google Play. That warning is expected for a directly
 distributed APK. Future releases can be installed over this release.
 
 Requires Android 8.0 or newer.
@@ -46,16 +46,27 @@ provide apps with a standard link directly to the Timeline page.
 On iPhone, use **Google Maps → profile picture → Settings → Personal content →
 Export Timeline data**, then move the JSON file to your Android phone.
 
+## Restore a missing Google Maps Timeline
+
+If older trips disappeared after changing phones, reinstalling Google Maps, or
+resetting a device, an encrypted Timeline backup may be available in Google Maps.
+Use the app's **Restore Google Maps Timeline** link or follow the
+[restoration guide](docs/restore-google-maps-timeline.md).
+
+Restore the history in Google Maps first, then export a new JSON file. Timeline
+Visualizer cannot access your Google account or encrypted backup and does not
+restore it directly.
+
 ## Create and share a video
 
 1. Select **Load Timeline** and choose the exported file.
 2. Choose the start year and month and the end year and month. The latest full
    year is selected by default, and ranges may cross year boundaries.
-3. Confirm the name and title template, then choose a 15, 30, 45, 60, 75, or
-   90-second journey. The template is saved for next time and supports `{year}`
+3. Confirm the name and title template, then choose a 10, 15, 20, 30, 45, or
+   60-second journey. The template is saved for next time and supports `{year}`
    and `{name}`.
-4. Select **Preview** to check the animated map. This is an interactive preview;
-   the saved video uses the same design with map tiles prepared before rendering.
+4. Select **Preview** to check the animated map. This is an interactive preview.
+   The saved video uses the same design with map tiles prepared before rendering.
 5. Select **Create video** and choose where to save it. The app shows each stage,
    an estimated time when enough progress has been measured, and a cancel button.
    You can switch apps or turn off the screen while it continues.
@@ -140,7 +151,7 @@ python visualizer.py --input Timeline.json --year 2025 --output my_trip_2025.mp4
 Android development requires JDK 17, Android SDK Platform 36, and Build Tools 36.0.0.
 
 ```bash
-./gradlew test lint assembleDebug
+./gradlew test lint assembleGithubDebug assemblePlayDebug
 python -m pip install -r requirements-dev.txt
 python -m pytest
 ```
