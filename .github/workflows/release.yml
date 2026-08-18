@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and update
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -11,8 +17,12 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_TAG }}
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -33,7 +43,7 @@ jobs:
       - name: Save Play Console bundle
         uses: actions/upload-artifact@v4
         with:
-          name: timeline-visualizer-play-${{ github.ref_name }}
+          name: timeline-visualizer-play-${{ env.RELEASE_TAG }}
           path: app/build/outputs/bundle/playRelease/app-play-release.aab
           if-no-files-found: error
           retention-days: 30
@@ -41,11 +51,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/github/release/app-github-release.apk "TimelineVisualizer-${GITHUB_REF_NAME}.apk"
-          sha256sum "TimelineVisualizer-${GITHUB_REF_NAME}.apk" > "TimelineVisualizer-${GITHUB_REF_NAME}.apk.sha256"
-          gh release create "$GITHUB_REF_NAME" \
-            "TimelineVisualizer-${GITHUB_REF_NAME}.apk" \
-            "TimelineVisualizer-${GITHUB_REF_NAME}.apk.sha256" \
-            --title "Timeline Visualizer ${GITHUB_REF_NAME#v}" \
-            --notes-file "docs/release-notes-${GITHUB_REF_NAME}.md" \
-            --verify-tag
+          apk="TimelineVisualizer-${RELEASE_TAG}.apk"
+          cp app/build/outputs/apk/github/release/app-github-release.apk "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$apk" "$apk.sha256" --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              "$apk" \
+              "$apk.sha256" \
+              --title "Timeline Visualizer ${RELEASE_TAG#v}" \
+              --notes-file "docs/release-notes-${RELEASE_TAG}.md" \
+              --verify-tag
+          fi
