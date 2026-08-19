@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildCameraTrack, cameraViewportAt, worldPositionAtProgress } from './camera';
+import {
+  blendViewport,
+  buildCameraTrack,
+  cameraViewportAt,
+  overviewSafeArea,
+  overviewViewport,
+  worldPositionAtProgress,
+} from './camera';
 import { cumulativeDistances, project, unwrapWorldPoints } from './geo';
 import { requiredTiles } from './renderer';
 import type { CameraMovement, GeoPoint } from './types';
@@ -89,5 +96,31 @@ describe('camera track', () => {
       expect(Math.abs(Math.log(current.spanY / previous.spanY))).toBeLessThan(0.8);
       expect(Math.abs(current.zoom - previous.zoom)).toBeLessThanOrEqual(3);
     }
+  });
+
+  it('fits the complete route below the Android-style video header', () => {
+    const size = 480;
+    const viewport = overviewViewport(koreanJourney, size);
+    const safe = overviewSafeArea(size);
+    koreanJourney.worldPoints.forEach((point) => {
+      const screenX = (point.x - viewport.minX) / (viewport.maxX - viewport.minX) * size;
+      const screenY = (point.y - viewport.minY) / (viewport.maxY - viewport.minY) * size;
+      expect(screenX).toBeGreaterThanOrEqual(safe.left);
+      expect(screenX).toBeLessThanOrEqual(safe.right);
+      expect(screenY).toBeGreaterThanOrEqual(safe.top);
+      expect(screenY).toBeLessThanOrEqual(safe.bottom);
+    });
+  });
+
+  it('blends from the final following view to the full-route ending view', () => {
+    const track = buildCameraTrack(koreanJourney, 480, 'dynamic');
+    const following = cameraViewportAt(track, 1);
+    const overview = overviewViewport(koreanJourney, 480);
+    expect(blendViewport(following, overview, 0, 480)).toEqual(following);
+    const ending = blendViewport(following, overview, 1, 480);
+    expect(ending.minX).toBeCloseTo(overview.minX, 12);
+    expect(ending.maxX).toBeCloseTo(overview.maxX, 12);
+    expect(ending.minY).toBeCloseTo(overview.minY, 12);
+    expect(ending.maxY).toBeCloseTo(overview.maxY, 12);
   });
 });

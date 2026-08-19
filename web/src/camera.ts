@@ -74,6 +74,13 @@ const TILE_ZOOM_HYSTERESIS = 0.15;
 const MIN_TILE_ZOOM = 2;
 const MAX_TILE_ZOOM = 15;
 const MAX_VIEWPORT_SPAN = 0.72;
+const MAX_OVERVIEW_VIEWPORT_SPAN = 1.25;
+const MIN_OVERVIEW_VIEWPORT_SPAN = 0.00045;
+const OVERVIEW_PADDING = 1.22;
+const OVERVIEW_SIDE_INSET = 34;
+const OVERVIEW_HEADER_BOTTOM = 132;
+const OVERVIEW_HEADER_GAP = 20;
+const OVERVIEW_BOTTOM_INSET = 34;
 const TRANSFER_PADDING = 2.8;
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -195,6 +202,85 @@ function clampCenterY(centerY: number, spanY: number): number {
 
 function tileZoom(size: number, aspect: number, spanY: number): number {
   return clamp(Math.floor(Math.log2(Math.max(1, size) / (256 * spanY * aspect))), MIN_TILE_ZOOM, MAX_TILE_ZOOM);
+}
+
+export interface OverviewSafeArea {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+export function overviewSafeArea(size: number): OverviewSafeArea {
+  const scale = size / 720;
+  return {
+    left: OVERVIEW_SIDE_INSET * scale,
+    top: (OVERVIEW_HEADER_BOTTOM + OVERVIEW_HEADER_GAP) * scale,
+    right: size - OVERVIEW_SIDE_INSET * scale,
+    bottom: size - OVERVIEW_BOTTOM_INSET * scale,
+  };
+}
+
+export function overviewViewport(journey: CameraJourney, size: number): Viewport {
+  const xs = journey.worldPoints.map((point) => point.x);
+  const ys = journey.worldPoints.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const contentCenterX = (minX + maxX) / 2;
+  const contentCenterY = (minY + maxY) / 2;
+  const contentSpanX = Math.max(maxX - minX, MIN_OVERVIEW_VIEWPORT_SPAN);
+  const contentSpanY = Math.max(maxY - minY, MIN_OVERVIEW_VIEWPORT_SPAN);
+  const safe = overviewSafeArea(size);
+  const safeWidth = Math.max(1, safe.right - safe.left);
+  const safeHeight = Math.max(1, safe.bottom - safe.top);
+  const worldPerPixel = Math.max(contentSpanX / safeWidth, contentSpanY / safeHeight) * OVERVIEW_PADDING;
+  const spanX = Math.max(worldPerPixel * size, MIN_OVERVIEW_VIEWPORT_SPAN);
+  const spanY = clamp(
+    worldPerPixel * size,
+    MIN_OVERVIEW_VIEWPORT_SPAN,
+    MAX_OVERVIEW_VIEWPORT_SPAN,
+  );
+  const viewportMinX = contentCenterX - ((safe.left + safe.right) / 2) * worldPerPixel;
+  let viewportMinY = contentCenterY - ((safe.top + safe.bottom) / 2) * worldPerPixel;
+  if (spanY <= 1) viewportMinY = clamp(viewportMinY, 0, 1 - spanY);
+  return {
+    minX: viewportMinX,
+    maxX: viewportMinX + spanX,
+    minY: viewportMinY,
+    maxY: viewportMinY + spanY,
+    zoom: clamp(Math.floor(Math.log2(Math.max(1, size) / (256 * spanX))), MIN_TILE_ZOOM, MAX_TILE_ZOOM),
+  };
+}
+
+export function blendViewport(
+  from: Viewport,
+  to: Viewport,
+  fraction: number,
+  size: number,
+): Viewport {
+  const amount = clamp(fraction, 0, 1);
+  const fromCenterX = (from.minX + from.maxX) / 2;
+  const toCenterX = unwrapNear((to.minX + to.maxX) / 2, fromCenterX);
+  const centerX = fromCenterX + (toCenterX - fromCenterX) * amount;
+  const centerY = (from.minY + from.maxY) / 2
+    + ((to.minY + to.maxY) / 2 - (from.minY + from.maxY) / 2) * amount;
+  const fromSpanY = Math.max(from.maxY - from.minY, MIN_OVERVIEW_VIEWPORT_SPAN);
+  const toSpanY = Math.max(to.maxY - to.minY, MIN_OVERVIEW_VIEWPORT_SPAN);
+  const spanY = clamp(
+    Math.exp(Math.log(fromSpanY) + (Math.log(toSpanY) - Math.log(fromSpanY)) * amount),
+    MIN_OVERVIEW_VIEWPORT_SPAN,
+    MAX_OVERVIEW_VIEWPORT_SPAN,
+  );
+  const adjustedCenterY = clampCenterY(centerY, spanY);
+  return {
+    minX: centerX - spanY / 2,
+    maxX: centerX + spanY / 2,
+    minY: adjustedCenterY - spanY / 2,
+    maxY: adjustedCenterY + spanY / 2,
+    zoom: clamp(Math.floor(Math.log2(Math.max(1, size) / (256 * spanY))), MIN_TILE_ZOOM, MAX_TILE_ZOOM),
+  };
 }
 
 function stabilizedTileZoom(previous: number, continuous: number): number {

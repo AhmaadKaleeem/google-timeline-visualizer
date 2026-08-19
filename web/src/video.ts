@@ -1,4 +1,5 @@
 import { BufferTarget, CanvasSource, Mp4OutputFormat, Output, Quality } from 'mediabunny';
+import { frameAtElapsedSeconds, OUTRO_SECONDS } from './animation';
 import { drawFrame } from './renderer';
 import type { PreparedJourney } from './types';
 
@@ -48,7 +49,9 @@ export async function createJourneyMp4(
 
   const fps = 24;
   const frameDuration = 1 / fps;
-  const frameCount = Math.max(1, Math.round(options.durationSeconds * fps));
+  const journeyFrameCount = Math.max(1, Math.round(options.durationSeconds * fps));
+  const outroFrameCount = Math.round(OUTRO_SECONDS * fps);
+  const frameCount = journeyFrameCount + outroFrameCount;
   const target = new BufferTarget();
   const output = new Output({
     format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
@@ -70,8 +73,16 @@ export async function createJourneyMp4(
       await output.cancel();
       throw new DOMException('Video creation was cancelled.', 'AbortError');
     }
-    const progress = frameCount === 1 ? 1 : frame / (frameCount - 1);
-    drawFrame(canvas, journey, progress, options.title, options.periodLabel);
+    const animationFrame = frame < journeyFrameCount
+      ? {
+        journeyProgress: journeyFrameCount === 1 ? 1 : frame / (journeyFrameCount - 1),
+        outroProgress: 0,
+      }
+      : frameAtElapsedSeconds(
+        options.durationSeconds + (frame - journeyFrameCount) / fps,
+        options.durationSeconds,
+      );
+    drawFrame(canvas, journey, animationFrame, options.title, options.periodLabel);
     await source.add(frame * frameDuration, frameDuration, { keyFrame: frame % fps === 0 });
     options.onProgress?.((frame + 1) / frameCount);
   }

@@ -1,10 +1,12 @@
 import './style.css';
+import { frameAtElapsedSeconds, totalDurationSeconds } from './animation';
 import { cumulativeDistances } from './geo';
 import { drawFrame, prepareJourney } from './renderer';
 import {
   availableMonths,
   localDateKey,
   parseTimelineJson,
+  pointDateKey,
   selectDateRange,
   selectRange,
   TimelineParseError,
@@ -198,8 +200,9 @@ function applyTimeline(data: unknown, sourceName: string): void {
   populateMonths(endSelect, months);
   startSelect.value = months[0].key;
   endSelect.value = months.at(-1)?.key ?? months[0].key;
-  const firstDate = localDateKey(allPoints[0].instant);
-  const lastDate = localDateKey(allPoints.at(-1)?.instant ?? allPoints[0].instant);
+  const dateKeys = allPoints.map(pointDateKey).sort();
+  const firstDate = dateKeys[0] ?? localDateKey(allPoints[0].instant);
+  const lastDate = dateKeys.at(-1) ?? firstDate;
   startDateInput.min = firstDate;
   startDateInput.max = lastDate;
   endDateInput.min = firstDate;
@@ -212,7 +215,10 @@ function applyTimeline(data: unknown, sourceName: string): void {
   mapConsent.checked = false;
   settingsCard.classList.remove('hidden');
   previewCard.classList.add('hidden');
-  fileStatus.textContent = `${sourceName} · ${allPoints.length.toLocaleString()} valid points from ${months[0].label} to ${months.at(-1)?.label}`;
+  const timezoneNote = allPoints.some((point) => point.timeZoneMissing)
+    ? ' · Timezone missing, preserving exported route order'
+    : '';
+  fileStatus.textContent = `${sourceName} · ${allPoints.length.toLocaleString()} valid points from ${months[0].label} to ${months.at(-1)?.label}${timezoneNote}`;
   updateSelection();
 }
 
@@ -289,10 +295,18 @@ previewButton.addEventListener('click', async () => {
   try {
     const journey = await getPreparedJourney();
     const started = performance.now();
-    const previewDuration = Math.min(8, Number(durationSelect.value));
+    const previewJourneyDuration = Math.min(8, Number(durationSelect.value));
+    const previewDuration = totalDurationSeconds(previewJourneyDuration);
     const tick = (now: number): void => {
-      const fraction = Math.min(1, (now - started) / (previewDuration * 1000));
-      drawFrame(canvas, journey, fraction, titleInput.value.trim(), currentPeriodLabel());
+      const elapsedSeconds = Math.min(previewDuration, (now - started) / 1000);
+      const fraction = elapsedSeconds / previewDuration;
+      drawFrame(
+        canvas,
+        journey,
+        frameAtElapsedSeconds(elapsedSeconds, previewJourneyDuration),
+        titleInput.value.trim(),
+        currentPeriodLabel(),
+      );
       progressLabel.textContent = fraction < 1 ? 'Previewing' : 'Preview complete';
       if (fraction < 1) previewAnimation = requestAnimationFrame(tick);
     };

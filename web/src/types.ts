@@ -2,6 +2,8 @@ export interface GeoPoint {
   instant: Date;
   latitude: number;
   longitude: number;
+  recordedDate?: string;
+  timeZoneMissing?: boolean;
 }
 
 export interface MonthOption {
@@ -36,11 +38,17 @@ export interface CameraTrack {
   aspect: number;
 }
 
+export interface TimelineFrame {
+  journeyProgress: number;
+  outroProgress: number;
+}
+
 export interface PreparedJourney {
   points: GeoPoint[];
   worldPoints: WorldPoint[];
   cumulativeDistanceKm: number[];
   totalDistanceKm: number;
   cameraTrack: CameraTrack;
+  overviewViewport: Viewport;
   tiles: Map<string, HTMLImageElement>;
 }

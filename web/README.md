@@ -47,14 +47,17 @@ The current implementation proves the complete private browser path.
 1. Load current direct-array or older `semanticSegments` Timeline JSON.
    A built-in fictional journey is available for privacy-safe device testing.
 2. Read absolute path timestamps or current minute offsets from segment start.
+   When timezone data is absent, preserve the exported route order and recorded
+   calendar dates so date-line travel is not reordered by the browser timezone.
 3. Choose a month range or exact dates, title, and duration.
 4. Choose Fixed zoom, Steady following, or Dynamic following camera movement.
 5. Require explicit acknowledgement before contacting CARTO for map tiles.
 6. Preview the journey on a 480 by 480 Canvas.
-7. Encode Canvas frames as H.264 and mux them into an MP4.
+7. Add the Android-style 1.5-second full-route ending, encode Canvas frames as
+   H.264, and mux them into an MP4.
 8. Keep the screen awake when supported and allow video creation to be cancelled.
 9. Preview, share, or download the completed MP4.
 
-Physical iPhone validation remains required before calling the web app ready for
-public use. Longer exports also need memory, thermal, interruption, and foreground
-execution testing on representative iPhone models.
+The browser layout, animated preview, and encoded sample output are validated at
+an iPhone-sized viewport. Longer exports still benefit from representative-device
+memory, thermal, interruption, and foreground execution testing.

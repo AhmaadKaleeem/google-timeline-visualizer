@@ -1,6 +1,20 @@
-import { buildCameraTrack, cameraViewportAt, worldPositionAtProgress } from './camera';
+import { easeInOutCubic, easeOutCubic } from './animation';
+import {
+  blendViewport,
+  buildCameraTrack,
+  cameraViewportAt,
+  overviewViewport,
+  worldPositionAtProgress,
+} from './camera';
 import { cumulativeDistances, project, unwrapWorldPoints } from './geo';
-import type { CameraMovement, GeoPoint, PreparedJourney, Viewport, WorldPoint } from './types';
+import type {
+  CameraMovement,
+  GeoPoint,
+  PreparedJourney,
+  TimelineFrame,
+  Viewport,
+  WorldPoint,
+} from './types';
 
 const TILE_TEMPLATE = 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
 
@@ -145,6 +159,7 @@ export async function prepareJourney(
     totalDistanceKm: distances.at(-1) ?? 0,
   };
   const cameraTrack = buildCameraTrack(journey, size, cameraMovement);
+  const endingOverview = overviewViewport(journey, size);
   const sampleCount = Math.max(
     20,
     Math.min(durationSeconds * 8, Math.max(durationSeconds * 2, Math.ceil(journey.totalDistanceKm / 250))),
@@ -155,8 +170,13 @@ export async function prepareJourney(
       required.set(tileKey(tile), tile);
     }
   }
+  const journeyEnd = cameraViewportAt(cameraTrack, 1);
+  for (let sample = 0; sample <= 12; sample += 1) {
+    const ending = blendViewport(journeyEnd, endingOverview, easeOutCubic(sample / 12), size);
+    for (const tile of requiredTiles(ending)) required.set(tileKey(tile), tile);
+  }
   const tiles = await loadRequiredTiles([...required.values()], signal, onProgress);
-  return { ...journey, cameraTrack, tiles };
+  return { ...journey, cameraTrack, overviewViewport: endingOverview, tiles };
 }
 
 function pointAtProgress(journey: PreparedJourney, progress: number): { point: WorldPoint; completedIndex: number } {
@@ -186,7 +206,7 @@ function strokeRoute(
 export function drawFrame(
   canvas: HTMLCanvasElement,
   journey: PreparedJourney,
-  progress: number,
+  frame: TimelineFrame,
   title: string,
   periodLabel: string,
 ): void {
@@ -194,18 +214,24 @@ export function drawFrame(
   if (!context) throw new Error('Canvas rendering is unavailable.');
   const size = canvas.width;
   context.clearRect(0, 0, size, size);
-  const viewport = cameraViewportAt(journey.cameraTrack, progress);
+  const journeyViewport = cameraViewportAt(journey.cameraTrack, frame.journeyProgress);
+  const viewport = frame.outroProgress <= 0
+    ? journeyViewport
+    : blendViewport(journeyViewport, journey.overviewViewport, easeOutCubic(frame.outroProgress), size);
   drawMapBackground(canvas, viewport, journey.tiles);
 
-  const current = pointAtProgress(journey, progress);
+  const current = pointAtProgress(journey, frame.journeyProgress);
   context.lineCap = 'round';
   context.lineJoin = 'round';
+  const activeAlpha = 1 - easeOutCubic(frame.outroProgress);
+  context.save();
+  context.globalAlpha = activeAlpha;
   const traveled = journey.worldPoints.slice(0, current.completedIndex + 1);
   context.strokeStyle = 'rgba(233, 0, 100, 0.34)';
   context.lineWidth = 5;
   strokeRoute(context, traveled, current.point, viewport, size);
 
-  const currentDistance = journey.totalDistanceKm * Math.max(0, Math.min(1, progress));
+  const currentDistance = journey.totalDistanceKm * Math.max(0, Math.min(1, frame.journeyProgress));
   const recentStartDistance = Math.max(0, currentDistance - Math.max(80, journey.totalDistanceKm * 0.16));
   const recentStartIndex = Math.max(
     0,
@@ -234,22 +260,38 @@ export function drawFrame(
   context.beginPath();
   context.arc(headX, headY, 16, 0, Math.PI * 2);
   context.stroke();
+  context.restore();
 
-  const gradient = context.createLinearGradient(0, 0, 0, 120);
-  gradient.addColorStop(0, 'rgba(255, 248, 250, 0.97)');
-  gradient.addColorStop(1, 'rgba(255, 248, 250, 0)');
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, size, 130);
+  if (frame.outroProgress > 0) {
+    context.save();
+    context.globalAlpha = (190 / 255) * easeInOutCubic(frame.outroProgress);
+    context.strokeStyle = '#e90064';
+    context.lineWidth = 3.5;
+    strokeRoute(
+      context,
+      journey.worldPoints.slice(0, -1),
+      journey.worldPoints.at(-1) ?? current.point,
+      viewport,
+      size,
+    );
+    context.restore();
+  }
+
+  const scale = size / 720;
+  context.fillStyle = 'rgba(255, 248, 250, 0.86)';
+  context.beginPath();
+  context.roundRect(34 * scale, 28 * scale, size - 68 * scale, 104 * scale, 24 * scale);
+  context.fill();
   context.textAlign = 'center';
   context.fillStyle = '#24191d';
-  context.font = '700 25px -apple-system, BlinkMacSystemFont, sans-serif';
-  context.fillText(title || 'My Journey', size / 2, 42, size - 48);
+  context.font = `700 ${34 * scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  context.fillText(title || 'My Journey', size / 2, 72 * scale, size - 104 * scale);
   context.fillStyle = '#5c4b52';
-  context.font = '16px -apple-system, BlinkMacSystemFont, sans-serif';
-  context.fillText(periodLabel, size / 2, 69);
+  context.font = `${20 * scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  context.fillText(periodLabel, size / 2, 108 * scale);
 
   context.textAlign = 'right';
   context.fillStyle = 'rgba(36, 25, 29, 0.78)';
-  context.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
-  context.fillText('© OpenStreetMap contributors  © CARTO', size - 8, size - 8);
+  context.font = `${13 * scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  context.fillText('© OpenStreetMap contributors  © CARTO', size - 12 * scale, size - 12 * scale);
 }

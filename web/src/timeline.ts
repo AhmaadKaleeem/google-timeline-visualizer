@@ -51,10 +51,23 @@ export function parseCoordinate(value: unknown): [number, number] | null {
   return [latitude, longitude];
 }
 
-function parseInstant(value: unknown): Date | null {
+interface ParsedInstant {
+  instant: Date;
+  recordedDate?: string;
+  timeZoneMissing: boolean;
+}
+
+function parseInstant(value: unknown): ParsedInstant | null {
   if (typeof value !== 'string' || value.trim() === '') return null;
-  const instant = new Date(value);
-  return Number.isNaN(instant.getTime()) ? null : instant;
+  const raw = value.trim();
+  const timeZoneMissing = !/(?:z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const instant = new Date(timeZoneMissing ? `${raw}Z` : raw);
+  if (Number.isNaN(instant.getTime())) return null;
+  return {
+    instant,
+    recordedDate: timeZoneMissing && /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : undefined,
+    timeZoneMissing,
+  };
 }
 
 function parseOffsetMinutes(value: unknown): number | null {
@@ -68,20 +81,31 @@ function parseOffsetInstant(startValue: unknown, endValue: unknown, offsetValue:
   const start = parseInstant(startValue);
   const offsetMinutes = parseOffsetMinutes(offsetValue);
   if (!start || offsetMinutes === null) return null;
-  const timestamp = start.getTime() + offsetMinutes * 60_000;
+  const timestamp = start.instant.getTime() + offsetMinutes * 60_000;
   if (!Number.isSafeInteger(timestamp)) return null;
   const instant = new Date(timestamp);
   if (Number.isNaN(instant.getTime())) return null;
   const end = parseInstant(endValue);
-  if (end && instant.getTime() > end.getTime() + 60_000) return null;
+  if (
+    end
+    && !start.timeZoneMissing
+    && !end.timeZoneMissing
+    && instant.getTime() > end.instant.getTime() + 60_000
+  ) return null;
   return instant;
 }
 
 function addPoint(output: GeoPoint[], time: unknown, coordinate: unknown): void {
-  const instant = parseInstant(time);
+  const parsedTime = parseInstant(time);
   const parsed = parseCoordinate(coordinate);
-  if (!instant || !parsed) return;
-  output.push({ instant, latitude: parsed[0], longitude: parsed[1] });
+  if (!parsedTime || !parsed) return;
+  output.push({
+    instant: parsedTime.instant,
+    latitude: parsed[0],
+    longitude: parsed[1],
+    recordedDate: parsedTime.recordedDate,
+    timeZoneMissing: parsedTime.timeZoneMissing,
+  });
 }
 
 export function parseTimelineJson(data: unknown): GeoPoint[] {
@@ -113,25 +137,36 @@ export function parseTimelineJson(data: unknown): GeoPoint[] {
     const startTime = rawSegment.startTime;
     const endTime = rawSegment.endTime;
 
+    if (isObject(rawSegment.activity)) {
+      addPoint(points, startTime, rawSegment.activity.start);
+    }
+
+    if (isObject(rawSegment.visit) && isObject(rawSegment.visit.topCandidate)) {
+      addPoint(points, startTime, rawSegment.visit.topCandidate.placeLocation);
+    }
+
     if (Array.isArray(rawSegment.timelinePath)) {
       for (const rawPathPoint of rawSegment.timelinePath) {
         if (!isObject(rawPathPoint)) continue;
-        const instant = parseInstant(rawPathPoint.time)
-          ?? parseOffsetInstant(startTime, endTime, rawPathPoint.durationMinutesOffsetFromStartTime);
+        const absolute = parseInstant(rawPathPoint.time);
+        const offsetInstant = parseOffsetInstant(startTime, endTime, rawPathPoint.durationMinutesOffsetFromStartTime);
         const coordinate = parseCoordinate(rawPathPoint.point);
-        if (instant && coordinate) {
-          points.push({ instant, latitude: coordinate[0], longitude: coordinate[1] });
+        if ((absolute || offsetInstant) && coordinate) {
+          const segmentStart = absolute ? null : parseInstant(startTime);
+          points.push({
+            instant: absolute?.instant ?? offsetInstant!,
+            latitude: coordinate[0],
+            longitude: coordinate[1],
+            recordedDate: absolute?.recordedDate
+              ?? (segmentStart?.timeZoneMissing ? offsetInstant?.toISOString().slice(0, 10) : undefined),
+            timeZoneMissing: absolute?.timeZoneMissing ?? segmentStart?.timeZoneMissing ?? false,
+          });
         }
       }
     }
 
     if (isObject(rawSegment.activity)) {
-      addPoint(points, startTime, rawSegment.activity.start);
       addPoint(points, endTime, rawSegment.activity.end);
-    }
-
-    if (isObject(rawSegment.visit) && isObject(rawSegment.visit.topCandidate)) {
-      addPoint(points, startTime, rawSegment.visit.topCandidate.placeLocation);
     }
   }
 
@@ -140,7 +175,10 @@ export function parseTimelineJson(data: unknown): GeoPoint[] {
     const key = `${point.instant.getTime()}:${point.latitude}:${point.longitude}`;
     unique.set(key, point);
   }
-  const normalized = [...unique.values()].sort((a, b) => a.instant.getTime() - b.instant.getTime());
+  const deduplicated = [...unique.values()];
+  const normalized = deduplicated.some((point) => point.timeZoneMissing)
+    ? deduplicated
+    : deduplicated.sort((a, b) => a.instant.getTime() - b.instant.getTime());
   if (normalized.length === 0) {
     throw new TimelineParseError(
       'no-usable-locations',
@@ -154,9 +192,17 @@ export function monthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
+export function pointDateKey(point: GeoPoint): string {
+  return point.recordedDate ?? localDateKey(point.instant);
+}
+
+function pointMonthKey(point: GeoPoint): string {
+  return pointDateKey(point).slice(0, 7);
+}
+
 export function availableMonths(points: GeoPoint[]): MonthOption[] {
   const formatter = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' });
-  const keys = [...new Set(points.map((point) => monthKey(point.instant)))].sort();
+  const keys = [...new Set(points.map(pointMonthKey))].sort();
   return keys.map((key) => {
     const [year, month] = key.split('-').map(Number);
     return { key, label: formatter.format(new Date(year, month - 1, 1)) };
@@ -165,7 +211,7 @@ export function availableMonths(points: GeoPoint[]): MonthOption[] {
 
 export function selectRange(points: GeoPoint[], startMonth: string, endMonth: string): GeoPoint[] {
   return points.filter((point) => {
-    const key = monthKey(point.instant);
+    const key = pointMonthKey(point);
     return key >= startMonth && key <= endMonth;
   });
 }
@@ -176,7 +222,7 @@ export function localDateKey(date: Date): string {
 
 export function selectDateRange(points: GeoPoint[], startDate: string, endDate: string): GeoPoint[] {
   return points.filter((point) => {
-    const key = localDateKey(point.instant);
+    const key = pointDateKey(point);
     return key >= startDate && key <= endDate;
   });
 }

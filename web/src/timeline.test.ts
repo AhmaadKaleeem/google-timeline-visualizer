@@ -4,6 +4,7 @@ import {
   localDateKey,
   parseCoordinate,
   parseTimelineJson,
+  pointDateKey,
   selectDateRange,
   selectRange,
   TimelineParseError,
@@ -80,6 +81,35 @@ describe('parseTimelineJson', () => {
     expect(points[0].instant.toISOString()).toBe('2025-01-10T00:00:00.000Z');
     expect(availableMonths(points).map((month) => month.key)).toEqual(['2025-01', '2025-03']);
     expect(selectRange(points, '2025-03', '2025-03')).toHaveLength(1);
+  });
+
+  it('preserves export order when timezone-less wall times cross the date line', () => {
+    const points = parseTimelineJson([
+      {
+        startTime: '2026-01-02T10:00:00',
+        visit: { topCandidate: { placeLocation: '10,179' } },
+      },
+      {
+        startTime: '2026-01-01T15:00:00',
+        visit: { topCandidate: { placeLocation: '10,-179' } },
+      },
+    ]);
+
+    expect(points.map((point) => point.longitude)).toEqual([179, -179]);
+    expect(points.every((point) => point.timeZoneMissing)).toBe(true);
+    expect(points.map(pointDateKey)).toEqual(['2026-01-02', '2026-01-01']);
+    expect(selectDateRange(points, '2026-01-01', '2026-01-01')).toHaveLength(1);
+  });
+
+  it('keeps a timezone-less activity start before its path and end', () => {
+    const points = parseTimelineJson([{
+      startTime: '2026-01-02T10:00:00',
+      endTime: '2026-01-01T16:00:00',
+      activity: { start: '10,179', end: '10,-178' },
+      timelinePath: [{ point: '10,-179', durationMinutesOffsetFromStartTime: 120 }],
+    }]);
+
+    expect(points.map((point) => point.longitude)).toEqual([179, -179, -178]);
   });
 
   it('rejects unsupported or empty exports', () => {
