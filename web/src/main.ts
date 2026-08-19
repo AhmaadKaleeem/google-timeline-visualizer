@@ -49,10 +49,6 @@ const downloadLink = element<HTMLAnchorElement>('download-link');
 
 if (import.meta.env.VITE_PREVIEW === 'true') {
   element<HTMLElement>('preview-banner').classList.remove('hidden');
-  const robots = document.createElement('meta');
-  robots.name = 'robots';
-  robots.content = 'noindex, nofollow, noarchive';
-  document.head.append(robots);
 }
 
 let allPoints: GeoPoint[] = [];

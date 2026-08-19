@@ -31,7 +31,8 @@ The Vite base path targets the default GitHub Pages project URL at
 `/google-timeline-visualizer/`.
 
 Set `VITE_PREVIEW=true` when building a public test deployment. Preview builds
-show a visible warning and add `noindex`, `nofollow`, and `noarchive` directives.
+show a visible warning. The current web app includes `noindex`, `nofollow`, and
+`noarchive` directives until the physical iPhone gate is complete.
 
 ## Current proof-of-concept scope
 
