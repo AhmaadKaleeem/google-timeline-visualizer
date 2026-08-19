@@ -36,10 +36,13 @@
           </ol>
           <p>To keep this app on your iPhone, use Safari’s Share menu and choose Add to Home Screen.</p>
         </details>
-        <label class="file-button">
-          <span>Choose Timeline.json</span>
-          <input id="timeline-file" type="file" accept="application/json,.json" />
-        </label>
+        <div class="source-actions">
+          <label class="file-button">
+            <span>Choose Timeline.json</span>
+            <input id="timeline-file" type="file" accept="application/json,.json" />
+          </label>
+          <button id="sample-button" class="secondary" type="button">Try a fictional sample journey</button>
+        </div>
         <p id="file-status" class="status" role="status">No Timeline loaded</p>
         <p id="compatibility-status" class="status">Checking video support…</p>
       </section>

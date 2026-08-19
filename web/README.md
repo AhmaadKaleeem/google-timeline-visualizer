@@ -45,6 +45,7 @@ show a visible warning. The current web app includes `noindex`, `nofollow`, and
 The current implementation proves the complete private browser path.
 
 1. Load current direct-array or older `semanticSegments` Timeline JSON.
+   A built-in fictional journey is available for privacy-safe device testing.
 2. Read absolute path timestamps or current minute offsets from segment start.
 3. Choose a month range or exact dates, title, and duration.
 4. Require explicit acknowledgement before contacting CARTO for map tiles.

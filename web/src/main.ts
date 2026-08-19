@@ -19,6 +19,7 @@ function element<T extends HTMLElement>(id: string): T {
 }
 
 const fileInput = element<HTMLInputElement>('timeline-file');
+const sampleButton = element<HTMLButtonElement>('sample-button');
 const fileStatus = element<HTMLParagraphElement>('file-status');
 const compatibilityStatus = element<HTMLParagraphElement>('compatibility-status');
 const settingsCard = element<HTMLElement>('settings-card');
@@ -176,11 +177,7 @@ function parseTimelineText(text: string): unknown {
   }
 }
 
-async function loadTimeline(file: File): Promise<void> {
-  setError(null);
-  setSettingsError(null);
-  fileStatus.textContent = `Reading ${file.name}…`;
-  const data = parseTimelineText(await file.text());
+function applyTimeline(data: unknown, sourceName: string): void {
   allPoints = parseTimelineJson(data);
   months = availableMonths(allPoints);
   populateMonths(startSelect, months);
@@ -201,8 +198,16 @@ async function loadTimeline(file: File): Promise<void> {
   mapConsent.checked = false;
   settingsCard.classList.remove('hidden');
   previewCard.classList.add('hidden');
-  fileStatus.textContent = `${allPoints.length.toLocaleString()} valid points from ${months[0].label} to ${months.at(-1)?.label}`;
+  fileStatus.textContent = `${sourceName} · ${allPoints.length.toLocaleString()} valid points from ${months[0].label} to ${months.at(-1)?.label}`;
   updateSelection();
+}
+
+async function loadTimeline(file: File): Promise<void> {
+  setError(null);
+  setSettingsError(null);
+  fileStatus.textContent = `Reading ${file.name}…`;
+  const data = parseTimelineText(await file.text());
+  applyTimeline(data, file.name);
 }
 
 async function requestWakeLock(): Promise<WakeLockSentinel | null> {
@@ -222,6 +227,22 @@ fileInput.addEventListener('change', async () => {
     settingsCard.classList.add('hidden');
     fileStatus.textContent = 'Timeline could not be loaded';
     setError(error instanceof Error ? error.message : 'The selected file could not be read.');
+    previewCard.classList.remove('hidden');
+  }
+});
+
+sampleButton.addEventListener('click', async () => {
+  setError(null);
+  setSettingsError(null);
+  fileStatus.textContent = 'Loading fictional sample…';
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL}sample-timeline.json`);
+    if (!response.ok) throw new Error('The fictional sample could not be loaded.');
+    applyTimeline(parseTimelineText(await response.text()), 'Fictional sample');
+  } catch (error) {
+    settingsCard.classList.add('hidden');
+    fileStatus.textContent = 'Sample could not be loaded';
+    setError(error instanceof Error ? error.message : 'The fictional sample could not be loaded.');
     previewCard.classList.remove('hidden');
   }
 });

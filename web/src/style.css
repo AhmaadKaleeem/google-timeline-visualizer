@@ -97,6 +97,8 @@ p { color: #5c4b52; line-height: 1.55; }
 
 .file-button { width: 100%; }
 .file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.source-actions { display: grid; gap: 10px; }
+.source-actions button { width: 100%; }
 button:disabled { cursor: not-allowed; opacity: 0.45; }
 .secondary { color: #5c1840; background: #f9dbe8; }
 
