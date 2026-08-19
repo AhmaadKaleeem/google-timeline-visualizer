@@ -9,7 +9,7 @@ import {
   selectRange,
   TimelineParseError,
 } from './timeline';
-import type { GeoPoint, MonthOption, PreparedJourney } from './types';
+import type { CameraMovement, GeoPoint, MonthOption, PreparedJourney } from './types';
 import { canCreateMp4, createJourneyMp4 } from './video';
 
 function element<T extends HTMLElement>(id: string): T {
@@ -32,6 +32,7 @@ const startDateInput = element<HTMLInputElement>('start-date');
 const endDateInput = element<HTMLInputElement>('end-date');
 const titleInput = element<HTMLInputElement>('video-title');
 const durationSelect = element<HTMLSelectElement>('duration');
+const cameraMovementSelect = element<HTMLSelectElement>('camera-movement');
 const selectionSummary = element<HTMLParagraphElement>('selection-summary');
 const mapConsent = element<HTMLInputElement>('map-consent');
 const settingsError = element<HTMLParagraphElement>('settings-error');
@@ -62,6 +63,7 @@ let previewAnimation = 0;
 let encodingSupported = false;
 let compatibilityChecked = false;
 let isExporting = false;
+let isPreparing = false;
 let exportController: AbortController | null = null;
 
 function setError(message: string | null): void {
@@ -113,8 +115,8 @@ function selectedDistanceKm(points: GeoPoint[]): number {
 
 function refreshActionAvailability(points = currentPoints()): void {
   const hasJourney = points.length >= 2 && selectedDistanceKm(points) > 0;
-  previewButton.disabled = isExporting || !hasJourney;
-  createButton.disabled = isExporting || !hasJourney || !encodingSupported;
+  previewButton.disabled = isExporting || isPreparing || !hasJourney;
+  createButton.disabled = isExporting || isPreparing || !hasJourney || !encodingSupported;
   if (!compatibilityChecked) {
     createButton.title = 'Checking browser video support.';
   } else if (!encodingSupported) {
@@ -127,6 +129,7 @@ function refreshActionAvailability(points = currentPoints()): void {
 }
 
 function updateSelection(): void {
+  cancelAnimationFrame(previewAnimation);
   if (exactDateToggle.checked) {
     if (startDateInput.value > endDateInput.value) endDateInput.value = startDateInput.value;
   } else if (startSelect.value > endSelect.value) {
@@ -151,11 +154,22 @@ function updateSelection(): void {
 }
 
 async function getPreparedJourney(signal?: AbortSignal): Promise<PreparedJourney> {
-  const signature = currentRangeSignature();
+  const cameraMovement = cameraMovementSelect.value as CameraMovement;
+  const durationSeconds = Number(durationSelect.value);
+  const signature = `${currentRangeSignature()}:camera:${cameraMovement}:duration:${durationSeconds}`;
   if (prepared && signature === selectedSignature) return prepared;
   if (signal?.aborted) throw new DOMException('Video creation was cancelled.', 'AbortError');
   progressLabel.textContent = 'Preparing map';
-  const nextJourney = await prepareJourney(currentPoints(), canvas.width);
+  const nextJourney = await prepareJourney(
+    currentPoints(),
+    canvas.width,
+    cameraMovement,
+    durationSeconds,
+    signal,
+    (completed, total) => {
+      progressLabel.textContent = `Preparing map ${completed}/${total}`;
+    },
+  );
   if (signal?.aborted) throw new DOMException('Video creation was cancelled.', 'AbortError');
   prepared = nextJourney;
   selectedSignature = signature;
@@ -251,6 +265,8 @@ startSelect.addEventListener('change', updateSelection);
 endSelect.addEventListener('change', updateSelection);
 startDateInput.addEventListener('change', updateSelection);
 endDateInput.addEventListener('change', updateSelection);
+durationSelect.addEventListener('change', updateSelection);
+cameraMovementSelect.addEventListener('change', updateSelection);
 exactDateToggle.addEventListener('change', () => {
   monthRangeFields.classList.toggle('hidden', exactDateToggle.checked);
   exactDateFields.classList.toggle('hidden', !exactDateToggle.checked);
@@ -268,6 +284,8 @@ previewButton.addEventListener('click', async () => {
   resultVideo.classList.add('hidden');
   previewCard.classList.remove('hidden');
   previewCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  isPreparing = true;
+  refreshActionAvailability();
   try {
     const journey = await getPreparedJourney();
     const started = performance.now();
@@ -281,6 +299,9 @@ previewButton.addEventListener('click', async () => {
     previewAnimation = requestAnimationFrame(tick);
   } catch (error) {
     setError(error instanceof Error ? error.message : 'Preview failed.');
+  } finally {
+    isPreparing = false;
+    refreshActionAvailability();
   }
 });
 

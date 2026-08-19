@@ -22,11 +22,25 @@ export interface Viewport {
   zoom: number;
 }
 
+export type CameraMovement = 'fixed' | 'steady' | 'dynamic';
+
+export interface CameraFrame {
+  centerX: number;
+  centerY: number;
+  spanY: number;
+  zoom: number;
+}
+
+export interface CameraTrack {
+  frames: CameraFrame[];
+  aspect: number;
+}
+
 export interface PreparedJourney {
   points: GeoPoint[];
   worldPoints: WorldPoint[];
   cumulativeDistanceKm: number[];
   totalDistanceKm: number;
-  viewport: Viewport;
-  background: HTMLCanvasElement;
+  cameraTrack: CameraTrack;
+  tiles: Map<string, HTMLImageElement>;
 }

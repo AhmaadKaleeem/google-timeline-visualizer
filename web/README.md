@@ -48,11 +48,12 @@ The current implementation proves the complete private browser path.
    A built-in fictional journey is available for privacy-safe device testing.
 2. Read absolute path timestamps or current minute offsets from segment start.
 3. Choose a month range or exact dates, title, and duration.
-4. Require explicit acknowledgement before contacting CARTO for map tiles.
-5. Preview the journey on a 480 by 480 Canvas.
-6. Encode Canvas frames as H.264 and mux them into an MP4.
-7. Keep the screen awake when supported and allow video creation to be cancelled.
-8. Preview, share, or download the completed MP4.
+4. Choose Fixed zoom, Steady following, or Dynamic following camera movement.
+5. Require explicit acknowledgement before contacting CARTO for map tiles.
+6. Preview the journey on a 480 by 480 Canvas.
+7. Encode Canvas frames as H.264 and mux them into an MP4.
+8. Keep the screen awake when supported and allow video creation to be cancelled.
+9. Preview, share, or download the completed MP4.
 
 Physical iPhone validation remains required before calling the web app ready for
 public use. Longer exports also need memory, thermal, interruption, and foreground
