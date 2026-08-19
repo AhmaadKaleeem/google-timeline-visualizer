@@ -5,6 +5,7 @@ import java.time.Month
 import java.time.YearMonth
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.AbstractList
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.ceil
@@ -120,6 +121,62 @@ data class RouteSample(
     val distanceKm: Double,
 )
 
+internal data class RenderSampleLocation(
+    val toPointIndex: Int,
+    val step: Int,
+    val steps: Int,
+) {
+    val fraction: Double get() = step.toDouble() / steps
+}
+
+private class JourneyRenderPath(
+    private val points: List<GeoPoint>,
+    private val cumulativeDistanceKm: DoubleArray,
+) : AbstractList<RouteSample>() {
+    private val segmentEnds = IntArray((points.size - 1).coerceAtLeast(0))
+
+    override val size: Int
+
+    init {
+        var sampleCount = if (points.isEmpty()) 0L else 1L
+        for (toIndex in 1..points.lastIndex) {
+            val segmentDistance = cumulativeDistanceKm[toIndex] - cumulativeDistanceKm[toIndex - 1]
+            val steps = renderSteps(segmentDistance)
+            sampleCount += steps
+            require(sampleCount <= Int.MAX_VALUE) { "Timeline contains too many render samples" }
+            segmentEnds[toIndex - 1] = sampleCount.toInt()
+        }
+        size = sampleCount.toInt()
+    }
+
+    override fun get(index: Int): RouteSample {
+        if (index !in indices) throw IndexOutOfBoundsException("Index $index, size $size")
+        if (index == 0) return RouteSample(points.first(), 0.0)
+        val location = locationAt(index)
+        val fromIndex = location.toPointIndex - 1
+        val fraction = location.fraction
+        val startDistance = cumulativeDistanceKm[fromIndex]
+        val segmentDistance = cumulativeDistanceKm[location.toPointIndex] - startDistance
+        return RouteSample(
+            interpolate(points[fromIndex], points[location.toPointIndex], fraction),
+            startDistance + segmentDistance * fraction,
+        )
+    }
+
+    fun locationAt(index: Int): RenderSampleLocation {
+        require(index in 1 until size)
+        var low = 0
+        var high = segmentEnds.size
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (segmentEnds[middle] <= index) low = middle + 1 else high = middle
+        }
+        val previousEnd = if (low == 0) 1 else segmentEnds[low - 1]
+        val steps = segmentEnds[low] - previousEnd
+        return RenderSampleLocation(low + 1, index - previousEnd + 1, steps)
+    }
+}
+
 data class JourneyLeg(
     val startKm: Double,
     val endKm: Double,
@@ -133,9 +190,10 @@ data class Journey(
     val points: List<GeoPoint>,
     val cumulativeDistanceKm: DoubleArray,
 ) {
+    private val renderPathData = JourneyRenderPath(points, cumulativeDistanceKm)
     val year: Int get() = period.startYear
     val totalDistanceKm: Double get() = cumulativeDistanceKm.lastOrNull() ?: 0.0
-    val renderPath: List<RouteSample> = buildRenderPath()
+    val renderPath: List<RouteSample> = renderPathData
     /**
      * A bounded, journey-specific cutoff for unusually large untracked hops. Dense local routes
      * can recognize shorter transfers, while consistently sparse routes keep the conservative cap.
@@ -192,39 +250,23 @@ data class Journey(
         )
     }
 
-    private fun buildRenderPath(): List<RouteSample> {
-        if (points.isEmpty()) return emptyList()
-        if (points.size == 1) return listOf(RouteSample(points.first(), 0.0))
-        return buildList {
-            add(RouteSample(points.first(), 0.0))
-            for (index in 1..points.lastIndex) {
-                val startDistance = cumulativeDistanceKm[index - 1]
-                val segmentDistance = cumulativeDistanceKm[index] - startDistance
-                val steps = ceil(segmentDistance / MAX_RENDER_STEP_KM).toInt().coerceIn(1, MAX_STEPS_PER_SEGMENT)
-                for (step in 1..steps) {
-                    val fraction = step.toDouble() / steps
-                    add(
-                        RouteSample(
-                            interpolate(points[index - 1], points[index], fraction),
-                            startDistance + segmentDistance * fraction,
-                        ),
-                    )
-                }
-            }
-        }
-    }
+    internal fun renderSampleLocation(index: Int): RenderSampleLocation? =
+        if (index == 0 || renderPath.isEmpty()) null else renderPathData.locationAt(index)
 
     private fun calculateTransferThresholdKm(): Double {
-        val ordinaryCandidates = cumulativeDistanceKm
-            .asSequence()
-            .zipWithNext { before, after -> after - before }
-            .filter { it > 0.0 && it < MAX_TRANSFER_THRESHOLD_KM }
-            .sorted()
-            .toList()
-        if (ordinaryCandidates.isEmpty()) return MAX_TRANSFER_THRESHOLD_KM
+        val candidates = DoubleArray((cumulativeDistanceKm.size - 1).coerceAtLeast(0))
+        var count = 0
+        for (index in 1 until cumulativeDistanceKm.size) {
+            val distance = cumulativeDistanceKm[index] - cumulativeDistanceKm[index - 1]
+            if (distance > 0.0 && distance < MAX_TRANSFER_THRESHOLD_KM) candidates[count++] = distance
+        }
+        if (count == 0) return MAX_TRANSFER_THRESHOLD_KM
 
-        val typicalHopKm = median(ordinaryCandidates)
-        val medianDeviationKm = median(ordinaryCandidates.map { kotlin.math.abs(it - typicalHopKm) }.sorted())
+        candidates.sort(0, count)
+        val typicalHopKm = median(candidates, count)
+        for (index in 0 until count) candidates[index] = kotlin.math.abs(candidates[index] - typicalHopKm)
+        candidates.sort(0, count)
+        val medianDeviationKm = median(candidates, count)
         return max(
             MIN_TRANSFER_THRESHOLD_KM,
             max(typicalHopKm * TRANSFER_TO_TYPICAL_RATIO, typicalHopKm + medianDeviationKm * DEVIATION_MULTIPLIER),
@@ -258,7 +300,7 @@ data class Journey(
             return Journey(period, points, distances)
         }
 
-        private fun interpolate(a: GeoPoint, b: GeoPoint, fraction: Double): GeoPoint {
+        internal fun interpolate(a: GeoPoint, b: GeoPoint, fraction: Double): GeoPoint {
             if (fraction <= 0.0) return a
             if (fraction >= 1.0) return b
             val lat1 = Math.toRadians(a.latitude)
@@ -288,18 +330,16 @@ data class Journey(
             return GeoPoint(instant, latitude, longitude)
         }
 
-        private const val MAX_RENDER_STEP_KM = 75.0
-        private const val MAX_STEPS_PER_SEGMENT = 320
         private const val MIN_TRANSFER_THRESHOLD_KM = 60.0
         private const val MAX_TRANSFER_THRESHOLD_KM = 120.0
         // A hop must also stand well clear of the journey's ordinary sampling pattern.
         private const val TRANSFER_TO_TYPICAL_RATIO = 3.0
         private const val DEVIATION_MULTIPLIER = 6.0
 
-        private fun median(sorted: List<Double>): Double {
-            if (sorted.isEmpty()) return 0.0
-            val middle = sorted.size / 2
-            return if (sorted.size % 2 == 0) {
+        private fun median(sorted: DoubleArray, size: Int): Double {
+            if (size == 0) return 0.0
+            val middle = size / 2
+            return if (size % 2 == 0) {
                 (sorted[middle - 1] + sorted[middle]) / 2.0
             } else {
                 sorted[middle]
@@ -307,6 +347,15 @@ data class Journey(
         }
     }
 }
+
+private const val MAX_RENDER_STEP_KM = 75.0
+private const val MAX_STEPS_PER_SEGMENT = 320
+
+private fun renderSteps(segmentDistance: Double): Int =
+    ceil(segmentDistance / MAX_RENDER_STEP_KM).toInt().coerceIn(1, MAX_STEPS_PER_SEGMENT)
+
+private fun interpolate(a: GeoPoint, b: GeoPoint, fraction: Double): GeoPoint =
+    Journey.interpolate(a, b, fraction)
 
 internal fun haversineKm(a: GeoPoint, b: GeoPoint): Double {
     val lat1 = Math.toRadians(a.latitude)

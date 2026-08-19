@@ -93,6 +93,9 @@ class TimelinePainter {
         color = Color.argb(220, 255, 248, 250)
     }
 
+    internal fun routeWorldPoint(journey: Journey, index: Int): WorldPoint =
+        prepare(journey).worldPointAt(index)
+
     fun viewport(
         journey: Journey,
         progress: Float,
@@ -145,25 +148,30 @@ class TimelinePainter {
         val lookaheadLimitKm = if (leg?.isTransfer == true) leg.endKm else journey.totalDistanceKm
         val tailDistance = max(rangeStartKm, current.distanceKm - contextKm)
         val lookaheadDistance = min(lookaheadLimitKm, current.distanceKm + contextKm)
-        val focus = buildList {
-            add(journey.positionAtDistance(tailDistance).point)
-            val start = prepared.lowerBound(tailDistance)
-            val end = prepared.upperBound(lookaheadDistance)
-            for (index in start..end) {
-                if (index in prepared.projected.indices) add(journey.renderPath[index].point)
-            }
-            add(current.point)
-            add(journey.positionAtDistance(lookaheadDistance).point)
-        }.map(WebMercator::project)
-
         val routeReferenceX = prepared.referenceX(current.distanceKm)
         val centerPoint = WebMercator.project(current.point)
         val centerX = unwrapNear(centerPoint.x, routeReferenceX)
-        val wrappedX = focus.map { unwrapNear(it.x, centerX) }
-        val ys = focus.map { it.y }
         val centerY = centerPoint.y
-        val contentSpanX = max(0.00015, (wrappedX.maxOrNull() ?: centerX) - (wrappedX.minOrNull() ?: centerX))
-        val contentSpanY = max(0.00015, (ys.maxOrNull() ?: centerY) - (ys.minOrNull() ?: centerY))
+        var minFocusX = centerX
+        var maxFocusX = centerX
+        var minFocusY = centerY
+        var maxFocusY = centerY
+        fun include(point: WorldPoint) {
+            val x = unwrapNear(point.x, centerX)
+            minFocusX = min(minFocusX, x)
+            maxFocusX = max(maxFocusX, x)
+            minFocusY = min(minFocusY, point.y)
+            maxFocusY = max(maxFocusY, point.y)
+        }
+        include(WebMercator.project(journey.positionAtDistance(tailDistance).point))
+        val start = prepared.lowerBound(tailDistance)
+        val end = prepared.upperBound(lookaheadDistance)
+        for (index in start..end) {
+            if (index in 0 until prepared.size) include(prepared.worldPointAt(index))
+        }
+        include(WebMercator.project(journey.positionAtDistance(lookaheadDistance).point))
+        val contentSpanX = max(0.00015, maxFocusX - minFocusX)
+        val contentSpanY = max(0.00015, maxFocusY - minFocusY)
         val aspect = width.toDouble() / height.coerceAtLeast(1)
         var spanY = max(contentSpanY * padding, contentSpanX * padding / aspect)
         spanY = spanY.coerceIn(movement.minimumViewportSpan, 0.72)
@@ -310,10 +318,24 @@ class TimelinePainter {
 
     private fun overviewViewport(journey: Journey, width: Int, height: Int): Viewport {
         val prepared = prepare(journey)
-        val minX = prepared.unwrappedX.minOrNull() ?: 0.5
-        val maxX = prepared.unwrappedX.maxOrNull() ?: minX
-        val minY = prepared.projected.minOfOrNull { it.y } ?: 0.5
-        val maxY = prepared.projected.maxOfOrNull { it.y } ?: minY
+        var minX = 0.5
+        var maxX = 0.5
+        var minY = 0.5
+        var maxY = 0.5
+        if (prepared.size > 0) {
+            val first = prepared.worldPointAt(0)
+            minX = first.x
+            maxX = first.x
+            minY = first.y
+            maxY = first.y
+            for (index in 1 until prepared.size) {
+                val point = prepared.worldPointAt(index)
+                minX = min(minX, point.x)
+                maxX = max(maxX, point.x)
+                minY = min(minY, point.y)
+                maxY = max(maxY, point.y)
+            }
+        }
         val contentCenterX = (minX + maxX) / 2.0
         val contentCenterY = (minY + maxY) / 2.0
         val contentSpanX = (maxX - minX).coerceAtLeast(MIN_VIEWPORT_SPAN)
@@ -602,7 +624,7 @@ class TimelinePainter {
         paint: Paint,
         alphaScale: Int,
     ) {
-        if (endDistance <= startDistance || prepared.distances.isEmpty() || alphaScale <= 0) return
+        if (endDistance <= startDistance || prepared.size == 0 || alphaScale <= 0) return
         val start = journey.positionAtDistance(startDistance)
         val end = journey.positionAtDistance(endDistance)
         val startScreen = screenPoint(start, prepared, viewport, width, height)
@@ -614,10 +636,10 @@ class TimelinePainter {
         var lastX = startScreen.first
         var lastY = startScreen.second
         var index = firstIndex
-        while (index <= lastIndex && index in prepared.projected.indices) {
-            val projected = prepared.projected[index]
+        while (index <= lastIndex && index in 0 until prepared.size) {
+            val projected = prepared.worldPointAt(index)
             val screen = worldToScreen(
-                WorldPoint(prepared.unwrappedX[index], projected.y),
+                projected,
                 viewport,
                 width,
                 height,
@@ -652,23 +674,10 @@ class TimelinePainter {
 
     private fun prepare(journey: Journey): PreparedJourney {
         if (cachedJourney === journey) return cachedPrepared!!
-        val projected = journey.renderPath.map { WebMercator.project(it.point) }
-        val prepared = PreparedJourney(
-            projected = projected,
-            unwrappedX = unwrapRoute(projected.map { it.x }),
-            distances = DoubleArray(journey.renderPath.size) { journey.renderPath[it].distanceKm },
-        )
+        val prepared = PreparedJourney(journey)
         cachedJourney = journey
         cachedPrepared = prepared
         return prepared
-    }
-
-    private fun unwrapRoute(values: List<Double>): List<Double> {
-        if (values.isEmpty()) return emptyList()
-        return buildList {
-            add(values.first())
-            for (index in 1..values.lastIndex) add(unwrapNear(values[index], last()))
-        }
     }
 
     private fun unwrapNear(value: Double, reference: Double): Double {
@@ -678,40 +687,73 @@ class TimelinePainter {
         return result
     }
 
-    private data class PreparedJourney(
-        val projected: List<WorldPoint>,
-        val unwrappedX: List<Double>,
-        val distances: DoubleArray,
-    ) {
+    private class PreparedJourney(private val journey: Journey) {
+        private val unwrappedPointX = DoubleArray(journey.points.size)
+        val size: Int get() = journey.renderPath.size
+
+        init {
+            for (index in journey.points.indices) {
+                val projected = WebMercator.project(journey.points[index])
+                unwrappedPointX[index] = if (index == 0) projected.x else {
+                    unwrap(projected.x, unwrappedPointX[index - 1])
+                }
+            }
+        }
+
+        fun worldPointAt(index: Int): WorldPoint {
+            val sample = journey.renderPath[index]
+            val projected = WebMercator.project(sample.point)
+            val location = journey.renderSampleLocation(index)
+            val reference = if (location == null) {
+                unwrappedPointX.firstOrNull() ?: 0.5
+            } else {
+                val from = location.toPointIndex - 1
+                unwrappedPointX[from] +
+                    (unwrappedPointX[location.toPointIndex] - unwrappedPointX[from]) * location.fraction
+            }
+            return WorldPoint(unwrap(projected.x, reference), projected.y)
+        }
+
+        private fun distanceAt(index: Int): Double = journey.renderPath[index].distanceKm
+
         fun lowerBound(value: Double): Int {
             var low = 0
-            var high = distances.size
+            var high = size
             while (low < high) {
                 val middle = (low + high) ushr 1
-                if (distances[middle] < value) low = middle + 1 else high = middle
+                if (distanceAt(middle) < value) low = middle + 1 else high = middle
             }
-            return low.coerceAtMost(distances.lastIndex.coerceAtLeast(0))
+            return low.coerceAtMost((size - 1).coerceAtLeast(0))
         }
 
         fun upperBound(value: Double): Int {
             var low = 0
-            var high = distances.size
+            var high = size
             while (low < high) {
                 val middle = (low + high) ushr 1
-                if (distances[middle] <= value) low = middle + 1 else high = middle
+                if (distanceAt(middle) <= value) low = middle + 1 else high = middle
             }
             return low - 1
         }
 
         fun referenceX(distanceKm: Double): Double {
-            if (distances.isEmpty()) return 0.5
-            val after = lowerBound(distanceKm)
-            val before = (after - 1).coerceAtLeast(0)
-            val nearest = if (
-                after in distances.indices &&
-                kotlin.math.abs(distances[after] - distanceKm) < kotlin.math.abs(distances[before] - distanceKm)
-            ) after else before
-            return unwrappedX[nearest]
+            if (journey.points.isEmpty()) return 0.5
+            val position = journey.positionAtDistance(distanceKm)
+            val projected = WebMercator.project(position.point)
+            val reference = if (position.fromIndex == position.toIndex) {
+                unwrappedPointX[position.fromIndex]
+            } else {
+                unwrappedPointX[position.fromIndex] +
+                    (unwrappedPointX[position.toIndex] - unwrappedPointX[position.fromIndex]) * position.segmentFraction
+            }
+            return unwrap(projected.x, reference)
+        }
+
+        private fun unwrap(value: Double, reference: Double): Double {
+            var result = value
+            while (result - reference > 0.5) result -= 1.0
+            while (result - reference < -0.5) result += 1.0
+            return result
         }
     }
 

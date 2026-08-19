@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.2
+
+- Keep interpolated route samples virtual instead of retaining millions of route objects.
+- Replace route-sized first-frame projection collections with compact source-point indexes.
+- Use primitive arrays for transfer-threshold statistics to avoid boxed number collections.
+- Add a dense long-gap import fixture below 16 MB and Android API 36 device coverage.
+- Preserve Timeline points, filtering, ordering, distances, and rendered route geometry.
+- Set Android version code 17 and version name 2.1.2.
+
 ## 2.1.1
 
 - Reduce peak memory while normalizing large Timeline JSON exports.
