@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">타임라인 비주얼라이저</string>
     <string name="import_timeline">파일 선택</string>
     <string name="how_to_export">타임라인 파일 받기</string>
@@ -120,7 +120,7 @@
     <string name="project_on_github">GitHub 프로젝트</string>
     <string name="update_page_unavailable">업데이트 페이지를 열 수 없습니다</string>
     <string name="web_page_unavailable">웹페이지를 열 수 없습니다</string>
-    <string name="render_date_pattern">yyyy년 M월</string>
+    <string name="render_date_pattern" tools:ignore="ExtraTranslation">yyyy년 M월</string>
     <string name="distance_unit">km</string>
     <string name="map_attribution">© OpenStreetMap  © CARTO</string>
     <string name="timeline_video">타임라인 영상</string>

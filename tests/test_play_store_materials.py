@@ -81,16 +81,23 @@ def test_android_locales_have_matching_resources_and_placeholders():
 
     def resources(path: Path):
         result = {}
+        developer_owned = set()
         for element in ET.parse(path).getroot():
             name = element.attrib["name"]
             text = " ".join(element.itertext())
             placeholders = sorted(set(re.findall(r"%\d+\$[a-zA-Z]|\{(?:year|name)\}", text)))
-            result[(element.tag, name)] = placeholders
-        return result
+            key = (element.tag, name)
+            result[key] = placeholders
+            if element.attrib.get("translatable") == "false":
+                developer_owned.add(key)
+        return result, developer_owned
 
-    localized = {locale: resources(path) for locale, path in files.items()}
+    localized = {locale: resources(path)[0] for locale, path in files.items()}
+    developer_owned = resources(files["en"])[1]
+    expected = {key: value for key, value in localized["en"].items() if key not in developer_owned}
     for locale, values in localized.items():
-        assert values == localized["en"], locale
+        translated = {key: value for key, value in values.items() if key not in developer_owned}
+        assert translated == expected, locale
 
 
 def test_localized_restoration_guides_are_complete_and_accessible():

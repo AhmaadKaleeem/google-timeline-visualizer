@@ -13,7 +13,6 @@ import dev.mahlernim.timelinevisualizer.model.JourneyPosition
 import dev.mahlernim.timelinevisualizer.model.WebMercator
 import dev.mahlernim.timelinevisualizer.model.WorldPoint
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.floor
@@ -592,8 +591,7 @@ class TimelinePainter {
             displayTitle.take(count.coerceAtLeast(1)).trimEnd() + "…"
         }
         canvas.drawText(fittedTitle, width / 2f, 72f * scale, titlePaint)
-        val date = DateTimeFormatter.ofPattern(renderText.datePattern, renderText.locale)
-            .format(position.point.instant.atZone(ZoneId.systemDefault()))
+        val date = renderText.dateFormatter.format(position.point.instant.atZone(ZoneId.systemDefault()))
         val distance = position.distanceKm
         val number = NumberFormat.getNumberInstance(renderText.locale).apply { maximumFractionDigits = 0 }
         canvas.drawText(
