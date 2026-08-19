@@ -108,6 +108,7 @@ class VideoExportService : Service() {
                 request.title,
                 request.durationSeconds,
                 request.renderText,
+                request.cameraSettings,
             ) { progress ->
                 val snapshot = VideoExportSnapshot(
                     status = VideoExportStatus.RUNNING,
@@ -282,11 +283,7 @@ class VideoExportService : Service() {
     }
 
     private fun buildCompletedNotification(uri: Uri, title: String): Notification {
-        val watch = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "video/mp4")
-            clipData = ClipData.newRawUri(getString(R.string.timeline_video), uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
+        val watch = MainActivity.playbackIntent(this, uri)
         val share = Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
             type = "video/mp4"
             putExtra(Intent.EXTRA_STREAM, uri)

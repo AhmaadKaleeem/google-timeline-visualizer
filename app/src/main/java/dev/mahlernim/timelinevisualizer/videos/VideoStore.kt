@@ -36,6 +36,8 @@ class VideoStore(private val context: Context) {
 
     fun remove(uri: String) = save(list().filterNot { it.uri == uri })
 
+    fun removeAll(uris: Set<String>) = save(list().filterNot { it.uri in uris })
+
     internal fun clear() {
         preferences.edit { remove(KEY_RECORDS) }
     }

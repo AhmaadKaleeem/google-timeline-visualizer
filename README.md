@@ -3,7 +3,7 @@
 [한국어 안내](README.ko.md) · [日本語](README.ja.md)
 
 Turn your Timeline file into an animated travel video on your Android phone. Choose
-a period, preview the Journey, and create an MP4 ready to watch or share.
+exact dates, preview the Journey, and create an MP4 ready to watch or share.
 
 ![Videos library](play-store/assets/screenshots/en-US/01-videos.png)
 
@@ -18,7 +18,7 @@ a period, preview the Journey, and create an MP4 ready to watch or share.
 The app is not yet on Google Play. Install it from this repository's
 [latest release](https://github.com/mahlernim/google-timeline-visualizer/releases/latest):
 
-1. Under **Assets**, download `TimelineVisualizer-v1.9.0.apk` on your phone.
+1. Under **Assets**, download `TimelineVisualizer-v2.0.0.apk` on your phone.
 2. Open the downloaded file.
 3. If Android blocks the installation, select **Settings**, allow your browser or
    file manager to **Install unknown apps**, then return and try again.
@@ -62,9 +62,9 @@ restore it directly.
 
 ## Create and share a video
 
-1. Open **New video**, select **Choose file**, and choose your Timeline file.
-2. Choose the start year and month and the end year and month under **Selected period**. The latest full
-   year is selected by default, and ranges may cross year boundaries.
+1. Open **Create video**, select **Choose file**, and choose your Timeline file.
+2. Choose a month range or use **Exact dates** for a trip lasting only a few days.
+   The latest full year is selected by default, and ranges may cross year boundaries.
 3. Confirm the name and title template, then choose a 10, 15, 20, 30, 45, or
    60-second journey. The template is saved for next time and supports `{year}`
    and `{name}`.
@@ -94,9 +94,10 @@ ready alert. Video creation continues even if you decline notification access.
 
 ## Keep your videos
 
-Completed videos are added to **Videos** automatically. Each entry keeps its
+Completed videos are added to **My videos** automatically. Each entry keeps its
 thumbnail, title, Timeline period, duration, and creation date, with quick actions
-to watch or share it. Automatically created MP4 files remain in `Movies/Timeline Visualizer`. The app stores
+to watch or share it. Videos open in a full-screen player inside the app, with
+seeking, sharing, and an external-player fallback. Automatically created MP4 files remain in `Movies/Timeline Visualizer`. The app stores
 only a small local index and a deterministic thumbnail made from the final journey overview.
 
 Use **Add videos** to include MP4s made before this library was introduced. You can
@@ -105,9 +106,20 @@ entry is marked **File unavailable** so you can remove it from the list.
 
 **Remove from list** leaves the MP4 untouched. **Delete video** is a separate,
 confirmed action that permanently deletes the file when its storage provider allows
-it. Use **Check for updates** at the bottom of the app to open the appropriate
-official update page. The separately labeled **Project on GitHub** link opens the
-source code.
+it. **Delete all** removes every available video after confirmation. The bottom
+navigation keeps **My videos**, **Create video**, and **Settings** easy to reach.
+
+## Video settings
+
+**Settings** controls defaults for every new video. Steady camera and Balanced
+long-trip compression are the defaults. Fixed camera keeps one zoom level, while
+Dynamic camera follows local movement more actively. Long-trip compression changes
+only animation timing and never route geometry. Video quality offers the original
+480p output plus 720p and 1080p options. Restore defaults returns all video settings
+to the recommended values.
+
+The app supports English, Korean, Japanese, Simplified Chinese, Traditional Chinese,
+Spanish, French, German, and Brazilian Portuguese.
 
 Long flights and other sparse routes are interpolated along a great-circle path,
 so the camera follows the trip smoothly instead of jumping to the destination.
@@ -147,7 +159,8 @@ Python 3.9+, FFmpeg, and the packages in `requirements.txt`.
 
 ```bash
 python -m pip install -r requirements.txt
-python visualizer.py --input Timeline.json --year 2025 --output my_trip_2025.mp4
+python visualizer.py --input Timeline.json --year 2025 --camera-movement steady \
+  --long-trip-compression balanced --output my_trip_2025.mp4
 ```
 
 ## Build and test

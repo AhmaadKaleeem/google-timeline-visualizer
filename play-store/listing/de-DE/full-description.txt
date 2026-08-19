@@ -1,0 +1,34 @@
+Erwecken Sie ein Reisejahr zum Leben.
+
+Timeline Visualizer verwandelt einen Google Maps Timeline-Export in ein animiertes Kartenvideo auf Ihrem Android-Telefon. Wählen Sie genaue Daten oder einen Monatsbereich, zeigen Sie eine Vorschau der Route an und erstellen Sie ein MP4, das Sie ansehen oder teilen können.
+
+Erstelle deine Geschichte
+• Wählen Sie eine Timeline-Datei, die aus Android oder iPhone exportiert wurde
+• Wählen Sie genaue Daten oder einen umfassenden Monatsbereich über mehrere Jahre aus
+• Personalisieren Sie einen wiederverwendbaren Titel wie „2026 Minas Timeline“.
+• Sehen Sie sich die Animation in der Vorschau an, bevor Sie das Video in voller Qualität erstellen
+• Wählen Sie „Feste“, „Stetige“ oder „Dynamische“ Kamerabewegung
+• Balancieren Sie lange Fahrten mit optionaler Timing-Komprimierung für lange Fahrten
+• Exportieren Sie mit 480p, 720p oder 1080p
+• Wählen Sie eine Fahrt von 10, 15, 20, 30, 45 oder 60 Sekunden
+• Beenden Sie die Fahrt mit einem reibungslosen Verkleinern und einer vollständigen Routenübersicht
+• Erstellen Sie weiterhin im Hintergrund mit Fortschritts- und Abschlussbenachrichtigungen
+• Öffnen Sie die zuletzt verwendete Timeline-Datei erneut, wenn Android weiterhin Zugriff hat
+• Speichern Sie Videos automatisch auf Movies/Timeline Visualizer auf Android 10 und höher
+• Speichern oder teilen Sie die endgültige 1080 × 1080-Routenübersicht
+
+Müssen Sie zuerst ältere Reisen wiederherstellen?
+Öffnen Sie die lokalisierte Wiederherstellungsanleitung in der App. Es erklärt, wie man ein vorhandenes verschlüsseltes Timeline-Backup in Google Maps importiert und dann eine neue JSON-Datei für Timeline Visualizer exportiert. Die App greift niemals auf Ihr Google-Konto oder Ihr verschlüsseltes Backup zu.
+
+Halten Sie Ihre Videos zusammen
+Abgeschlossene Videos werden in „Meine Videos“ mit Miniaturansicht, Titel, Datum, Dauer und ausgewähltem Zeitraum angezeigt. Fügen Sie ältere MP4-Dateien hinzu, spielen Sie sie in der App ab, teilen Sie sie oder löschen Sie die gesamte Bibliothek mit Bestätigung.
+
+Einfache Navigation
+Wechseln Sie in der unteren Navigationsleiste zwischen „Meine Videos“, „Video erstellen“ und „Einstellungen“. Kamerabewegung, Langzeitkomprimierung und Videoqualität werden als Standardwerte für die nächste Vorschau und den nächsten Export gespeichert.
+
+Auf Privatsphäre ausgelegt
+Ihre Timeline-Datei wird nie hochgeladen. Die Reise, Titel und generierten Videos werden auf Ihrem Gerät verarbeitet. Es werden keine Google-Anmelde-, Analyse-, Werbe- oder Standortberechtigungen verwendet.
+
+Um die Karte zu zeichnen, fordert die App Kartenkacheln von CARTO an. Zu diesen Anfragen gehören Kachelkoordinaten des Kartenbereichs und normale Netzwerkinformationen, die möglicherweise Orte in Ihrem Timeline bis CARTO offenbaren. Die App erklärt dies vor dem Laden des ersten Timeline und ermöglicht den Abbruch.
+
+Timeline Visualizer ist eine unabhängige Open-Source-App. Es ist weder mit Google verbunden noch wird es von Google unterstützt. Google Maps ist eine Marke von Google LLC.

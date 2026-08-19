@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.0.0
+
+- Add bottom navigation for My videos, Create video, and Settings while preserving unfinished creation state.
+- Add a full-screen in-app Media3 video player with seeking, sharing, error handling, and external-player fallback.
+- Add Steady, Fixed, and Dynamic camera movement settings with improved long-movement anticipation and asymmetric zoom smoothing.
+- Add long-trip compression with Balanced `0.85` as the default while preserving route geometry and total duration.
+- Add 480p, 720p, and 1080p video quality options and exact date ranges.
+- Add deletion of every available library video after confirmation.
+- Keep Android preview, seeking, export timing, and the Python renderer aligned.
+- Add Simplified Chinese, Traditional Chinese, Spanish, French, German, and Brazilian Portuguese.
+- Regenerate English, Korean, and Japanese store screenshots for the new navigation.
+- Set Android version code 13 and version name 2.0.0.
+
 ## 1.9.0
 
 - Implements issues #21, #23, and #24.

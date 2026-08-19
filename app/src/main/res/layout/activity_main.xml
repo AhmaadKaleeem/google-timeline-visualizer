@@ -1,14 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:orientation="vertical">
 
-    <include
-        android:id="@+id/videosScreen"
-        layout="@layout/screen_videos" />
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
-    <include
-        android:id="@+id/newVideoScreen"
-        layout="@layout/screen_new_video"
-        android:visibility="gone" />
-</FrameLayout>
+        <include
+            android:id="@+id/videosScreen"
+            layout="@layout/screen_videos" />
+
+        <include
+            android:id="@+id/newVideoScreen"
+            layout="@layout/screen_new_video"
+            android:visibility="gone" />
+
+        <include
+            android:id="@+id/settingsScreen"
+            layout="@layout/screen_settings"
+            android:visibility="gone" />
+
+        <include
+            android:id="@+id/playerScreen"
+            layout="@layout/screen_player"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNavigation"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:background="?attr/colorSurfaceContainer"
+        app:itemHorizontalTranslationEnabled="false"
+        app:itemTextAppearanceActive="@style/BottomNavigationTextAppearance"
+        app:itemTextAppearanceInactive="@style/BottomNavigationTextAppearance"
+        app:labelVisibilityMode="labeled"
+        app:menu="@menu/bottom_navigation" />
+</LinearLayout>

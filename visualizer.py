@@ -19,6 +19,7 @@ import sys
 import io
 import urllib.request
 import bisect
+import statistics
 from datetime import datetime
 from pathlib import Path
 
@@ -44,10 +45,27 @@ DEFAULT_TAIL_KM = 500
 THEME_COLOR = '#ff0055' # Pink/Red
 TILE_URL = "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
 
-# Camera Physics
-SMOOTHING_FACTOR = 0.1 
-LOOKAHEAD_KM = 500 
-MIN_ZOOM_SPAN_METERS = 5000 
+# Camera behavior matches the Android renderer defaults and options.
+CAMERA_MOVEMENTS = {
+    'fixed': dict(context_fraction=0.10, minimum_context_km=25.0, maximum_context_km=350.0,
+                  padding=2.6, minimum_span=0.00060, zoom_out_alpha=0.0,
+                  zoom_in_alpha=0.0, leg_aware=False, fixed_zoom=True),
+    'steady': dict(context_fraction=1.00, minimum_context_km=650.0, maximum_context_km=650.0,
+                   padding=2.8, minimum_span=0.00060, zoom_out_alpha=0.14,
+                   zoom_in_alpha=0.035, leg_aware=False, fixed_zoom=False),
+    'dynamic': dict(context_fraction=0.10, minimum_context_km=100.0, maximum_context_km=350.0,
+                    padding=2.2, minimum_span=0.00045, zoom_out_alpha=0.24,
+                    zoom_in_alpha=0.06, leg_aware=True, fixed_zoom=False),
+}
+COMPRESSION_EXPONENTS = {'off': 1.00, 'gentle': 0.92, 'balanced': 0.85, 'strong': 0.75}
+TRANSFER_PADDING = 2.8
+CAMERA_TRACK_SAMPLES = 480
+CAMERA_DEAD_ZONE_HALF = 0.20
+FIXED_ZOOM_PERCENTILE = 0.80
+MIN_TRANSFER_THRESHOLD_KM = 60.0
+MAX_TRANSFER_THRESHOLD_KM = 120.0
+TRANSFER_TO_TYPICAL_RATIO = 3.0
+DEVIATION_MULTIPLIER = 6.0
 
 # Web Mercator Constants
 R_EARTH = 6378137.0
@@ -72,6 +90,146 @@ def haversine_dist(lat1, lon1, lat2, lon2):
     a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
+
+
+def interpolate_latlon(lat1, lon1, lat2, lon2, fraction):
+    """Return a great-circle position so long hops sweep instead of teleporting."""
+    if fraction <= 0:
+        return lat1, lon1
+    if fraction >= 1:
+        return lat2, lon2
+    p1, l1 = math.radians(lat1), math.radians(lon1)
+    p2, l2 = math.radians(lat2), math.radians(lon2)
+    ax, ay, az = math.cos(p1) * math.cos(l1), math.cos(p1) * math.sin(l1), math.sin(p1)
+    bx, by, bz = math.cos(p2) * math.cos(l2), math.cos(p2) * math.sin(l2), math.sin(p2)
+    dot = max(-1.0, min(1.0, ax * bx + ay * by + az * bz))
+    omega = math.acos(dot)
+    if math.sin(omega) < 1e-8:
+        left, right = 1 - fraction, fraction
+    else:
+        left = math.sin((1 - fraction) * omega) / math.sin(omega)
+        right = math.sin(fraction * omega) / math.sin(omega)
+    x, y, z = left * ax + right * bx, left * ay + right * by, left * az + right * bz
+    return math.degrees(math.atan2(z, math.sqrt(x * x + y * y))), math.degrees(math.atan2(y, x))
+
+
+def position_at_distance(cum_dist, lats, lons, distance_km):
+    if not cum_dist:
+        raise ValueError('A route needs at least one point')
+    if len(cum_dist) == 1 or cum_dist[-1] <= 0:
+        return lats[0], lons[0]
+    distance = max(0.0, min(cum_dist[-1], distance_km))
+    to_index = min(max(bisect.bisect_left(cum_dist, distance), 1), len(cum_dist) - 1)
+    segment = cum_dist[to_index] - cum_dist[to_index - 1]
+    fraction = 0.0 if segment <= 0 else (distance - cum_dist[to_index - 1]) / segment
+    return interpolate_latlon(
+        lats[to_index - 1], lons[to_index - 1], lats[to_index], lons[to_index], fraction,
+    )
+
+
+def transfer_threshold_km(cum_dist):
+    hops = [after - before for before, after in zip(cum_dist, cum_dist[1:])]
+    ordinary = sorted(hop for hop in hops if 0 < hop < MAX_TRANSFER_THRESHOLD_KM)
+    if not ordinary:
+        return MAX_TRANSFER_THRESHOLD_KM
+    typical = statistics.median(ordinary)
+    deviation = statistics.median(sorted(abs(hop - typical) for hop in ordinary))
+    threshold = max(
+        MIN_TRANSFER_THRESHOLD_KM,
+        typical * TRANSFER_TO_TYPICAL_RATIO,
+        typical + deviation * DEVIATION_MULTIPLIER,
+    )
+    return min(MAX_TRANSFER_THRESHOLD_KM, threshold)
+
+
+def build_legs(cum_dist, threshold_km=None):
+    if len(cum_dist) < 2 or cum_dist[-1] <= 0:
+        return []
+    threshold = threshold_km if threshold_km is not None else transfer_threshold_km(cum_dist)
+    legs = []
+    local_start = 0.0
+    for before, after in zip(cum_dist, cum_dist[1:]):
+        if after - before < max(1.0, threshold):
+            continue
+        if before > local_start:
+            legs.append((local_start, before, False))
+        legs.append((before, after, True))
+        local_start = after
+    if cum_dist[-1] > local_start:
+        legs.append((local_start, cum_dist[-1], False))
+    return legs
+
+
+def leg_at(legs, distance_km, total_km):
+    if not legs:
+        return 0.0, total_km, False
+    starts = [leg[0] for leg in legs]
+    index = bisect.bisect_right(starts, max(0.0, min(total_km, distance_km))) - 1
+    return legs[max(0, min(index, len(legs) - 1))]
+
+
+def _endpoint_slope(first_width, second_width, first, second):
+    slope = ((2 * first_width + second_width) * first - first_width * second) / (first_width + second_width)
+    if slope <= 0:
+        return 0.0
+    return min(slope, 3 * first)
+
+
+def _monotone_slopes(x_values, y_values):
+    count = len(x_values) - 1
+    delta = [(y_values[i + 1] - y_values[i]) / (x_values[i + 1] - x_values[i]) for i in range(count)]
+    if count == 1:
+        return [delta[0], delta[0]]
+    slopes = [0.0] * len(x_values)
+    slopes[0] = _endpoint_slope(x_values[1] - x_values[0], x_values[2] - x_values[1], delta[0], delta[1])
+    for index in range(1, len(x_values) - 1):
+        before_width = x_values[index] - x_values[index - 1]
+        after_width = x_values[index + 1] - x_values[index]
+        weight_before = 2 * after_width + before_width
+        weight_after = after_width + 2 * before_width
+        slopes[index] = (weight_before + weight_after) / (
+            weight_before / delta[index - 1] + weight_after / delta[index]
+        )
+    slopes[-1] = _endpoint_slope(
+        x_values[-1] - x_values[-2], x_values[-2] - x_values[-3], delta[-1], delta[-2],
+    )
+    return slopes
+
+
+def build_journey_timing(cum_dist, compression):
+    """Return a progress-to-raw-distance mapper without changing route geometry."""
+    total_km = cum_dist[-1] if cum_dist else 0.0
+    exponent = COMPRESSION_EXPONENTS[compression]
+    if compression == 'off' or len(cum_dist) < 2:
+        return lambda progress: total_km * max(0.0, min(1.0, progress))
+    distances = [0.0]
+    effective = [0.0]
+    effective_total = 0.0
+    for before, after in zip(cum_dist, cum_dist[1:]):
+        segment = after - before
+        if segment <= 0:
+            continue
+        effective_total += segment ** exponent
+        distances.append(after)
+        effective.append(effective_total)
+    if effective_total <= 0 or len(distances) < 2:
+        return lambda progress: total_km * max(0.0, min(1.0, progress))
+    x_values = [value / effective_total for value in effective]
+    slopes = _monotone_slopes(x_values, distances)
+
+    def distance_at(progress):
+        elapsed = max(0.0, min(1.0, progress))
+        to_index = min(max(bisect.bisect_left(x_values, elapsed), 1), len(x_values) - 1)
+        from_index = to_index - 1
+        width = x_values[to_index] - x_values[from_index]
+        t = 0.0 if width <= 0 else (elapsed - x_values[from_index]) / width
+        t2, t3 = t * t, t * t * t
+        return ((2 * t3 - 3 * t2 + 1) * distances[from_index]
+                + (t3 - 2 * t2 + t) * width * slopes[from_index]
+                + (-2 * t3 + 3 * t2) * distances[to_index]
+                + (t3 - t2) * width * slopes[to_index])
+
+    return distance_at
 
 # --- MAP TILES (Web Mercator) ---
 
@@ -277,13 +435,111 @@ def parse_timeline(input_path, year):
         
     return timestamps, xs, ys, cum_dist, lats, lons
 
-def main():
+
+def raw_camera_sample(cum_dist, xs, ys, lats, lons, distance_km, movement_name, legs):
+    movement = CAMERA_MOVEMENTS[movement_name]
+    total_km = cum_dist[-1]
+    latitude, longitude = position_at_distance(cum_dist, lats, lons, distance_km)
+    center_x, center_y = latlon_to_meters(latitude, longitude)
+    context = max(
+        movement['minimum_context_km'],
+        min(movement['maximum_context_km'], total_km * movement['context_fraction']),
+    )
+    leg = leg_at(legs, distance_km, total_km) if movement['leg_aware'] else None
+    if leg is not None and leg[2]:
+        context = leg[1] - leg[0]
+        padding = TRANSFER_PADDING
+        range_start = leg[0]
+        lookahead_limit = leg[1]
+    else:
+        padding = movement['padding']
+        range_start = leg[0] if leg is not None else 0.0
+        lookahead_limit = total_km
+    tail_distance = max(range_start, distance_km - context)
+    lookahead_distance = min(lookahead_limit, distance_km + context)
+    start_index = bisect.bisect_left(cum_dist, tail_distance)
+    end_index = bisect.bisect_right(cum_dist, lookahead_distance)
+    focus_x = list(xs[start_index:end_index])
+    focus_y = list(ys[start_index:end_index])
+    for edge in (tail_distance, distance_km, lookahead_distance):
+        edge_lat, edge_lon = position_at_distance(cum_dist, lats, lons, edge)
+        edge_x, edge_y = latlon_to_meters(edge_lat, edge_lon)
+        focus_x.append(edge_x)
+        focus_y.append(edge_y)
+    minimum_span = movement['minimum_span'] * (2 * MAX_EXTENT)
+    span = max(
+        (max(focus_x) - min(focus_x)) * padding,
+        (max(focus_y) - min(focus_y)) * padding,
+        minimum_span,
+    )
+    return center_x, center_y, min(span, 0.72 * 2 * MAX_EXTENT)
+
+
+def build_camera_track(cum_dist, xs, ys, lats, lons, movement_name, distance_at):
+    movement = CAMERA_MOVEMENTS[movement_name]
+    legs = build_legs(cum_dist)
+    raw = [
+        raw_camera_sample(
+            cum_dist, xs, ys, lats, lons,
+            distance_at(sample / CAMERA_TRACK_SAMPLES), movement_name, legs,
+        )
+        for sample in range(CAMERA_TRACK_SAMPLES + 1)
+    ]
+    fixed_span = None
+    if movement['fixed_zoom']:
+        spans = sorted(sample[2] for sample in raw)
+        fixed_span = spans[int((len(spans) - 1) * FIXED_ZOOM_PERCENTILE)]
+    track = []
+    for raw_x, raw_y, raw_span in raw:
+        target_span = fixed_span if fixed_span is not None else raw_span
+        if not track:
+            track.append((raw_x, raw_y, target_span))
+            continue
+        center_x, center_y, previous_span = track[-1]
+        alpha = movement['zoom_out_alpha'] if target_span > previous_span else movement['zoom_in_alpha']
+        span = target_span if movement['fixed_zoom'] else math.exp(
+            math.log(previous_span) + (math.log(target_span) - math.log(previous_span)) * alpha,
+        )
+        dead_half = span * CAMERA_DEAD_ZONE_HALF
+        if raw_x < center_x - dead_half:
+            center_x = raw_x + dead_half
+        elif raw_x > center_x + dead_half:
+            center_x = raw_x - dead_half
+        if raw_y < center_y - dead_half:
+            center_y = raw_y + dead_half
+        elif raw_y > center_y + dead_half:
+            center_y = raw_y - dead_half
+        track.append((center_x, center_y, span))
+    return track
+
+
+def camera_at(track, progress):
+    position = max(0.0, min(1.0, progress)) * (len(track) - 1)
+    from_index = int(math.floor(position))
+    to_index = min(from_index + 1, len(track) - 1)
+    fraction = position - from_index
+    before, after = track[from_index], track[to_index]
+    center_x = before[0] + (after[0] - before[0]) * fraction
+    center_y = before[1] + (after[1] - before[1]) * fraction
+    span = math.exp(math.log(before[2]) + (math.log(after[2]) - math.log(before[2])) * fraction)
+    return center_x, center_y, span
+
+def build_argument_parser():
     parser = argparse.ArgumentParser(description="Google Timeline Visualizer")
     parser.add_argument('--input', '-i', required=True, help="Path to Timeline.json")
     parser.add_argument('--year', '-y', type=int, default=datetime.now().year, help="Year to visualize")
     parser.add_argument('--output', '-o', default='travel_history.mp4', help="Output video path")
     parser.add_argument('--title', '-t', default="My Trips", help="Title displayed on video")
-    
+    parser.add_argument('--camera-movement', choices=CAMERA_MOVEMENTS, default='steady',
+                        help="Camera behavior: fixed, steady, or dynamic")
+    parser.add_argument('--long-trip-compression', choices=COMPRESSION_EXPONENTS, default='balanced',
+                        help="Timing compression: off, gentle, balanced, or strong")
+    return parser
+
+
+def main():
+    parser = build_argument_parser()
+
     args = parser.parse_args()
     
     # Load
@@ -292,57 +548,26 @@ def main():
     total_km = cum_dist[-1]
     print(f"Total distance: {total_km:.1f} km")
     
-    # Prepare Frame Indices (Distance Based)
+    # Prepare frame positions from softened distance timing while retaining raw route geometry.
     total_frames = DEFAULT_FPS * DEFAULT_DURATION
-    km_per_frame = total_km / total_frames
-    
-    print(f"Target: {DEFAULT_DURATION}s @ {DEFAULT_FPS}fps. {km_per_frame:.3f} km/frame")
-    
-    frames_dist = [i * km_per_frame for i in range(total_frames)]
+    distance_at = build_journey_timing(cum_dist, args.long_trip_compression)
+    print(f"Target: {DEFAULT_DURATION}s @ {DEFAULT_FPS}fps. Compression: {args.long_trip_compression}")
+
+    frame_progress = [i / total_frames for i in range(total_frames)]
+    frames_dist = [distance_at(progress) for progress in frame_progress]
     frame_indices = []
+    frame_points = []
     for d in frames_dist:
-        idx = bisect.bisect_left(cum_dist, d)
-        idx = min(idx, len(cum_dist)-1)
+        idx = min(max(bisect.bisect_right(cum_dist, d) - 1, 0), len(cum_dist)-1)
         frame_indices.append(idx)
-        
+        frame_points.append(latlon_to_meters(*position_at_distance(cum_dist, lats, lons, d)))
+
     # Camera Calculation
-    print("Calculating camera path...")
-    cam_centers = []
-    cam_spans = []
-    
-    curr_x, curr_y = xs[0], ys[0]
-    curr_span = 10000.0 # Start with 10km view
-    
-    for i, frame_d in enumerate(frames_dist):
-        idx = frame_indices[i]
-        
-        # Lookahead
-        target_d = frame_d + LOOKAHEAD_KM
-        look_idx = bisect.bisect_left(cum_dist, target_d)
-        look_idx = min(look_idx, len(cum_dist)-1)
-        
-        # Get bounds of window
-        w_xs = xs[idx : look_idx+1] or [xs[idx]]
-        w_ys = ys[idx : look_idx+1] or [ys[idx]]
-        
-        min_x, max_x = min(w_xs), max(w_xs)
-        min_y, max_y = min(w_ys), max(w_ys)
-        
-        span_x = max_x - min_x
-        span_y = max_y - min_y
-        
-        target_span = max(span_x, span_y, MIN_ZOOM_SPAN_METERS) * 3.0
-        
-        # Center Target (Current Position implies following the dot)
-        t_x, t_y = xs[idx], ys[idx]
-        
-        # Update
-        curr_x += (t_x - curr_x) * SMOOTHING_FACTOR
-        curr_y += (t_y - curr_y) * SMOOTHING_FACTOR
-        curr_span += (target_span - curr_span) * (SMOOTHING_FACTOR * 0.5)
-        
-        cam_centers.append((curr_x, curr_y))
-        cam_spans.append(curr_span)
+    print(f"Calculating {args.camera_movement} camera path...")
+    camera_track = build_camera_track(cum_dist, xs, ys, lats, lons, args.camera_movement, distance_at)
+    cameras = [camera_at(camera_track, progress) for progress in frame_progress]
+    cam_centers = [(camera[0], camera[1]) for camera in cameras]
+    cam_spans = [camera[2] for camera in cameras]
         
     # Visualization
     print("Setting up animation...")
@@ -387,21 +612,21 @@ def main():
             map_layer.set_extent(ext)
             
         # Path
-        _xs = xs[:frame_idx+1]
-        _ys = ys[:frame_idx+1]
+        head_x, head_y = frame_points[i]
+        _xs = list(xs[:frame_idx+1]) + [head_x]
+        _ys = list(ys[:frame_idx+1]) + [head_y]
         path_line.set_data(_xs, _ys)
         
         # Tail
-        curr_km = cum_dist[frame_idx]
+        curr_km = frames_dist[i]
         start_km = max(0, curr_km - DEFAULT_TAIL_KM)
         start_idx = bisect.bisect_left(cum_dist, start_km)
         
-        txs = xs[start_idx : frame_idx+1]
-        tys = ys[start_idx : frame_idx+1]
+        txs = list(xs[start_idx : frame_idx+1]) + [head_x]
+        tys = list(ys[start_idx : frame_idx+1]) + [head_y]
         tail_line.set_data(txs, tys)
         
-        if _xs:
-            head_point.set_data([_xs[-1]], [_ys[-1]])
+        head_point.set_data([head_x], [head_y])
             
         if timestamps:
             date_text.set_text(timestamps[frame_idx].strftime('%B %Y'))

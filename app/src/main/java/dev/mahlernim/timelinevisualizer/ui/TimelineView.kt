@@ -7,6 +7,7 @@ import android.util.AttributeSet
 import android.view.View
 import dev.mahlernim.timelinevisualizer.data.TileRepository
 import dev.mahlernim.timelinevisualizer.model.Journey
+import dev.mahlernim.timelinevisualizer.render.CameraSettings
 import dev.mahlernim.timelinevisualizer.render.TileId
 import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import dev.mahlernim.timelinevisualizer.render.TimelinePainter
@@ -63,6 +64,12 @@ class TimelineView @JvmOverloads constructor(
             field = value
             markFrameDirty()
         }
+    var cameraSettings: CameraSettings = CameraSettings.DEFAULT
+        set(value) {
+            if (field == value) return
+            field = value
+            markFrameDirty()
+        }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -103,7 +110,10 @@ class TimelineView @JvmOverloads constructor(
         val tilesToLoad = buildSet {
             listOf(progress, (progress + 0.015f).coerceAtMost(1f), (progress + 0.03f).coerceAtMost(1f)).forEach {
                 val lookahead = TimelineAnimation.frameAtOverallProgress(it, journeyDurationSeconds)
-                addAll(painter.requiredTiles(painter.viewport(data, lookahead, width, height)).map { tile -> tile.id })
+                addAll(
+                    painter.requiredTiles(painter.viewport(data, lookahead, width, height, cameraSettings))
+                        .map { tile -> tile.id },
+                )
             }
         }
         tilesToLoad.forEach { tile ->
@@ -126,6 +136,7 @@ class TimelineView @JvmOverloads constructor(
             journeyDurationSeconds,
             videoTitle,
             renderText,
+            cameraSettings,
             tiles::cached,
         )
         frameDirty = false

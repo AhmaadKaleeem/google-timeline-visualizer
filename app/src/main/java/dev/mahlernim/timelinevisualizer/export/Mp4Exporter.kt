@@ -13,6 +13,7 @@ import android.os.Build
 import dev.mahlernim.timelinevisualizer.data.TileRepository
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
+import dev.mahlernim.timelinevisualizer.render.CameraSettings
 import dev.mahlernim.timelinevisualizer.render.TimelineFrame
 import dev.mahlernim.timelinevisualizer.render.TimelinePainter
 import dev.mahlernim.timelinevisualizer.render.RenderText
@@ -43,11 +44,12 @@ class Mp4Exporter(
         title: String,
         durationSeconds: Int,
         renderText: RenderText,
+        cameraSettings: CameraSettings = CameraSettings.DEFAULT,
         onProgress: (ExportProgress) -> Unit,
     ): Bitmap = withContext(Dispatchers.Default) {
         require(journey.points.size >= 2) { "At least two location points are needed" }
-        val width = 480
-        val height = 480
+        val width = cameraSettings.videoQuality.size
+        val height = cameraSettings.videoQuality.size
         val fps = 24
         val painter = TimelinePainter()
 
@@ -56,16 +58,28 @@ class Mp4Exporter(
         val requiredTiles = buildSet {
             for (sample in 0..sampleCount) {
                 val progress = sample.toFloat() / sampleCount
-                addAll(painter.requiredTiles(painter.viewport(journey, progress, width, height)).map { it.id })
+                addAll(
+                    painter.requiredTiles(painter.viewport(journey, progress, width, height, cameraSettings))
+                        .map { it.id },
+                )
             }
             for (sample in 0..OUTRO_TILE_SAMPLES) {
                 val outroProgress = sample.toFloat() / OUTRO_TILE_SAMPLES
                 val frame = TimelineFrame(1f, outroProgress)
-                addAll(painter.requiredTiles(painter.viewport(journey, frame, width, height)).map { it.id })
+                addAll(
+                    painter.requiredTiles(painter.viewport(journey, frame, width, height, cameraSettings))
+                        .map { it.id },
+                )
             }
             addAll(
                 painter.requiredTiles(
-                    painter.viewport(journey, TimelineFrame(1f, 1f), OVERVIEW_SIZE, OVERVIEW_SIZE),
+                    painter.viewport(
+                        journey,
+                        TimelineFrame(1f, 1f),
+                        OVERVIEW_SIZE,
+                        OVERVIEW_SIZE,
+                        cameraSettings,
+                    ),
                 ).map { it.id },
             )
         }
@@ -83,10 +97,10 @@ class Mp4Exporter(
             )
         }
 
-        val encoder = selectEncoder()
+        val encoder = selectEncoder(width, height, cameraSettings.videoQuality.bitrate)
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, encoder.colorFormat)
-            setInteger(MediaFormat.KEY_BIT_RATE, 2_500_000)
+            setInteger(MediaFormat.KEY_BIT_RATE, cameraSettings.videoQuality.bitrate)
             setInteger(MediaFormat.KEY_FRAME_RATE, fps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
         }
@@ -164,6 +178,7 @@ class Mp4Exporter(
                     durationSeconds,
                     title,
                     renderText,
+                    cameraSettings,
                     tileRepository::cached,
                 )
                 bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
@@ -221,6 +236,7 @@ class Mp4Exporter(
                 durationSeconds,
                 title,
                 renderText,
+                cameraSettings,
                 tileRepository::cached,
             )
             onProgress(ExportProgress(1f, ExportPhase.COMPLETE, 1, 1))
@@ -235,7 +251,7 @@ class Mp4Exporter(
         }
     }
 
-    private fun selectEncoder(): EncoderChoice {
+    private fun selectEncoder(width: Int, height: Int, bitrate: Int): EncoderChoice {
         val preferredFormats = listOf(
             MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar,
             MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar,
@@ -246,7 +262,13 @@ class Mp4Exporter(
             }
         for (info in codecs) {
             if (!info.isEncoder || !info.supportedTypes.any { it.equals(MediaFormat.MIMETYPE_VIDEO_AVC, true) }) continue
-            val formats = info.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC).colorFormats.toSet()
+            val capabilities = runCatching { info.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC) }.getOrNull()
+                ?: continue
+            val videoCapabilities = capabilities.videoCapabilities ?: continue
+            if (!videoCapabilities.isSizeSupported(width, height) || !videoCapabilities.bitrateRange.contains(bitrate)) {
+                continue
+            }
+            val formats = capabilities.colorFormats.toSet()
             preferredFormats.firstOrNull(formats::contains)?.let { return EncoderChoice(info.name, it) }
         }
         error("This device does not expose a compatible H.264 encoder")

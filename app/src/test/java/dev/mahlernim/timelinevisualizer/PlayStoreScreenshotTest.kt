@@ -56,15 +56,16 @@ class PlayStoreScreenshotTest {
 
         seedVideos(context)
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1))
             render(controller.get().window.decorView, output.resolve("01-videos.png"))
         }
 
         reset(context)
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
             val activity = controller.get()
-            activity.findViewById<View>(R.id.createVideoButton).performClick()
+            activity.findViewById<View>(R.id.navigationCreate).performClick()
             activity.findViewById<View>(R.id.importButton).performClick()
-            shadowOf(Looper.getMainLooper()).idle()
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1))
             render(activity.window.decorView, output.resolve("02-timeline-file.png"), ShadowDialog.getLatestDialog()?.window?.decorView)
         }
 
@@ -75,6 +76,7 @@ class PlayStoreScreenshotTest {
         Robolectric.buildActivity(MainActivity::class.java, intent).setup().use { controller ->
             val activity = controller.get()
             waitForEditor(activity)
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1))
             findNestedScrollView(activity.findViewById(R.id.newVideoScreen))?.scrollTo(0, 0)
             render(activity.window.decorView, output.resolve("03-selected-period.png"))
 

@@ -1,0 +1,56 @@
+from visualizer import (
+    build_argument_parser,
+    build_camera_track,
+    build_journey_timing,
+    build_legs,
+    latlon_to_meters,
+)
+
+
+def progress_at_distance(distance_at, target):
+    low, high = 0.0, 1.0
+    for _ in range(60):
+        middle = (low + high) / 2
+        if distance_at(middle) < target:
+            low = middle
+        else:
+            high = middle
+    return (low + high) / 2
+
+
+def test_cli_defaults_match_android():
+    args = build_argument_parser().parse_args(['--input', 'Timeline.json'])
+    assert args.camera_movement == 'steady'
+    assert args.long_trip_compression == 'balanced'
+
+
+def test_balanced_compression_reduces_long_segments_share_without_changing_duration():
+    cumulative = [0.0, 10.0, 1010.0, 1020.0]
+    linear = build_journey_timing(cumulative, 'off')
+    balanced = build_journey_timing(cumulative, 'balanced')
+    linear_share = progress_at_distance(linear, 1010.0) - progress_at_distance(linear, 10.0)
+    balanced_share = progress_at_distance(balanced, 1010.0) - progress_at_distance(balanced, 10.0)
+
+    assert balanced_share < linear_share
+    assert balanced(0.0) == 0.0
+    assert abs(balanced(1.0) - cumulative[-1]) < 1e-6
+
+
+def test_adaptive_transfer_detection_separates_a_long_hop():
+    cumulative = [0.0, 3.0, 8.0, 308.0, 312.0]
+    legs = build_legs(cumulative)
+    assert legs == [(0.0, 8.0, False), (8.0, 308.0, True), (308.0, 312.0, False)]
+
+
+def test_fixed_camera_keeps_one_span():
+    lats = [37.5, 37.55, 35.68, 35.70]
+    lons = [126.9, 127.0, 139.69, 139.72]
+    cumulative = [0.0, 12.0, 1165.0, 1169.0]
+    projected = [latlon_to_meters(lat, lon) for lat, lon in zip(lats, lons)]
+    xs = [point[0] for point in projected]
+    ys = [point[1] for point in projected]
+    distance_at = build_journey_timing(cumulative, 'off')
+    track = build_camera_track(cumulative, xs, ys, lats, lons, 'fixed', distance_at)
+
+    spans = [frame[2] for frame in track]
+    assert max(spans) - min(spans) < 1e-6

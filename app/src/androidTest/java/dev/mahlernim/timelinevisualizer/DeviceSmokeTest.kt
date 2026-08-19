@@ -16,12 +16,15 @@ class DeviceSmokeTest {
                 assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
                 assertEquals(View.GONE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
 
-                activity.findViewById<View>(R.id.createVideoButton).performClick()
+                activity.findViewById<View>(R.id.navigationCreate).performClick()
                 assertEquals(View.GONE, activity.findViewById<View>(R.id.videosScreen).visibility)
                 assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
 
                 activity.onBackPressedDispatcher.onBackPressed()
                 assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
+
+                activity.findViewById<View>(R.id.navigationSettings).performClick()
+                assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsScreen).visibility)
             }
         }
     }

@@ -7,6 +7,7 @@ import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import java.time.Instant
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -17,6 +18,29 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TimelinePainterTest {
+    @Test
+    fun fixedCameraKeepsTheSameZoomSpanAcrossTheJourney() {
+        val journey = Journey.from(
+            listOf(
+                point(37.50, 126.90),
+                point(37.55, 126.95),
+                point(37.60, 127.00),
+            ),
+            2025,
+        )
+        val fixed = CameraSettings(
+            cameraMovement = CameraMovement.FIXED,
+            longTripCompression = LongTripCompression.OFF,
+        )
+        val painter = TimelinePainter()
+        val spans = listOf(0f, 0.2f, 0.5f, 0.8f, 1f).map { progress ->
+            val viewport = painter.viewport(journey, progress, SIZE, SIZE, fixed)
+            viewport.maxY - viewport.minY
+        }
+
+        spans.forEach { assertEquals(spans.first(), it, 1e-12) }
+    }
+
     @Test
     fun routeStartsEmptyAndAppearsOnlyAsJourneyAdvances() {
         val points = listOf(

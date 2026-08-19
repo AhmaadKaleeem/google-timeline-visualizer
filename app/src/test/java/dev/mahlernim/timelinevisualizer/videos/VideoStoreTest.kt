@@ -51,6 +51,17 @@ class VideoStoreTest {
     }
 
     @Test
+    fun removeAllForgetsOnlySuccessfullyDeletedRecords() {
+        store.upsert(record("content://one", "One", 100L))
+        store.upsert(record("content://two", "Two", 200L))
+        store.upsert(record("content://three", "Three", 300L))
+
+        store.removeAll(setOf("content://one", "content://three"))
+
+        assertEquals(listOf("Two"), store.list().map(VideoRecord::title))
+    }
+
+    @Test
     fun readsLegacyYearAndMonthMetadataWithoutDroppingHistory() {
         context.getSharedPreferences("creations", Context.MODE_PRIVATE).edit {
             putString(
@@ -75,4 +86,3 @@ class VideoStoreTest {
         durationSeconds = 30,
     )
 }
-

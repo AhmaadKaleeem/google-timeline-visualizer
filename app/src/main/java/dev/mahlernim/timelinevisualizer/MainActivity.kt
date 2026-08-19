@@ -3,6 +3,7 @@ package dev.mahlernim.timelinevisualizer
 import android.animation.ValueAnimator
 import android.Manifest
 import android.content.ClipData
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -30,13 +31,20 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.datepicker.MaterialDatePicker
 import com.google.android.material.snackbar.Snackbar
 import dev.mahlernim.timelinevisualizer.data.TimelineParser
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.databinding.ActivityMainBinding
 import dev.mahlernim.timelinevisualizer.databinding.ItemVideoBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenNewVideoBinding
+import dev.mahlernim.timelinevisualizer.databinding.ScreenPlayerBinding
+import dev.mahlernim.timelinevisualizer.databinding.ScreenSettingsBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenVideosBinding
 import dev.mahlernim.timelinevisualizer.export.ExportProgress
 import dev.mahlernim.timelinevisualizer.export.ExportPhase
@@ -52,6 +60,11 @@ import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import dev.mahlernim.timelinevisualizer.model.TitleTemplate
 import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import dev.mahlernim.timelinevisualizer.render.RenderText
+import dev.mahlernim.timelinevisualizer.render.CameraSettings
+import dev.mahlernim.timelinevisualizer.render.CameraMovement
+import dev.mahlernim.timelinevisualizer.render.LongTripCompression
+import dev.mahlernim.timelinevisualizer.render.VideoQuality
+import dev.mahlernim.timelinevisualizer.ui.CameraSettingsPreferences
 import dev.mahlernim.timelinevisualizer.videos.GeneratedMediaRepository
 import dev.mahlernim.timelinevisualizer.videos.VideoMedia
 import dev.mahlernim.timelinevisualizer.videos.VideoRecord
@@ -67,12 +80,20 @@ import java.text.NumberFormat
 import java.util.Date
 import java.util.Locale
 import java.time.YearMonth
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import androidx.core.util.Pair as AndroidPair
 import kotlin.math.ceil
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var home: ScreenVideosBinding
     private lateinit var editor: ScreenNewVideoBinding
+    private lateinit var settingsScreen: ScreenSettingsBinding
+    private lateinit var playerScreen: ScreenPlayerBinding
     private var timeline: Timeline? = null
     private var journey: Journey? = null
     private var animation: ValueAnimator? = null
@@ -86,6 +107,9 @@ class MainActivity : AppCompatActivity() {
     private var selectedEndYear: Int? = null
     private var selectedStartMonth = 1
     private var selectedEndMonth = 12
+    private var exactDateRangeEnabled = false
+    private var selectedStartDate: LocalDate? = null
+    private var selectedEndDate: LocalDate? = null
     private val titleHandler = Handler(Looper.getMainLooper())
     private val monthNames by lazy { DateFormatSymbols.getInstance().months.take(12) }
     private val preferences by lazy { getSharedPreferences("display", MODE_PRIVATE) }
@@ -93,12 +117,19 @@ class MainActivity : AppCompatActivity() {
     private val videoMedia by lazy { VideoMedia(applicationContext) }
     private val generatedMedia by lazy { GeneratedMediaRepository(applicationContext) }
     private val timelineSourceStore by lazy { TimelineSourceStore(applicationContext) }
+    private val cameraSettingsPreferences by lazy { CameraSettingsPreferences(applicationContext) }
+    private var cameraSettings = CameraSettings.DEFAULT
     private val applyTitleChanges = Runnable { commitTitlePreferences() }
     private var videoRenderGeneration = 0
     private var videosExpanded = false
     private var currentScreen = Screen.VIDEOS
     private var rememberedTimelineLoaded = false
     private var lastRenderedExportStatus = VideoExportStatus.IDLE
+    private var videoPlayer: ExoPlayer? = null
+    private var playerUri: Uri? = null
+    private var playerPositionMs = 0L
+    private var playerPlayWhenReady = true
+    private var syncingBottomNavigation = false
 
     private val openTimeline = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importTimeline(uri)
@@ -140,15 +171,25 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         home = ScreenVideosBinding.bind(findViewById(R.id.videosScreen))
         editor = ScreenNewVideoBinding.bind(findViewById(R.id.newVideoScreen))
+        settingsScreen = ScreenSettingsBinding.bind(findViewById(R.id.settingsScreen))
+        playerScreen = ScreenPlayerBinding.bind(findViewById(R.id.playerScreen))
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
             val bars: Insets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(0, bars.top, 0, bars.bottom)
             insets
         }
 
-        home.createVideoButton.setOnClickListener { showNewVideo(loadRemembered = true) }
+        binding.bottomNavigation.setOnItemSelectedListener { item ->
+            if (syncingBottomNavigation) return@setOnItemSelectedListener true
+            when (item.itemId) {
+                R.id.navigationVideos -> showVideos()
+                R.id.navigationCreate -> showNewVideo(loadRemembered = true)
+                R.id.navigationSettings -> showSettings()
+                else -> return@setOnItemSelectedListener false
+            }
+            true
+        }
         home.homeCancelExportButton.setOnClickListener { VideoExportService.cancel(applicationContext) }
-        editor.backButton.setOnClickListener { showVideos() }
         editor.doneButton.setOnClickListener {
             VideoExportCoordinator.clear(applicationContext)
             editor.videoReadyGroup.visibility = View.GONE
@@ -171,11 +212,18 @@ class MainActivity : AppCompatActivity() {
             videosExpanded = !videosExpanded
             renderVideos()
         }
-        home.privacyPolicyButton.setOnClickListener { openPrivacyPolicy() }
-        home.githubProjectButton.setOnClickListener { openWebPage(PROJECT_URL, R.string.web_page_unavailable) }
-        home.checkUpdatesButton.setOnClickListener { openUpdates() }
+        home.deleteAllVideosButton.setOnClickListener { confirmDeleteAllVideos() }
+        settingsScreen.privacyPolicyButton.setOnClickListener { openPrivacyPolicy() }
+        settingsScreen.githubProjectButton.setOnClickListener { openWebPage(PROJECT_URL, R.string.web_page_unavailable) }
+        settingsScreen.checkUpdatesButton.setOnClickListener { openUpdates() }
+        playerScreen.playerBackButton.setOnClickListener { showVideos() }
+        playerScreen.playerShareButton.setOnClickListener { playerUri?.let(::shareVideo) }
+        playerScreen.playerMoreButton.setOnClickListener {
+            playerUri?.let { uri -> videoStore.list().firstOrNull { it.uri == uri.toString() }?.let(::showVideoActions) }
+        }
+        playerScreen.playerExternalButton.setOnClickListener { playerUri?.let(::openExternalVideoPlayer) }
         onBackPressedDispatcher.addCallback(this) {
-            if (currentScreen == Screen.NEW_VIDEO) showVideos() else finish()
+            if (currentScreen == Screen.VIDEOS) finish() else showVideos()
         }
         editor.timelineSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -211,26 +259,41 @@ class MainActivity : AppCompatActivity() {
             showProgress(editor.timelineSeek.progress / 1000f)
         }
         makeDropdownOpenReliably(editor.durationDropdown)
+        configureAdvancedSettings()
         configureMonthDropdowns()
+        configureExactDates()
         renderVideos()
         lifecycleScope.launch(Dispatchers.IO) { videoMedia.pruneOverviewCache() }
         VideoExportCoordinator.restore(applicationContext)
         observeVideoExport()
         VideoExportService.resumeIfNeeded(applicationContext)
 
+        playerUri = savedInstanceState?.getString(STATE_PLAYER_URI)?.toUri()
+        playerPositionMs = savedInstanceState?.getLong(STATE_PLAYER_POSITION) ?: 0L
+        playerPlayWhenReady = savedInstanceState?.getBoolean(STATE_PLAYER_PLAYING) ?: true
         val incoming = intent?.data
-        if (incoming != null) {
+        if (intent?.action == ACTION_WATCH_VIDEO && incoming != null) {
+            showVideoPlayer(incoming, resetPosition = savedInstanceState == null)
+        } else if (incoming != null) {
             showNewVideo(loadRemembered = false)
             requestTimelineImport(incoming)
-        } else if (savedInstanceState?.getString(STATE_SCREEN) == Screen.NEW_VIDEO.name) {
-            showNewVideo(loadRemembered = true)
-        } else {
-            showVideos()
+        } else when (savedInstanceState?.getString(STATE_SCREEN)) {
+            Screen.NEW_VIDEO.name -> showNewVideo(loadRemembered = true)
+            Screen.SETTINGS.name -> showSettings()
+            Screen.PLAYER.name -> playerUri?.let { showVideoPlayer(it, resetPosition = false) } ?: showVideos()
+            else -> showVideos()
         }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(STATE_SCREEN, currentScreen.name)
+        videoPlayer?.let {
+            playerPositionMs = it.currentPosition
+            playerPlayWhenReady = it.playWhenReady
+        }
+        outState.putString(STATE_PLAYER_URI, playerUri?.toString())
+        outState.putLong(STATE_PLAYER_POSITION, playerPositionMs)
+        outState.putBoolean(STATE_PLAYER_PLAYING, playerPlayWhenReady)
         super.onSaveInstanceState(outState)
     }
 
@@ -238,22 +301,42 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         intent.data?.let { uri ->
-            showNewVideo(loadRemembered = false)
-            requestTimelineImport(uri)
+            if (intent.action == ACTION_WATCH_VIDEO) showVideoPlayer(uri) else {
+                showNewVideo(loadRemembered = false)
+                requestTimelineImport(uri)
+            }
         }
     }
 
     private fun showVideos() {
+        releaseVideoPlayer()
         currentScreen = Screen.VIDEOS
         home.root.visibility = View.VISIBLE
         editor.root.visibility = View.GONE
+        settingsScreen.root.visibility = View.GONE
+        playerScreen.root.visibility = View.GONE
+        binding.bottomNavigation.visibility = View.VISIBLE
+        if (binding.bottomNavigation.selectedItemId != R.id.navigationVideos) {
+            syncingBottomNavigation = true
+            binding.bottomNavigation.selectedItemId = R.id.navigationVideos
+            syncingBottomNavigation = false
+        }
         renderVideos()
     }
 
     private fun showNewVideo(loadRemembered: Boolean) {
+        releaseVideoPlayer()
         currentScreen = Screen.NEW_VIDEO
         home.root.visibility = View.GONE
         editor.root.visibility = View.VISIBLE
+        settingsScreen.root.visibility = View.GONE
+        playerScreen.root.visibility = View.GONE
+        binding.bottomNavigation.visibility = View.VISIBLE
+        if (binding.bottomNavigation.selectedItemId != R.id.navigationCreate) {
+            syncingBottomNavigation = true
+            binding.bottomNavigation.selectedItemId = R.id.navigationCreate
+            syncingBottomNavigation = false
+        }
         if (loadRemembered && !rememberedTimelineLoaded && timeline == null &&
             preferences.getBoolean(MAP_PRIVACY_ACCEPTED, false)
         ) {
@@ -262,7 +345,79 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showSettings() {
+        releaseVideoPlayer()
+        currentScreen = Screen.SETTINGS
+        home.root.visibility = View.GONE
+        editor.root.visibility = View.GONE
+        settingsScreen.root.visibility = View.VISIBLE
+        playerScreen.root.visibility = View.GONE
+        binding.bottomNavigation.visibility = View.VISIBLE
+        if (binding.bottomNavigation.selectedItemId != R.id.navigationSettings) {
+            syncingBottomNavigation = true
+            binding.bottomNavigation.selectedItemId = R.id.navigationSettings
+            syncingBottomNavigation = false
+        }
+    }
+
+    private fun showVideoPlayer(uri: Uri, resetPosition: Boolean = true) {
+        currentScreen = Screen.PLAYER
+        playerUri = uri
+        if (resetPosition) {
+            playerPositionMs = 0L
+            playerPlayWhenReady = true
+        }
+        home.root.visibility = View.GONE
+        editor.root.visibility = View.GONE
+        settingsScreen.root.visibility = View.GONE
+        playerScreen.root.visibility = View.VISIBLE
+        binding.bottomNavigation.visibility = View.GONE
+        playerScreen.playerTitle.text = videoStore.list().firstOrNull { it.uri == uri.toString() }?.title
+            ?: getString(R.string.timeline_video)
+        playerScreen.playerErrorGroup.visibility = View.GONE
+        initializeVideoPlayer()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (currentScreen == Screen.PLAYER) initializeVideoPlayer()
+    }
+
+    override fun onStop() {
+        releaseVideoPlayer()
+        super.onStop()
+    }
+
+    private fun initializeVideoPlayer() {
+        val uri = playerUri ?: return
+        if (videoPlayer != null || !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
+        playerScreen.playerErrorGroup.visibility = View.GONE
+        videoPlayer = ExoPlayer.Builder(this).build().also { player ->
+            playerScreen.playerView.player = player
+            player.addListener(object : Player.Listener {
+                override fun onPlayerError(error: PlaybackException) {
+                    playerScreen.playerErrorGroup.visibility = View.VISIBLE
+                }
+            })
+            player.setMediaItem(MediaItem.fromUri(uri))
+            player.seekTo(playerPositionMs)
+            player.playWhenReady = playerPlayWhenReady
+            player.prepare()
+        }
+    }
+
+    private fun releaseVideoPlayer() {
+        videoPlayer?.let { player ->
+            playerPositionMs = player.currentPosition
+            playerPlayWhenReady = player.playWhenReady
+            playerScreen.playerView.player = null
+            player.release()
+        }
+        videoPlayer = null
+    }
+
     override fun onDestroy() {
+        releaseVideoPlayer()
         titleHandler.removeCallbacks(applyTitleChanges)
         importJob?.cancel()
         setTimelineLoading(false)
@@ -369,6 +524,11 @@ class MainActivity : AppCompatActivity() {
         }
         selectedStartYear = years.first()
         selectedEndYear = years.first()
+        exactDateRangeEnabled = false
+        selectedStartDate = null
+        selectedEndDate = null
+        editor.exactDateSwitch.isChecked = false
+        updateExactDateControls()
         updateYearDropdowns()
         updateResolvedTitle()
         selectRange()
@@ -376,7 +536,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun selectRange() {
         val period = currentPeriod() ?: return
-        val selected = timeline?.forRange(period) ?: return
+        val selected = if (exactDateRangeEnabled) {
+            val start = selectedStartDate ?: return
+            val end = selectedEndDate ?: return
+            timeline?.forDateRange(start, end)
+        } else {
+            timeline?.forRange(period)
+        } ?: return
         animation?.cancel()
         journey = selected
         editor.timelineView.journey = selected
@@ -397,7 +563,13 @@ class MainActivity : AppCompatActivity() {
             return getString(R.string.selected_period_no_movement, number.format(selected.points.size))
         }
         val range = selected.period
-        val period = if (
+        val period = if (exactDateRangeEnabled && selectedStartDate != null && selectedEndDate != null) {
+            getString(
+                R.string.exact_date_range,
+                formatExactDate(selectedStartDate!!),
+                formatExactDate(selectedEndDate!!),
+            )
+        } else if (
             range.startYear == range.endYear &&
             range.startMonth == 1 &&
             range.endMonth == 12
@@ -448,6 +620,73 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun configureExactDates() {
+        editor.exactDateSwitch.setOnCheckedChangeListener { _, checked ->
+            exactDateRangeEnabled = checked
+            if (checked && (selectedStartDate == null || selectedEndDate == null)) {
+                resetExactDatesToSelectedMonths()
+            }
+            updateExactDateControls()
+            updateResolvedTitle()
+            selectRange()
+        }
+        editor.exactDateRangeButton.setOnClickListener { showExactDatePicker() }
+        updateExactDateControls()
+    }
+
+    private fun showExactDatePicker() {
+        val start = selectedStartDate ?: currentPeriod()?.start?.atDay(1) ?: return
+        val end = selectedEndDate ?: currentPeriod()?.endInclusive?.atEndOfMonth() ?: return
+        val picker = MaterialDatePicker.Builder.dateRangePicker()
+            .setTitleText(R.string.choose_exact_dates)
+            .setSelection(AndroidPair(datePickerMillis(start), datePickerMillis(end)))
+            .build()
+        picker.addOnPositiveButtonClickListener { range ->
+            val pickedStart = Instant.ofEpochMilli(range.first).atZone(ZoneOffset.UTC).toLocalDate()
+            val pickedEnd = Instant.ofEpochMilli(range.second).atZone(ZoneOffset.UTC).toLocalDate()
+            selectedStartDate = pickedStart
+            selectedEndDate = pickedEnd
+            selectedStartYear = pickedStart.year
+            selectedEndYear = pickedEnd.year
+            selectedStartMonth = pickedStart.monthValue
+            selectedEndMonth = pickedEnd.monthValue
+            updateYearDropdowns()
+            editor.startMonthDropdown.setText(monthNames[selectedStartMonth - 1], false)
+            editor.endMonthDropdown.setText(monthNames[selectedEndMonth - 1], false)
+            updateExactDateControls()
+            updateResolvedTitle()
+            selectRange()
+        }
+        picker.show(supportFragmentManager, "exact-date-range")
+    }
+
+    private fun resetExactDatesToSelectedMonths() {
+        val period = currentPeriod() ?: return
+        selectedStartDate = period.start.atDay(1)
+        selectedEndDate = period.endInclusive.atEndOfMonth()
+    }
+
+    private fun updateExactDateControls() {
+        editor.exactDateRangeButton.visibility = if (exactDateRangeEnabled) View.VISIBLE else View.GONE
+        val start = selectedStartDate
+        val end = selectedEndDate
+        editor.exactDateRangeButton.text = if (start != null && end != null) {
+            getString(R.string.exact_date_range, formatExactDate(start), formatExactDate(end))
+        } else {
+            getString(R.string.choose_exact_dates)
+        }
+    }
+
+    private fun formatExactDate(date: LocalDate): String = DateTimeFormatter
+        .ofLocalizedDate(FormatStyle.MEDIUM)
+        .withLocale(resources.configuration.locales[0])
+        .format(date)
+
+    private fun datePickerMillis(date: LocalDate): Long = date
+        .atStartOfDay(ZoneOffset.UTC)
+        .toInstant()
+        .toEpochMilli()
+
     private fun normalizeRange(changedStart: Boolean) {
         val startYear = selectedStartYear ?: return
         val endYear = selectedEndYear ?: return
@@ -464,6 +703,10 @@ class MainActivity : AppCompatActivity() {
             updateYearDropdowns()
             editor.startMonthDropdown.setText(monthNames[selectedStartMonth - 1], false)
             editor.endMonthDropdown.setText(monthNames[selectedEndMonth - 1], false)
+        }
+        if (exactDateRangeEnabled) {
+            resetExactDatesToSelectedMonths()
+            updateExactDateControls()
         }
         updateResolvedTitle()
         selectRange()
@@ -531,6 +774,81 @@ class MainActivity : AppCompatActivity() {
         editor.timelineView.progress = progress
     }
 
+    private fun configureAdvancedSettings() {
+        val cameraLabels = listOf(
+            R.string.camera_fixed,
+            R.string.camera_steady,
+            R.string.camera_dynamic,
+        ).map(::getString)
+        val compressionLabels = listOf(
+            R.string.compression_off,
+            R.string.compression_gentle,
+            R.string.compression_balanced,
+            R.string.compression_strong,
+        ).map(::getString)
+        val qualityLabels = listOf(
+            R.string.quality_standard,
+            R.string.quality_high,
+            R.string.quality_ultra,
+        ).map(::getString)
+
+        listOf(
+            settingsScreen.cameraMovementDropdown to cameraLabels,
+            settingsScreen.longTripDropdown to compressionLabels,
+            settingsScreen.videoQualityDropdown to qualityLabels,
+        ).forEach { (dropdown, labels) ->
+            dropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels))
+            makeDropdownOpenReliably(dropdown)
+        }
+
+        settingsScreen.cameraMovementDropdown.setOnItemClickListener { _, _, position, _ ->
+            updateAdvancedSettings(cameraSettings.copy(cameraMovement = CameraMovement.values()[position]))
+        }
+        settingsScreen.longTripDropdown.setOnItemClickListener { _, _, position, _ ->
+            updateAdvancedSettings(cameraSettings.copy(longTripCompression = LongTripCompression.values()[position]))
+        }
+        settingsScreen.videoQualityDropdown.setOnItemClickListener { _, _, position, _ ->
+            updateAdvancedSettings(cameraSettings.copy(videoQuality = VideoQuality.values()[position]))
+        }
+        settingsScreen.resetAdvancedSettingsButton.setOnClickListener {
+            applyAdvancedSettings(cameraSettingsPreferences.reset())
+            Snackbar.make(binding.root, R.string.advanced_defaults_restored, Snackbar.LENGTH_SHORT).show()
+        }
+        applyAdvancedSettings(cameraSettingsPreferences.load())
+    }
+
+    private fun updateAdvancedSettings(settings: CameraSettings) {
+        cameraSettingsPreferences.save(settings)
+        applyAdvancedSettings(settings)
+    }
+
+    private fun applyAdvancedSettings(settings: CameraSettings) {
+        cameraSettings = settings
+        editor.timelineView.cameraSettings = settings
+        settingsScreen.cameraMovementDropdown.setText(
+            getString(
+                listOf(R.string.camera_fixed, R.string.camera_steady, R.string.camera_dynamic)[settings.cameraMovement.ordinal],
+            ),
+            false,
+        )
+        settingsScreen.longTripDropdown.setText(
+            getString(
+                listOf(
+                    R.string.compression_off,
+                    R.string.compression_gentle,
+                    R.string.compression_balanced,
+                    R.string.compression_strong,
+                )[settings.longTripCompression.ordinal],
+            ),
+            false,
+        )
+        settingsScreen.videoQualityDropdown.setText(
+            getString(listOf(R.string.quality_standard, R.string.quality_high, R.string.quality_ultra)[settings.videoQuality.ordinal]),
+            false,
+        )
+        showProgress(editor.timelineSeek.progress / 1000f)
+    }
+
     private fun chooseExportDestination() {
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -563,6 +881,7 @@ class MainActivity : AppCompatActivity() {
             title = title,
             durationSeconds = selectedDurationSeconds(),
             renderText = currentRenderText(),
+            cameraSettings = cameraSettings,
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val request = pendingExport ?: return
@@ -697,7 +1016,7 @@ class MainActivity : AppCompatActivity() {
         val canCreate = journey?.let(::canCreateVideo) == true
         editor.exportProgress.visibility = if (exporting) View.VISIBLE else View.GONE
         editor.cancelExportButton.visibility = if (exporting) View.VISIBLE else View.GONE
-        home.createVideoButton.isEnabled = !exporting
+        home.deleteAllVideosButton.isEnabled = !exporting
         editor.importButton.isEnabled = !exporting
         editor.playButton.isEnabled = !exporting && canCreate
         editor.exportButton.isEnabled = !exporting && canCreate
@@ -713,8 +1032,14 @@ class MainActivity : AppCompatActivity() {
         editor.durationDropdown.isEnabled = !exporting
         editor.startMonthDropdown.isEnabled = !exporting
         editor.endMonthDropdown.isEnabled = !exporting
+        editor.exactDateSwitch.isEnabled = !exporting
+        editor.exactDateRangeButton.isEnabled = !exporting
         editor.ownerInput.isEnabled = !exporting
         editor.titleInput.isEnabled = !exporting
+        settingsScreen.cameraMovementDropdown.isEnabled = !exporting
+        settingsScreen.longTripDropdown.isEnabled = !exporting
+        settingsScreen.videoQualityDropdown.isEnabled = !exporting
+        settingsScreen.resetAdvancedSettingsButton.isEnabled = !exporting
         if (exporting) editor.videoReadyGroup.visibility = View.GONE
     }
 
@@ -772,6 +1097,7 @@ class MainActivity : AppCompatActivity() {
         val generation = ++videoRenderGeneration
         home.emptyVideosText.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
         home.showAllVideosButton.visibility = if (records.size > COLLAPSED_CREATION_COUNT) View.VISIBLE else View.GONE
+        home.deleteAllVideosButton.visibility = if (records.isEmpty()) View.GONE else View.VISIBLE
         home.showAllVideosButton.text = if (videosExpanded) {
             getString(R.string.show_fewer_videos)
         } else {
@@ -899,6 +1225,51 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun confirmDeleteAllVideos() {
+        val records = videoStore.list()
+        if (records.isEmpty()) return
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.delete_all_videos_title)
+            .setMessage(R.string.delete_all_videos_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.delete_all_videos) { _, _ -> deleteAllVideos(records) }
+            .show()
+    }
+
+    private fun deleteAllVideos(records: List<VideoRecord>) {
+        home.deleteAllVideosButton.isEnabled = false
+        lifecycleScope.launch {
+            val deleted = withContext(Dispatchers.IO) {
+                records.filter { record ->
+                    val uri = record.uri.toUri()
+                    val removed = videoMedia.delete(uri)
+                    if (removed) {
+                        videoMedia.deleteThumbnail(uri)
+                        videoMedia.deleteOverview(uri)
+                    }
+                    removed
+                }
+            }
+            videoStore.removeAll(deleted.mapTo(mutableSetOf(), VideoRecord::uri))
+            deleted.forEach { record ->
+                releaseUriAccess(record.uri.toUri())
+                if (lastVideoUri?.toString() == record.uri) lastVideoUri = null
+            }
+            renderVideos()
+            home.deleteAllVideosButton.isEnabled = true
+            val failed = records.size - deleted.size
+            Snackbar.make(
+                binding.root,
+                if (failed == 0) {
+                    getString(R.string.all_videos_deleted)
+                } else {
+                    getString(R.string.some_videos_not_deleted, deleted.size, failed)
+                },
+                Snackbar.LENGTH_LONG,
+            ).show()
+        }
+    }
+
     private fun deleteVideo(record: VideoRecord) {
         lifecycleScope.launch {
             val uri = record.uri.toUri()
@@ -1000,6 +1371,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun watchVideo(uri: Uri) {
+        showVideoPlayer(uri)
+    }
+
+    private fun openExternalVideoPlayer(uri: Uri) {
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "video/mp4")
             clipData = ClipData.newRawUri(getString(R.string.timeline_video), uri)
@@ -1174,7 +1549,7 @@ class MainActivity : AppCompatActivity() {
         dropdown.setOnClickListener { dropdown.showDropDown() }
     }
 
-    private enum class Screen { VIDEOS, NEW_VIDEO }
+    private enum class Screen { VIDEOS, NEW_VIDEO, SETTINGS, PLAYER }
 
     companion object {
         private const val TITLE_UPDATE_DELAY_MS = 450L
@@ -1182,6 +1557,10 @@ class MainActivity : AppCompatActivity() {
         private const val MAP_PRIVACY_ACCEPTED = "map_privacy_accepted_v1"
         private const val NOTIFICATION_PROMPTED = "notification_prompted_v1"
         private const val STATE_SCREEN = "screen_v1"
+        private const val STATE_PLAYER_URI = "player_uri_v1"
+        private const val STATE_PLAYER_POSITION = "player_position_v1"
+        private const val STATE_PLAYER_PLAYING = "player_playing_v1"
+        internal const val ACTION_WATCH_VIDEO = "dev.mahlernim.timelinevisualizer.action.WATCH_VIDEO"
         private const val PROJECT_URL = "https://github.com/mahlernim/google-timeline-visualizer"
         private const val PRIVACY_URL =
             "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/privacy.md"
@@ -1196,6 +1575,14 @@ class MainActivity : AppCompatActivity() {
         private const val RESTORE_GUIDE_URL_JA =
             "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/restore-google-maps-timeline.ja.md"
         private const val TAG = "TimelineVisualizer"
+
+        internal fun playbackIntent(context: Context, uri: Uri): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                action = ACTION_WATCH_VIDEO
+                data = uri
+                clipData = ClipData.newRawUri(context.getString(R.string.timeline_video), uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
 
         internal fun restoreGuideUrl(language: String?): String = when (language) {
             Locale.KOREAN.language -> RESTORE_GUIDE_URL_KO

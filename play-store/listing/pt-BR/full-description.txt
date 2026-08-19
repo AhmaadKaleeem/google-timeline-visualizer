@@ -1,0 +1,34 @@
+Dê vida a um ano de viagens.
+
+Timeline Visualizer transforma uma exportação Google Maps Timeline em um vídeo de mapa animado em seu telefone Android. Escolha datas exatas ou um intervalo de meses, visualize a rota e crie um MP4 pronto para assistir ou compartilhar.
+
+Crie sua história
+• Escolha um arquivo Timeline exportado de Android ou iPhone
+• Selecione datas exatas ou um intervalo de meses inclusivo em vários anos
+• Personalize um título reutilizável, como “2026 Mina's Timeline”
+• Visualize a animação antes de criar o vídeo com qualidade total
+• Escolha movimento de câmera Fixo, Estável ou Dinâmico
+• Equilibre viagens longas com compressão de cronometragem opcional para viagens longas
+• Exportar em 480p, 720p ou 1080p
+• Escolha uma viagem de 10, 15, 20, 30, 45 ou 60 segundos
+• Termine com um zoom suave e uma visão geral completa da rota
+• Continue criando em segundo plano com notificações de progresso e conclusão
+• Reabrir o arquivo Timeline usado mais recentemente quando Android retém o acesso
+• Salve vídeos automaticamente no Movies/Timeline Visualizer no Android 10 e posterior
+• Salve ou compartilhe a visão geral final da rota em 1080 × 1080
+
+Precisa restaurar viagens mais antigas primeiro?
+Abra o guia de restauração localizado no aplicativo. Ele explica como importar um backup Timeline criptografado existente em Google Maps e, em seguida, exportar um novo arquivo JSON para Timeline Visualizer. O aplicativo nunca acessa sua conta Google ou backup criptografado.
+
+Mantenha seus vídeos juntos
+Os vídeos concluídos aparecem em Meus vídeos com miniatura, título, data, duração e período selecionado. Adicione arquivos MP4 mais antigos, reproduza-os dentro do aplicativo, compartilhe-os ou exclua toda a biblioteca com confirmação.
+
+Navegação simples
+Mova-se entre Meus vídeos, Criar vídeo e Configurações na barra de navegação inferior. O movimento da câmera, a compactação de longa viagem e a qualidade do vídeo são armazenados como padrões para a próxima visualização e exportação.
+
+Projetado para privacidade
+Seu arquivo Timeline nunca é carregado. A jornada, os títulos e os vídeos gerados são processados ​​no seu dispositivo. Nenhum login, análise, publicidade ou permissão de localização do Google é usado.
+
+Para desenhar o mapa, o aplicativo solicita blocos de mapa do CARTO. Essas solicitações incluem coordenadas de blocos de áreas do mapa e informações normais de rede, que podem revelar locais em seu Timeline a CARTO. O aplicativo explica isso antes do primeiro Timeline ser carregado e permite cancelar.
+
+Timeline Visualizer é um aplicativo independente de código aberto. Não é afiliado ou endossado por Google. Google Maps é uma marca registrada da Google LLC.

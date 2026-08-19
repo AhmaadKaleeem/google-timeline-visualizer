@@ -48,8 +48,8 @@ def test_phone_screenshots_are_current_play_recommended_size():
 
 def test_play_release_metadata_is_consistent():
     build_file = (ROOT / "app" / "build.gradle.kts").read_text(encoding="utf-8")
-    assert 'versionCode = 12' in build_file
-    assert 'versionName = "1.9.0"' in build_file
+    assert 'versionCode = 13' in build_file
+    assert 'versionName = "2.0.0"' in build_file
     assert (ROOT / "docs" / "release-notes-v1.9.0.md").is_file()
 
 

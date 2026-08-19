@@ -5,6 +5,10 @@ import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import dev.mahlernim.timelinevisualizer.render.RenderText
+import dev.mahlernim.timelinevisualizer.render.CameraSettings
+import dev.mahlernim.timelinevisualizer.render.CameraMovement
+import dev.mahlernim.timelinevisualizer.render.LongTripCompression
+import dev.mahlernim.timelinevisualizer.render.VideoQuality
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -16,6 +20,7 @@ data class VideoExportRequest(
     val title: String,
     val durationSeconds: Int,
     val renderText: RenderText = RenderText.ENGLISH,
+    val cameraSettings: CameraSettings = CameraSettings.DEFAULT,
 ) {
     val period: TimelinePeriod get() = journey.period
 }
@@ -40,6 +45,9 @@ class VideoExportRequestStore(context: Context) {
             output.writeUTF(request.renderText.datePattern)
             output.writeUTF(request.renderText.distanceUnit)
             output.writeUTF(request.renderText.attribution)
+            output.writeUTF(request.cameraSettings.cameraMovement.name)
+            output.writeUTF(request.cameraSettings.longTripCompression.name)
+            output.writeUTF(request.cameraSettings.videoQuality.name)
             output.writeInt(request.journey.points.size)
             request.journey.points.forEach { point ->
                 output.writeLong(point.instant.toEpochMilli())
@@ -68,10 +76,12 @@ class VideoExportRequestStore(context: Context) {
                 val endYear: Int
                 val endMonth: Int
                 val renderText: RenderText
+                val cameraSettings: CameraSettings
                 if (version == 1) {
                     endYear = startYear
                     endMonth = input.readInt()
                     renderText = RenderText.ENGLISH
+                    cameraSettings = CameraSettings.DEFAULT
                 } else {
                     endYear = input.readInt()
                     endMonth = input.readInt()
@@ -82,6 +92,22 @@ class VideoExportRequestStore(context: Context) {
                         distanceUnit = input.readUTF(),
                         attribution = input.readUTF(),
                     )
+                    cameraSettings = if (version >= 4) {
+                        CameraSettings(
+                            cameraMovement = enumOrDefault(input.readUTF(), CameraMovement.STEADY),
+                            longTripCompression = enumOrDefault(input.readUTF(), LongTripCompression.BALANCED),
+                            videoQuality = enumOrDefault(input.readUTF(), VideoQuality.STANDARD),
+                        )
+                    } else if (version == 3) {
+                        repeat(4) { input.readUTF() }
+                        CameraSettings(
+                            cameraMovement = CameraMovement.STEADY,
+                            longTripCompression = enumOrDefault(input.readUTF(), LongTripCompression.BALANCED),
+                            videoQuality = enumOrDefault(input.readUTF(), VideoQuality.STANDARD),
+                        )
+                    } else {
+                        CameraSettings.DEFAULT
+                    }
                 }
                 val pointCount = input.readInt().coerceIn(0, MAX_POINT_COUNT)
                 val points = List(pointCount) {
@@ -103,6 +129,7 @@ class VideoExportRequestStore(context: Context) {
                     title = title,
                     durationSeconds = durationSeconds,
                     renderText = renderText,
+                    cameraSettings = cameraSettings,
                 )
             }
         }.getOrNull()
@@ -115,9 +142,12 @@ class VideoExportRequestStore(context: Context) {
     }
 
     companion object {
-        private const val CURRENT_FILE_VERSION = 2
+        private const val CURRENT_FILE_VERSION = 4
         private const val MAX_POINT_COUNT = 2_000_000
         private const val REQUEST_FILE = "pending-video-export.bin"
         private const val TEMPORARY_FILE = "pending-video-export.tmp"
+
+        private inline fun <reified T : Enum<T>> enumOrDefault(value: String, fallback: T): T =
+            enumValues<T>().firstOrNull { it.name == value } ?: fallback
     }
 }

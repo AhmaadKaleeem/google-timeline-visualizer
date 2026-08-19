@@ -20,22 +20,11 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/backButton"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="@string/back_to_videos"
-                android:maxLines="1"
-                android:minWidth="48dp"
-                android:text="@string/back" />
-
             <TextView
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:maxLines="1"
-                android:text="@string/new_video"
+                android:text="@string/create_video"
                 android:textAppearance="?attr/textAppearanceHeadlineSmall"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -166,6 +155,22 @@
                 android:text="@string/selected_period_empty"
                 android:textAppearance="?attr/textAppearanceBodyMedium" />
 
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/exactDateSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/use_exact_dates" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/exactDateRangeButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="@string/choose_exact_dates"
+                android:visibility="gone" />
+
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:maxLines="1" android:text="@string/video_details" android:textAppearance="?attr/textAppearanceTitleMedium" android:textStyle="bold" />
 
             <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="@string/duration">
@@ -221,4 +226,3 @@
         </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
-

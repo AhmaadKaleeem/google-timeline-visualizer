@@ -1,6 +1,9 @@
 package dev.mahlernim.timelinevisualizer.model
 
 import dev.mahlernim.timelinevisualizer.render.TimelinePainter
+import dev.mahlernim.timelinevisualizer.render.CameraMovement
+import dev.mahlernim.timelinevisualizer.render.CameraSettings
+import dev.mahlernim.timelinevisualizer.render.LongTripCompression
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -8,11 +11,30 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.time.Instant
+import java.time.LocalDate
 import java.time.YearMonth
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class JourneyTest {
+    @Test
+    fun exactDateRangeIncludesOnlyPointsOnSelectedDates() {
+        val timeline = Timeline(
+            listOf(
+                GeoPoint(Instant.parse("2026-04-01T12:00:00Z"), 37.0, 127.0),
+                GeoPoint(Instant.parse("2026-04-02T12:00:00Z"), 37.1, 127.1),
+                GeoPoint(Instant.parse("2026-04-03T12:00:00Z"), 37.2, 127.2),
+                GeoPoint(Instant.parse("2026-04-04T12:00:00Z"), 37.3, 127.3),
+            ),
+        )
+
+        val journey = timeline.forDateRange(LocalDate.parse("2026-04-02"), LocalDate.parse("2026-04-03"))
+
+        assertEquals(2, journey.points.size)
+        assertEquals(Instant.parse("2026-04-02T12:00:00Z"), journey.points.first().instant)
+        assertEquals(Instant.parse("2026-04-03T12:00:00Z"), journey.points.last().instant)
+    }
+
     private val seoul = GeoPoint(Instant.parse("2025-06-01T00:00:00Z"), 37.5665, 126.9780)
     private val bohol = GeoPoint(Instant.parse("2025-06-01T04:00:00Z"), 9.8500, 124.1435)
 
@@ -38,6 +60,59 @@ class JourneyTest {
         assertTrue(journey.renderPath.size > 20)
         val largestStep = journey.renderPath.zipWithNext { a, b -> b.distanceKm - a.distanceKm }.max()
         assertTrue("Largest rendered step was $largestStep km", largestStep <= 75.1)
+    }
+
+    @Test
+    fun adaptsTransferThresholdToDenselySampledLocalTravel() {
+        val local = equatorialPoints(doubleArrayOf(0.0, 0.01, 0.02, 0.03, 0.04))
+        val shortFlight = local + equatorialPoint(0.76, 5)
+        val journey = Journey.from(shortFlight, 2025)
+
+        assertTrue("Adaptive threshold was ${journey.transferThresholdKm} km", journey.transferThresholdKm < 80.0)
+        assertEquals(listOf(false, true), journey.legs.map { it.isTransfer })
+    }
+
+    @Test
+    fun consistentlySparseTravelDoesNotCreateFalseTransferLegs() {
+        val journey = Journey.from(equatorialPoints(doubleArrayOf(0.0, 0.81, 1.62, 2.43)), 2025)
+
+        assertEquals(120.0, journey.transferThresholdKm, 0.1)
+        assertEquals(listOf(false), journey.legs.map { it.isTransfer })
+    }
+
+    @Test
+    fun absoluteGuardrailStillRecognizesAnUntrackedLongHop() {
+        val local = equatorialPoints(doubleArrayOf(0.0, 0.01, 0.02, 0.03))
+        val journey = Journey.from(local + equatorialPoint(2.0, 4), 2025)
+
+        assertEquals(listOf(false, true), journey.legs.map { it.isTransfer })
+    }
+
+    @Test
+    fun cameraReturnsToLocalScaleAfterAnAdaptiveTransfer() {
+        val departure = compactCityPoints(centerLongitude = 0.0, count = 31)
+        val arrival = compactCityPoints(centerLongitude = 1.1, count = 31, startHour = departure.size)
+        val journey = Journey.from(departure + arrival, 2025)
+        val painter = TimelinePainter()
+        val settings = CameraSettings(
+            cameraMovement = CameraMovement.DYNAMIC,
+            longTripCompression = LongTripCompression.OFF,
+        )
+        val arrivalStartKm = journey.legs.last().startKm
+        val localWidthsKm = (0..100).map { sample ->
+            val distanceKm = arrivalStartKm + journey.legs.last().lengthKm * sample / 100.0
+            val viewport = painter.viewport(
+                journey,
+                (distanceKm / journey.totalDistanceKm).toFloat(),
+                480,
+                480,
+                settings,
+            )
+            (viewport.maxX - viewport.minX) * EQUATOR_KM
+        }
+
+        assertEquals(listOf(false, true, false), journey.legs.map { it.isTransfer })
+        assertTrue("Tightest arrival frame was ${localWidthsKm.min()} km", localWidthsKm.min() < 40.0)
     }
 
     @Test
@@ -152,5 +227,29 @@ class JourneyTest {
         while (result - reference > 0.5) result -= 1.0
         while (result - reference < -0.5) result += 1.0
         return result
+    }
+
+    private fun equatorialPoints(longitudes: DoubleArray): List<GeoPoint> =
+        longitudes.mapIndexed { index, longitude -> equatorialPoint(longitude, index) }
+
+    private fun equatorialPoint(longitude: Double, hour: Int): GeoPoint = GeoPoint(
+        instant = Instant.parse("2025-01-01T00:00:00Z").plusSeconds(hour * 3_600L),
+        latitude = 0.0,
+        longitude = longitude,
+    )
+
+    private fun compactCityPoints(
+        centerLongitude: Double,
+        count: Int,
+        startHour: Int = 0,
+    ): List<GeoPoint> = List(count) { index ->
+        equatorialPoint(
+            longitude = centerLongitude + if (index % 2 == 0) -0.01 else 0.01,
+            hour = startHour + index,
+        )
+    }
+
+    private companion object {
+        const val EQUATOR_KM = 40_075.0
     }
 }

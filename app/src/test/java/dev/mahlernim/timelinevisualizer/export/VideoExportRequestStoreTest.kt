@@ -6,6 +6,10 @@ import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import dev.mahlernim.timelinevisualizer.render.RenderText
+import dev.mahlernim.timelinevisualizer.render.CameraSettings
+import dev.mahlernim.timelinevisualizer.render.CameraMovement
+import dev.mahlernim.timelinevisualizer.render.LongTripCompression
+import dev.mahlernim.timelinevisualizer.render.VideoQuality
 import java.time.Instant
 import java.time.YearMonth
 import java.io.DataOutputStream
@@ -42,6 +46,11 @@ class VideoExportRequestStoreTest {
             title = "2026 Mina's Timeline",
             durationSeconds = 60,
             renderText = RenderText("ja", "マイタイムライン", "yyyy年M月", "km", "attribution"),
+            cameraSettings = CameraSettings(
+                CameraMovement.FIXED,
+                LongTripCompression.STRONG,
+                VideoQuality.ULTRA,
+            ),
         )
 
         store.save(request)
@@ -52,6 +61,7 @@ class VideoExportRequestStoreTest {
         assertEquals(request.durationSeconds, restored.durationSeconds)
         assertEquals(request.period, restored.period)
         assertEquals(request.renderText, restored.renderText)
+        assertEquals(request.cameraSettings, restored.cameraSettings)
         assertEquals(request.journey.points, restored.journey.points)
     }
 
@@ -92,6 +102,39 @@ class VideoExportRequestStoreTest {
         assertEquals(YearMonth.of(2025, 3), restored.period.start)
         assertEquals(YearMonth.of(2025, 11), restored.period.endInclusive)
         assertEquals(RenderText.ENGLISH, restored.renderText)
+        assertEquals(CameraSettings.DEFAULT, restored.cameraSettings)
         assertEquals(1, restored.journey.points.size)
+    }
+
+    @Test
+    fun migratesDetailedVersionThreeSettingsToSteadyCameraMovement() {
+        val requestFile = File(context.filesDir, "pending-video-export.bin")
+        DataOutputStream(requestFile.outputStream().buffered()).use { output ->
+            output.writeInt(3)
+            output.writeUTF("content://documents/version-three.mp4")
+            output.writeUTF("Version three")
+            output.writeInt(30)
+            output.writeInt(2026)
+            output.writeInt(1)
+            output.writeInt(2026)
+            output.writeInt(12)
+            repeat(5) { output.writeUTF("legacy-render-text") }
+            output.writeUTF("MAXIMUM")
+            output.writeUTF("WIDE")
+            output.writeUTF("CINEMATIC")
+            output.writeUTF("LESS_SENSITIVE")
+            output.writeUTF("BALANCED")
+            output.writeUTF("HIGH")
+            output.writeInt(1)
+            output.writeLong(Instant.parse("2026-06-01T00:00:00Z").toEpochMilli())
+            output.writeDouble(35.0)
+            output.writeDouble(139.0)
+        }
+
+        val restored = store.load()!!
+
+        assertEquals(CameraMovement.STEADY, restored.cameraSettings.cameraMovement)
+        assertEquals(LongTripCompression.BALANCED, restored.cameraSettings.longTripCompression)
+        assertEquals(VideoQuality.HIGH, restored.cameraSettings.videoQuality)
     }
 }
