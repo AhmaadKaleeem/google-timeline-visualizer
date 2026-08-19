@@ -32,6 +32,7 @@ class TimelineView @JvmOverloads constructor(
     private var frameCanvas: Canvas? = null
     private var frameDirty = true
     private var redrawPosted = false
+    private var afterNextFrameRendered: (() -> Unit)? = null
 
     var journey: Journey? = null
         set(value) {
@@ -103,7 +104,10 @@ class TimelineView @JvmOverloads constructor(
         val data = journey ?: return
         if (data.points.isEmpty()) return
         if (!frameDirty) {
-            frame?.let { canvas.drawBitmap(it, 0f, 0f, null) }
+            frame?.let {
+                canvas.drawBitmap(it, 0f, 0f, null)
+                notifyFrameRendered()
+            }
             return
         }
         val animationFrame = TimelineAnimation.frameAtOverallProgress(progress, journeyDurationSeconds)
@@ -141,6 +145,12 @@ class TimelineView @JvmOverloads constructor(
         )
         frameDirty = false
         canvas.drawBitmap(target, 0f, 0f, null)
+        notifyFrameRendered()
+    }
+
+    fun runAfterNextFrameRendered(action: () -> Unit) {
+        afterNextFrameRendered = action
+        markFrameDirty()
     }
 
     private fun allocateFrame(width: Int, height: Int) {
@@ -162,5 +172,11 @@ class TimelineView @JvmOverloads constructor(
         post {
             redrawPosted = false
         }
+    }
+
+    private fun notifyFrameRendered() {
+        val action = afterNextFrameRendered ?: return
+        afterNextFrameRendered = null
+        post(action)
     }
 }

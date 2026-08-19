@@ -39,12 +39,7 @@ class TimelineParser {
             }
         }
 
-        val normalized = points
-            .asSequence()
-            .filter { it.latitude in -85.05112878..85.05112878 && it.longitude in -180.0..180.0 }
-            .distinctBy { Triple(it.instant.toEpochMilli(), it.latitude, it.longitude) }
-            .sortedBy { it.instant }
-            .toList()
+        val normalized = normalize(points)
 
         if (normalized.isEmpty()) {
             throw TimelineParseException(
@@ -53,6 +48,57 @@ class TimelineParser {
             )
         }
         return Timeline(normalized)
+    }
+
+    private fun normalize(points: MutableList<GeoPoint>): List<GeoPoint> {
+        var validCount = 0
+        points.forEach { point ->
+            if (point.latitude in -85.05112878..85.05112878 && point.longitude in -180.0..180.0) {
+                points[validCount] = point
+                validCount += 1
+            }
+        }
+        if (validCount < points.size) points.subList(validCount, points.size).clear()
+
+        // Stable millisecond ordering groups possible duplicates while retaining the first
+        // occurrence from the source, matching distinctBy's existing behavior without a
+        // document-sized HashSet of boxed Triple keys.
+        points.sortWith(compareBy { it.instant.toEpochMilli() })
+        var writeIndex = 0
+        var groupStart = 0
+        while (groupStart < points.size) {
+            val epochMillis = points[groupStart].instant.toEpochMilli()
+            var groupEnd = groupStart + 1
+            while (groupEnd < points.size && points[groupEnd].instant.toEpochMilli() == epochMillis) {
+                groupEnd += 1
+            }
+            val keptGroupStart = writeIndex
+            for (readIndex in groupStart until groupEnd) {
+                val candidate = points[readIndex]
+                var duplicate = false
+                for (keptIndex in keptGroupStart until writeIndex) {
+                    val kept = points[keptIndex]
+                    if (
+                        kept.latitude.toBits() == candidate.latitude.toBits() &&
+                        kept.longitude.toBits() == candidate.longitude.toBits()
+                    ) {
+                        duplicate = true
+                        break
+                    }
+                }
+                if (!duplicate) {
+                    points[writeIndex] = candidate
+                    writeIndex += 1
+                }
+            }
+            groupStart = groupEnd
+        }
+        if (writeIndex < points.size) points.subList(writeIndex, points.size).clear()
+
+        // The second stable sort restores exact Instant ordering while preserving source order
+        // for points with identical timestamps.
+        points.sortWith(compareBy(GeoPoint::instant))
+        return points
     }
 
     private fun readRootObject(reader: JsonReader, points: MutableList<GeoPoint>) {

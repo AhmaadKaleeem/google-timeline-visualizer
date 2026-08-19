@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.File
 import java.time.Instant
 
 class TimelineParserTest {
@@ -81,6 +82,34 @@ class TimelineParserTest {
         assertEquals(37.5, timeline.points.single().latitude, 0.00001)
         assertEquals(127.0, timeline.points.single().longitude, 0.00001)
         assertEquals(null, parser.parseCoordinate("geo:91,127"))
+    }
+
+    @Test
+    fun normalizationPreservesExistingOrderingAndDeduplicationSemantics() {
+        val timeline = parse(
+            """
+            [{
+              "timelinePath": [
+                {"point": "37.2,127.2", "time": "2026-01-01T00:00:02Z"},
+                {"point": "37.1,127.1", "time": "2026-01-01T00:00:01.000500Z"},
+                {"point": "37.3,127.3", "time": "2026-01-01T00:00:01.000100Z"},
+                {"point": "37.2,127.2", "time": "2026-01-01T00:00:02Z"},
+                {"point": "37.1,127.1", "time": "2026-01-01T00:00:01.000700Z"},
+                {"point": "37.4,127.4", "time": "2026-01-01T00:00:01.000500Z"}
+              ]
+            }]
+            """.trimIndent(),
+        )
+
+        assertEquals(
+            listOf(
+                Triple("2026-01-01T00:00:01.000100Z", 37.3, 127.3),
+                Triple("2026-01-01T00:00:01.000500Z", 37.1, 127.1),
+                Triple("2026-01-01T00:00:01.000500Z", 37.4, 127.4),
+                Triple("2026-01-01T00:00:02Z", 37.2, 127.2),
+            ),
+            timeline.points.map { Triple(it.instant.toString(), it.latitude, it.longitude) },
+        )
     }
 
     @Test
@@ -189,6 +218,22 @@ class TimelineParserTest {
         assertEquals(2, journey.pointIndexAt(0.5f))
     }
 
+    @Test
+    fun parsesLargeTimelineWithoutLoadingTheDocumentAsOneString() {
+        val source = File.createTempFile("large-timeline-", ".json")
+        try {
+            writeLargeTimeline(source, 45L * 1024 * 1024)
+
+            val timeline = source.inputStream().buffered().use(parser::parse)
+
+            assertTrue(source.length() >= 45L * 1024 * 1024)
+            assertTrue(timeline.points.size > 300_000)
+            assertTrue(timeline.points.asSequence().zipWithNext().all { (before, after) -> before.instant <= after.instant })
+        } finally {
+            source.delete()
+        }
+    }
+
     private fun parse(json: String) = parser.parse(ByteArrayInputStream(json.toByteArray()))
 
     private fun parseFailure(json: String): TimelineParseException = try {
@@ -196,5 +241,37 @@ class TimelineParserTest {
         throw AssertionError("Expected TimelineParseException")
     } catch (error: TimelineParseException) {
         error
+    }
+
+    private fun writeLargeTimeline(file: File, minimumBytes: Long) {
+        file.bufferedWriter().use { writer ->
+            writer.write("{\"semanticSegments\":[")
+            var firstSegment = true
+            var pointIndex = 0
+            var segmentCount = 0
+            while (true) {
+                if (!firstSegment) writer.write(','.code)
+                firstSegment = false
+                writer.write("{\"startTime\":\"2020-01-01T00:00:00Z\",\"timelinePath\":[")
+                repeat(20) { offset ->
+                    if (offset > 0) writer.write(','.code)
+                    val minute = pointIndex
+                    val latitude = 35.0 + (pointIndex % 100_000) / 1_000_000.0
+                    val longitude = 126.0 + (pointIndex % 100_000) / 1_000_000.0
+                    writer.write(
+                        "{\"point\":\"$latitude,$longitude\"," +
+                            "\"durationMinutesOffsetFromStartTime\":$minute}",
+                    )
+                    pointIndex += 1
+                }
+                writer.write("]}")
+                segmentCount += 1
+                if (segmentCount % 100 == 0) {
+                    writer.flush()
+                    if (file.length() >= minimumBytes) break
+                }
+            }
+            writer.write("]}")
+        }
     }
 }

@@ -13,11 +13,38 @@ class TimelineSourceStore(context: Context) {
         .putString(KEY_URI, uri.toString())
         .commit()
 
+    fun beginImport(uri: Uri): Boolean = preferences.edit()
+        .putString(KEY_IMPORT_IN_PROGRESS_URI, uri.toString())
+        .commit()
+
+    fun completeImport(uri: Uri) {
+        if (importInProgress() == uri) {
+            preferences.edit().remove(KEY_IMPORT_IN_PROGRESS_URI).commit()
+        }
+    }
+
+    fun recoverInterruptedImport(): Uri? {
+        val pending = importInProgress() ?: return null
+        val remembered = load()
+        val interruptedRemembered = remembered?.takeIf { it == pending }
+        preferences.edit().apply {
+            remove(KEY_IMPORT_IN_PROGRESS_URI)
+            if (interruptedRemembered != null) remove(KEY_URI)
+        }.commit()
+        return interruptedRemembered
+    }
+
     fun clear(): Uri? {
         val previous = load()
-        preferences.edit { remove(KEY_URI) }
+        preferences.edit {
+            remove(KEY_URI)
+            remove(KEY_IMPORT_IN_PROGRESS_URI)
+        }
         return previous
     }
+
+    internal fun importInProgress(): Uri? =
+        preferences.getString(KEY_IMPORT_IN_PROGRESS_URI, null)?.let(Uri::parse)
 
     internal fun clearForTest() {
         preferences.edit { clear() }
@@ -26,5 +53,6 @@ class TimelineSourceStore(context: Context) {
     companion object {
         private const val PREFERENCES_NAME = "timeline_source"
         private const val KEY_URI = "document_uri_v1"
+        private const val KEY_IMPORT_IN_PROGRESS_URI = "import_in_progress_uri_v1"
     }
 }

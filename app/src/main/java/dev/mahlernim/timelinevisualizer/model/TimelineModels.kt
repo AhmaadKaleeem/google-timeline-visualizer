@@ -27,7 +27,7 @@ data class GeoPoint(
 data class Timeline(
     val points: List<GeoPoint>,
 ) {
-    val years: List<Int> = points.map { it.year }.distinct().sortedDescending()
+    val years: List<Int> = points.asSequence().map { it.year }.distinct().sortedDescending().toList()
 
     fun forYear(year: Int): Journey {
         return forRange(year, Month.JANUARY.value, Month.DECEMBER.value)
@@ -44,24 +44,44 @@ data class Timeline(
     }
 
     fun forRange(period: TimelinePeriod): Journey {
+        val zone = ZoneId.systemDefault()
         val selected = points.filter {
-            val date = it.instant.atZone(ZoneId.systemDefault())
+            val date = it.instant.atZone(zone)
             val month = YearMonth.of(date.year, date.monthValue)
             month >= period.start && month <= period.endInclusive
-        }.sortedBy { it.instant }
+        }
         return Journey.from(selected, period)
+    }
+
+    fun countForRange(period: TimelinePeriod): Int {
+        val zone = ZoneId.systemDefault()
+        return points.count {
+            val date = it.instant.atZone(zone)
+            val month = YearMonth.of(date.year, date.monthValue)
+            month >= period.start && month <= period.endInclusive
+        }
     }
 
     fun forDateRange(start: LocalDate, endInclusive: LocalDate): Journey {
         require(endInclusive >= start)
+        val zone = ZoneId.systemDefault()
         val selected = points.filter {
-            val date = it.instant.atZone(ZoneId.systemDefault()).toLocalDate()
+            val date = it.instant.atZone(zone).toLocalDate()
             date >= start && date <= endInclusive
-        }.sortedBy { it.instant }
+        }
         return Journey.from(
             selected,
             TimelinePeriod(YearMonth.from(start), YearMonth.from(endInclusive)),
         )
+    }
+
+    fun countForDateRange(start: LocalDate, endInclusive: LocalDate): Int {
+        require(endInclusive >= start)
+        val zone = ZoneId.systemDefault()
+        return points.count {
+            val date = it.instant.atZone(zone).toLocalDate()
+            date >= start && date <= endInclusive
+        }
     }
 }
 

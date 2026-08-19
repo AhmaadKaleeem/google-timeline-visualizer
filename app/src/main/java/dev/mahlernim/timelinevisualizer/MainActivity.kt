@@ -137,6 +137,7 @@ class MainActivity : AppCompatActivity() {
     private var videosExpanded = false
     private var currentScreen = Screen.VIDEOS
     private var rememberedTimelineLoaded = false
+    private var interruptedTimelineRecovered = false
     private var lastRenderedExportStatus = VideoExportStatus.IDLE
     private var videoPlayer: ExoPlayer? = null
     private var playerUri: Uri? = null
@@ -186,6 +187,11 @@ class MainActivity : AppCompatActivity() {
         editor = ScreenNewVideoBinding.bind(findViewById(R.id.newVideoScreen))
         settingsScreen = ScreenSettingsBinding.bind(findViewById(R.id.settingsScreen))
         playerScreen = ScreenPlayerBinding.bind(findViewById(R.id.playerScreen))
+        timelineSourceStore.recoverInterruptedImport()?.let { uri ->
+            releaseUriAccess(uri)
+            interruptedTimelineRecovered = true
+            rememberedTimelineLoaded = true
+        }
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
             val bars: Insets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(0, bars.top, 0, bars.bottom)
@@ -352,6 +358,11 @@ class MainActivity : AppCompatActivity() {
             binding.bottomNavigation.selectedItemId = R.id.navigationCreate
             syncingBottomNavigation = false
         }
+        if (loadRemembered && interruptedTimelineRecovered) {
+            interruptedTimelineRecovered = false
+            editor.statusText.setText(R.string.timeline_file_unavailable)
+            Snackbar.make(binding.root, R.string.choose_timeline_again, Snackbar.LENGTH_LONG).show()
+        }
         if (loadRemembered && !rememberedTimelineLoaded && timeline == null &&
             preferences.getBoolean(MAP_PRIVACY_ACCEPTED, false)
         ) {
@@ -468,6 +479,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun importTimeline(uri: Uri, remembered: Boolean = false) {
         if (importJob?.isActive == true) return
+        if (!remembered) interruptedTimelineRecovered = false
+        timelineSourceStore.beginImport(uri)
         animation?.cancel()
         editor.editorGroup.visibility = View.GONE
         setTimelineLoading(true, R.string.opening_timeline)
@@ -479,9 +492,15 @@ class MainActivity : AppCompatActivity() {
                         ?: throw java.io.FileNotFoundException()
                 }
                 editor.loadingStageText.setText(R.string.preparing_trips)
-                timeline = loaded
-                rebuildRenderTimeline(reselect = false)
-                configureYears(loaded)
+                val prepared = withContext(Dispatchers.Default) {
+                    prepareTimeline(loaded)
+                }
+                timeline = prepared.source
+                renderTimeline = prepared.render
+                editor.timelineView.runAfterNextFrameRendered {
+                    timelineSourceStore.completeImport(uri)
+                }
+                configureYears(loaded, prepared.initialJourney, prepared.ignoredCount)
                 editor.editorGroup.visibility = View.VISIBLE
                 editor.statusText.text = ""
                 if (!remembered) rememberTimelineSource(uri)
@@ -489,6 +508,7 @@ class MainActivity : AppCompatActivity() {
                 throw cancelled
             } catch (error: TimelineParseException) {
                 Log.e(TAG, "Timeline import failed", error)
+                timelineSourceStore.completeImport(uri)
                 timeline = null
                 renderTimeline = null
                 if (remembered) {
@@ -502,6 +522,7 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (error: Throwable) {
                 Log.e(TAG, "Timeline import failed", error)
+                timelineSourceStore.completeImport(uri)
                 timeline = null
                 renderTimeline = null
                 if (remembered) {
@@ -545,7 +566,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun configureYears(loaded: Timeline) {
+    private fun prepareTimeline(loaded: Timeline): PreparedTimeline {
+        val filtered = LocationOutlierFilter.filter(loaded.points, locationFilterMode)
+        val rendered = if (filtered.points === loaded.points) loaded else Timeline(filtered.points)
+        val initialPeriod = TimelinePeriod.sameYear(loaded.years.first())
+        val initialJourney = rendered.forRange(initialPeriod)
+        return PreparedTimeline(
+            source = loaded,
+            render = rendered,
+            initialJourney = initialJourney,
+            ignoredCount = (loaded.countForRange(initialPeriod) - initialJourney.points.size).coerceAtLeast(0),
+        )
+    }
+
+    private fun configureYears(loaded: Timeline, initialJourney: Journey, ignoredCount: Int) {
         val years = loaded.years
         val labels = years.map { NumberFormat.getIntegerInstance().apply { isGroupingUsed = false }.format(it) }
         editor.startYearDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels))
@@ -569,7 +603,7 @@ class MainActivity : AppCompatActivity() {
         updateExactDateControls()
         updateYearDropdowns()
         updateResolvedTitle()
-        selectRange()
+        applySelectedJourney(initialJourney, ignoredCount)
     }
 
     private fun selectRange() {
@@ -581,12 +615,16 @@ class MainActivity : AppCompatActivity() {
         } else {
             renderTimeline?.forRange(period)
         } ?: return
-        val unfiltered = if (exactDateRangeEnabled) {
-            timeline?.forDateRange(selectedStartDate ?: return, selectedEndDate ?: return)
+        val unfilteredCount = if (exactDateRangeEnabled) {
+            timeline?.countForDateRange(selectedStartDate ?: return, selectedEndDate ?: return)
         } else {
-            timeline?.forRange(period)
+            timeline?.countForRange(period)
         }
-        val ignoredCount = ((unfiltered?.points?.size ?: selected.points.size) - selected.points.size).coerceAtLeast(0)
+        val ignoredCount = ((unfilteredCount ?: selected.points.size) - selected.points.size).coerceAtLeast(0)
+        applySelectedJourney(selected, ignoredCount)
+    }
+
+    private fun applySelectedJourney(selected: Journey, ignoredCount: Int) {
         animation?.cancel()
         journey = selected
         editor.timelineView.journey = selected
@@ -1168,7 +1206,7 @@ class MainActivity : AppCompatActivity() {
         editor.exportProgress.visibility = if (exporting) View.VISIBLE else View.GONE
         editor.cancelExportButton.visibility = if (exporting) View.VISIBLE else View.GONE
         home.deleteAllVideosButton.isEnabled = !exporting
-        editor.importButton.isEnabled = !exporting
+        editor.importButton.isEnabled = !exporting && editor.loadingGroup.visibility != View.VISIBLE
         editor.playButton.isEnabled = !exporting && canCreate
         editor.exportButton.isEnabled = !exporting && canCreate
         editor.shareButton.isEnabled = !exporting
@@ -1699,6 +1737,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private enum class Screen { VIDEOS, NEW_VIDEO, SETTINGS, PLAYER }
+
+    private data class PreparedTimeline(
+        val source: Timeline,
+        val render: Timeline,
+        val initialJourney: Journey,
+        val ignoredCount: Int,
+    )
 
     companion object {
         private const val TITLE_UPDATE_DELAY_MS = 450L

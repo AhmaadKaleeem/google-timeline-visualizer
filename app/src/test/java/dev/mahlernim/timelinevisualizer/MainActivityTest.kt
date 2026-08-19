@@ -2,6 +2,8 @@ package dev.mahlernim.timelinevisualizer
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.net.Uri
 import android.os.Looper
 import android.util.TypedValue
@@ -364,6 +366,25 @@ class MainActivityTest {
     }
 
     @Test
+    fun interruptedRememberedImportStopsAutomaticRetryAndRequestsReselection() {
+        val interrupted = Uri.parse("content://example/large-timeline.json")
+        assertTrue(timelineSourceStore.replace(interrupted))
+        assertTrue(timelineSourceStore.beginImport(interrupted))
+        acceptPrivacyDisclosure()
+
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
+
+        assertEquals(null, timelineSourceStore.load())
+        assertEquals(null, timelineSourceStore.importInProgress())
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)
+        assertEquals(
+            activity.getString(R.string.timeline_file_unavailable),
+            activity.findViewById<TextView>(R.id.statusText).text.toString(),
+        )
+    }
+
+    @Test
     @Config(sdk = [35], qualifiers = "en-rUS-w360dp-h640dp-xxhdpi")
     fun compactEnglishButtonsRemainSingleLine() = assertCompactButtons()
 
@@ -565,6 +586,8 @@ class MainActivityTest {
 
         val activity = launchActivity(Intent(Intent.ACTION_VIEW, explicit))
         waitUntil { activity.findViewById<View>(R.id.editorGroup).visibility == View.VISIBLE }
+        drawActivity(activity)
+        waitUntil { timelineSourceStore.importInProgress() == null }
 
         assertEquals(explicit, timelineSourceStore.load())
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)
@@ -620,6 +643,15 @@ class MainActivityTest {
             View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
         )
         root.layout(0, 0, width, height)
+    }
+
+    private fun drawActivity(activity: MainActivity) {
+        measureActivity(activity)
+        val root = activity.window.decorView
+        val bitmap = Bitmap.createBitmap(root.width.coerceAtLeast(1), root.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        root.draw(Canvas(bitmap))
+        bitmap.recycle()
+        shadowOf(Looper.getMainLooper()).idle()
     }
 
     private fun assertSingleLineButtons(view: View) {

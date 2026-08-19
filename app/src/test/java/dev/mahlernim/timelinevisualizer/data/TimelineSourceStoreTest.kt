@@ -32,4 +32,27 @@ class TimelineSourceStoreTest {
         assertEquals(second, store.clear())
         assertNull(store.load())
     }
+
+    @Test
+    fun interruptedRememberedImportIsClearedForManualReselection() {
+        val source = Uri.parse("content://example/large.json")
+        assertTrue(store.replace(source))
+        assertTrue(store.beginImport(source))
+
+        assertEquals(source, store.recoverInterruptedImport())
+        assertNull(store.load())
+        assertNull(store.importInProgress())
+    }
+
+    @Test
+    fun successfulRenderedImportClearsOnlyItsMarker() {
+        val source = Uri.parse("content://example/large.json")
+        assertTrue(store.replace(source))
+        assertTrue(store.beginImport(source))
+
+        store.completeImport(source)
+
+        assertEquals(source, store.load())
+        assertNull(store.importInProgress())
+    }
 }

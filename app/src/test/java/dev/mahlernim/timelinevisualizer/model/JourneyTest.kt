@@ -31,6 +31,7 @@ class JourneyTest {
         val journey = timeline.forDateRange(LocalDate.parse("2026-04-02"), LocalDate.parse("2026-04-03"))
 
         assertEquals(2, journey.points.size)
+        assertEquals(2, timeline.countForDateRange(LocalDate.parse("2026-04-02"), LocalDate.parse("2026-04-03")))
         assertEquals(Instant.parse("2026-04-02T12:00:00Z"), journey.points.first().instant)
         assertEquals(Instant.parse("2026-04-03T12:00:00Z"), journey.points.last().instant)
     }
@@ -201,6 +202,7 @@ class JourneyTest {
 
         assertEquals(4, timeline.forYear(2025).points.size)
         assertEquals(2, timeline.forRange(2025, 6, 7).points.size)
+        assertEquals(2, timeline.countForRange(TimelinePeriod.sameYear(2025, 6, 7)))
     }
 
     @Test
@@ -219,6 +221,7 @@ class JourneyTest {
 
         assertEquals(period, journey.period)
         assertEquals(2, journey.points.size)
+        assertEquals(journey.points.size, timeline.countForRange(period))
         assertEquals("2025–2026", journey.period.yearLabel)
     }
 

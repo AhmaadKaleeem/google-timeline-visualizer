@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.1
+
+- Reduce peak memory while normalizing large Timeline JSON exports.
+- Prepare filtered Timeline data and the initial Journey away from the UI thread.
+- Avoid building a second unfiltered Journey only to count ignored locations.
+- Stop automatically reopening a remembered Timeline after an interrupted import.
+- Add generated 45 MB import coverage without storing personal Timeline data.
+- Set Android version code 16 and version name 2.1.1.
+
 ## 2.1.0
 
 - Prevent system navigation insets from clipping bottom-navigation icons and labels.
