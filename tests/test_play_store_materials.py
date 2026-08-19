@@ -17,7 +17,17 @@ def png_info(path: Path) -> tuple[int, int, int]:
 
 
 def test_listing_text_meets_play_limits():
-    for locale in ("en-US", "ko-KR", "ja-JP"):
+    for locale in (
+        "en-US",
+        "ko-KR",
+        "ja-JP",
+        "zh-CN",
+        "zh-TW",
+        "es-ES",
+        "fr-FR",
+        "de-DE",
+        "pt-BR",
+    ):
         listing = PLAY_STORE / "listing" / locale
         assert len((listing / "title.txt").read_text(encoding="utf-8").strip()) <= 30
         assert len((listing / "short-description.txt").read_text(encoding="utf-8").strip()) <= 80
@@ -48,9 +58,12 @@ def test_phone_screenshots_are_current_play_recommended_size():
 
 def test_play_release_metadata_is_consistent():
     build_file = (ROOT / "app" / "build.gradle.kts").read_text(encoding="utf-8")
-    assert 'versionCode = 13' in build_file
-    assert 'versionName = "2.0.0"' in build_file
-    assert (ROOT / "docs" / "release-notes-v1.9.0.md").is_file()
+    version_code = re.search(r"versionCode = (\d+)", build_file).group(1)
+    version_name = re.search(r'versionName = "([^"]+)"', build_file).group(1)
+    checklist = (PLAY_STORE / "submission-checklist.md").read_text(encoding="utf-8")
+
+    assert f"Version name `{version_name}` and version code `{version_code}`" in checklist
+    assert (ROOT / "docs" / f"release-notes-v{version_name}.md").is_file()
 
 
 def test_android_locales_have_matching_resources_and_placeholders():

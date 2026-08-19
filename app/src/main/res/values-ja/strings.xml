@@ -22,6 +22,10 @@
     <string name="share_travel_video">旅行動画を共有</string>
     <string name="import_failed">読み込みに失敗しました</string>
     <string name="import_failed_detail">このファイルを読み取れませんでした。対応する Timeline JSON の書き出しファイルを選択してください。</string>
+    <string name="timeline_error_malformed">有効または完全な JSON ファイルではありません。</string>
+    <string name="timeline_error_legacy">以前の Google Takeout 形式です。端末からタイムライン データを書き出してください。</string>
+    <string name="timeline_error_raw_only">この書き出しには生の信号だけがあり、再構成された移動経路がありません。</string>
+    <string name="timeline_error_no_locations">このタイムラインの書き出しには使用できる位置情報がありません。</string>
     <string name="remembered_timeline_unavailable">前回使用したタイムラインを開けなくなりました。</string>
     <string name="choose_timeline_again">Timeline.jsonをもう一度選択してください。</string>
     <string name="video_export_failed">動画を作成できませんでした</string>

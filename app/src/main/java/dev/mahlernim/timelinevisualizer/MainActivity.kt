@@ -38,6 +38,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.datepicker.MaterialDatePicker
 import com.google.android.material.snackbar.Snackbar
+import dev.mahlernim.timelinevisualizer.data.TimelineParseException
+import dev.mahlernim.timelinevisualizer.data.TimelineParseReason
 import dev.mahlernim.timelinevisualizer.data.TimelineParser
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.databinding.ActivityMainBinding
@@ -471,6 +473,18 @@ class MainActivity : AppCompatActivity() {
                 if (!remembered) rememberTimelineSource(uri)
             } catch (cancelled: CancellationException) {
                 throw cancelled
+            } catch (error: TimelineParseException) {
+                Log.e(TAG, "Timeline import failed", error)
+                timeline = null
+                if (remembered) {
+                    timelineSourceStore.clear()
+                    releaseUriAccess(uri)
+                    editor.statusText.setText(R.string.timeline_file_unavailable)
+                    Snackbar.make(binding.root, R.string.choose_timeline_again, Snackbar.LENGTH_LONG).show()
+                } else {
+                    editor.statusText.setText(timelineParseMessage(error.reason))
+                    Snackbar.make(binding.root, R.string.import_failed, Snackbar.LENGTH_LONG).show()
+                }
             } catch (error: Throwable) {
                 Log.e(TAG, "Timeline import failed", error)
                 timeline = null
@@ -488,6 +502,14 @@ class MainActivity : AppCompatActivity() {
                 importJob = null
             }
         }
+    }
+
+    private fun timelineParseMessage(reason: TimelineParseReason): Int = when (reason) {
+        TimelineParseReason.MALFORMED_JSON -> R.string.timeline_error_malformed
+        TimelineParseReason.LEGACY_FORMAT -> R.string.timeline_error_legacy
+        TimelineParseReason.RAW_SIGNALS_ONLY -> R.string.timeline_error_raw_only
+        TimelineParseReason.NO_USABLE_LOCATIONS -> R.string.timeline_error_no_locations
+        TimelineParseReason.UNSUPPORTED_FORMAT -> R.string.import_failed_detail
     }
 
     private fun setTimelineLoading(loading: Boolean, stage: Int = R.string.opening_timeline) {

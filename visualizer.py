@@ -20,7 +20,7 @@ import io
 import urllib.request
 import bisect
 import statistics
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Third-party imports
@@ -353,13 +353,47 @@ def extract_timeline_points(data, year):
 
     points = []
 
+    def parse_timestamp(time_value):
+        if isinstance(time_value, datetime):
+            return time_value
+        if not time_value:
+            return None
+        try:
+            return dateutil.parser.parse(time_value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+    def path_timestamp(path_point, start_value, end_value):
+        absolute = parse_timestamp(path_point.get('time'))
+        if absolute is not None:
+            return absolute
+        offset_value = path_point.get('durationMinutesOffsetFromStartTime')
+        if isinstance(offset_value, bool):
+            return None
+        try:
+            offset = int(offset_value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if offset < 0:
+            return None
+        start = parse_timestamp(start_value)
+        if start is None:
+            return None
+        try:
+            timestamp = start + timedelta(minutes=offset)
+        except OverflowError:
+            return None
+        end = parse_timestamp(end_value)
+        if end is not None and timestamp > end + timedelta(minutes=1):
+            return None
+        return timestamp
+
     def add_point(time_value, coordinate_value):
         coordinate = parse_coordinate(coordinate_value)
-        if not time_value or coordinate is None:
+        if coordinate is None:
             return
-        try:
-            timestamp = dateutil.parser.parse(time_value)
-        except (TypeError, ValueError, OverflowError):
+        timestamp = parse_timestamp(time_value)
+        if timestamp is None:
             return
         if timestamp.year == year:
             points.append({'dt': timestamp, 'lat': coordinate[0], 'lon': coordinate[1]})
@@ -372,7 +406,7 @@ def extract_timeline_points(data, year):
 
         for path_point in seg.get('timelinePath', []):
             if isinstance(path_point, dict):
-                add_point(path_point.get('time'), path_point.get('point'))
+                add_point(path_timestamp(path_point, start_time, end_time), path_point.get('point'))
 
         activity = seg.get('activity')
         if isinstance(activity, dict):

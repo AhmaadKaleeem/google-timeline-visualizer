@@ -23,6 +23,10 @@
     <string name="share_travel_video">Compartilhe vídeo de viagem</string>
     <string name="import_failed">Não foi possível carregar Timeline</string>
     <string name="import_failed_detail">Este arquivo não pôde ser lido. Selecione uma exportação JSON Timeline compatível.</string>
+    <string name="timeline_error_malformed">Este arquivo não contém um JSON válido ou completo.</string>
+    <string name="timeline_error_legacy">Este é um formato antigo do Google Takeout. Exporte os dados do Timeline pelo telefone.</string>
+    <string name="timeline_error_raw_only">Esta exportação contém sinais brutos, mas não contém viagens reconstruídas do Timeline.</string>
+    <string name="timeline_error_no_locations">Esta exportação do Timeline não contém pontos de localização utilizáveis.</string>
     <string name="remembered_timeline_unavailable">O Timeline usado anteriormente não está mais disponível.</string>
     <string name="choose_timeline_again">Escolha o arquivo Timeline.json novamente.</string>
     <string name="video_export_failed">Não foi possível criar o vídeo</string>

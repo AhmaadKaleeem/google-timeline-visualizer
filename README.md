@@ -18,7 +18,7 @@ exact dates, preview the Journey, and create an MP4 ready to watch or share.
 The app is not yet on Google Play. Install it from this repository's
 [latest release](https://github.com/mahlernim/google-timeline-visualizer/releases/latest):
 
-1. Under **Assets**, download `TimelineVisualizer-v2.0.0.apk` on your phone.
+1. Under **Assets**, download `TimelineVisualizer-v2.0.1.apk` on your phone.
 2. Open the downloaded file.
 3. If Android blocks the installation, select **Settings**, allow your browser or
    file manager to **Install unknown apps**, then return and try again.

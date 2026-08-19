@@ -24,9 +24,11 @@ the selected route points and export settings are temporarily stored in private
 app storage so creation can continue when the app is no longer on screen and can
 restart if Android recreates the app process. This temporary export data is
 deleted after completion, cancellation, or failure and is excluded from Android
-backup and device transfer. Generated videos are written to the destination the
-On Android 10 and later, completed MP4 files are saved through MediaStore under
-`Movies/Timeline Visualizer`. Android 8 and 9 use the system Save As picker. Cached basemap image tiles may remain in the app's temporary cache
+backup and device transfer. Generated videos are written through Android's
+media storage interfaces. On Android 10 and later, completed MP4 files are saved
+through MediaStore under
+`Movies/Timeline Visualizer`. Android 8 and 9 use the system Save As picker.
+Cached basemap image tiles may remain in the app's temporary cache
 and can be removed by clearing the app cache or uninstalling the app.
 
 After a successful Timeline import, the app stores only the selected document URI

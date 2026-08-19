@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.time.Instant
 
 class TimelineParserTest {
     private val parser = TimelineParser()
@@ -82,6 +83,87 @@ class TimelineParserTest {
         assertEquals(null, parser.parseCoordinate("geo:91,127"))
     }
 
+    @Test
+    fun parsesStringAndNumericOffsetsFromSegmentStart() {
+        val timeline = parse(
+            """
+            [{
+              "startTime": "2026-01-01T00:00:00Z",
+              "endTime": "2026-01-01T02:00:00Z",
+              "timelinePath": [
+                {"point": "37.0,127.0", "durationMinutesOffsetFromStartTime": "15"},
+                {"point": "37.1,127.1", "durationMinutesOffsetFromStartTime": 60}
+              ]
+            }]
+            """.trimIndent(),
+        )
+
+        assertEquals(
+            listOf(Instant.parse("2026-01-01T00:15:00Z"), Instant.parse("2026-01-01T01:00:00Z")),
+            timeline.points.map { it.instant },
+        )
+    }
+
+    @Test
+    fun validAbsolutePathTimeTakesPriorityOverOffset() {
+        val timeline = parse(
+            """
+            [{
+              "startTime": "2026-01-01T00:00:00Z",
+              "endTime": "2026-01-01T02:00:00Z",
+              "timelinePath": [{
+                "point": "37.0,127.0",
+                "time": "2026-01-01T01:30:00Z",
+                "durationMinutesOffsetFromStartTime": "5"
+              }]
+            }]
+            """.trimIndent(),
+        )
+
+        assertEquals(Instant.parse("2026-01-01T01:30:00Z"), timeline.points.single().instant)
+    }
+
+    @Test
+    fun ignoresInvalidAndOutOfRangeOffsets() {
+        val timeline = parse(
+            """
+            [{
+              "startTime": "2026-01-01T00:00:00Z",
+              "endTime": "2026-01-01T01:00:00Z",
+              "timelinePath": [
+                {"point": "37.0,127.0", "durationMinutesOffsetFromStartTime": "-1"},
+                {"point": "37.1,127.1", "durationMinutesOffsetFromStartTime": "unknown"},
+                {"point": "37.2,127.2", "durationMinutesOffsetFromStartTime": "120"}
+              ],
+              "visit": {"topCandidate": {"placeLocation": "37.3,127.3"}}
+            }]
+            """.trimIndent(),
+        )
+
+        assertEquals(1, timeline.points.size)
+        assertEquals(37.3, timeline.points.single().latitude, 0.00001)
+    }
+
+    @Test
+    fun classifiesUnsupportedTimelineFormats() {
+        assertEquals(
+            TimelineParseReason.LEGACY_FORMAT,
+            parseFailure("""{"timelineObjects": []}""").reason,
+        )
+        assertEquals(
+            TimelineParseReason.RAW_SIGNALS_ONLY,
+            parseFailure("""{"rawSignals": []}""").reason,
+        )
+        assertEquals(
+            TimelineParseReason.NO_USABLE_LOCATIONS,
+            parseFailure("""{"semanticSegments": []}""").reason,
+        )
+        assertEquals(
+            TimelineParseReason.MALFORMED_JSON,
+            parseFailure("""{"semanticSegments": [""").reason,
+        )
+    }
+
     @Test(expected = TimelineParseException::class)
     fun rejectsUnsupportedJson() {
         parse("""{"locations": []}""")
@@ -108,4 +190,11 @@ class TimelineParserTest {
     }
 
     private fun parse(json: String) = parser.parse(ByteArrayInputStream(json.toByteArray()))
+
+    private fun parseFailure(json: String): TimelineParseException = try {
+        parse(json)
+        throw AssertionError("Expected TimelineParseException")
+    } catch (error: TimelineParseException) {
+        error
+    }
 }

@@ -19,7 +19,7 @@
 
 ## Release
 
-- Version name `1.9.0` and version code `12`
+- Version name `2.0.1` and version code `14`
 - Upload the signed `playRelease` Android App Bundle
 - On first enrollment, preserve the existing app-signing key so GitHub and Play installs remain update-compatible
 - Register a separate upload key for later Play releases
@@ -30,9 +30,11 @@
 ## Store presence and policy
 
 - Upload the 512×512 app icon and 1024×500 feature graphic
-- Upload at least two current phone screenshots for each maintained locale
-- Paste and proofread the English, Korean, and Japanese listing text
-- Upload four current screenshots and the localized feature graphic for each maintained locale
+- Paste and proofread the listing text for English, Korean, Japanese, Simplified
+  Chinese, Traditional Chinese, Spanish, French, German, and Brazilian Portuguese
+- Upload the four current screenshots and localized feature graphic for English,
+  Korean, and Japanese. Use the English graphics as the fallback for the other
+  six locales
 - Complete Data safety, content rating, target audience, ads, and app-access forms
 - Confirm the public privacy policy and support address work without signing in
 - Confirm the Play build opens Google Play, not GitHub Releases, for updates

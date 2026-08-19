@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0.1
+
+- Parse current Timeline path points that store a minute offset from the segment
+  start instead of an absolute timestamp.
+- Prefer valid absolute path timestamps and safely ignore invalid, negative, or
+  out-of-range offsets.
+- Distinguish malformed JSON, older Google Takeout formats, raw-only exports,
+  and exports without usable locations.
+- Keep Android and Python Timeline parsing behavior aligned.
+- Correct the Play submission checklist and English privacy-policy wording.
+- Set Android version code 14 and version name 2.0.1.
+
 ## 2.0.0
 
 - Add bottom navigation for My videos, Create video, and Settings while preserving unfinished creation state.
