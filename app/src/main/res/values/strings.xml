@@ -124,6 +124,9 @@
     <string name="project_on_github">Project on GitHub</string>
     <string name="update_page_unavailable">Could not open the update page</string>
     <string name="web_page_unavailable">Could not open the web page</string>
+    <!-- java.time.DateTimeFormatter pattern. Reorder or add literal text for a locale, but keep
+         the pattern letters (M, y) exactly as they are: letters a-z are reserved format symbols,
+         and translating them (e.g. "aaaa" or "jjjj" for "yyyy") makes the pattern invalid. -->
     <string name="render_date_pattern">MMMM yyyy</string>
     <string name="distance_unit">km</string>
     <string name="map_attribution">© OpenStreetMap  © CARTO</string>
