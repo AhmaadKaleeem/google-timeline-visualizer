@@ -30,6 +30,12 @@ pnpm dev
 The Vite base path targets the default GitHub Pages project URL at
 `/google-timeline-visualizer/`.
 
+The current test deployment is available at
+<https://ahn-lab.org/google-timeline-visualizer/>. Before merging the Pages
+workflow, change the repository's Pages publishing source from `gh-pages` to
+GitHub Actions. Keep the project base path unchanged unless a dedicated custom
+subdomain is configured at the same time.
+
 Set `VITE_PREVIEW=true` when building a public test deployment. Preview builds
 show a visible warning. The current web app includes `noindex`, `nofollow`, and
 `noarchive` directives until the physical iPhone gate is complete.
