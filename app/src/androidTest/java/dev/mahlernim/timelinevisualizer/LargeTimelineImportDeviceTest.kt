@@ -7,8 +7,12 @@ import android.view.View
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.data.LocationFilterMode
+import dev.mahlernim.timelinevisualizer.ui.TimelineView
 import dev.mahlernim.timelinevisualizer.ui.LocationFilterPreferences
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -19,12 +23,13 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class LargeTimelineImportDeviceTest {
     @Test
-    fun importsDenseLongGapTimelineBelowSixteenMegabytes() {
+    fun importsDenseLongGapTimelineBelowSixteenMegabytesInPortuguese() {
         val context = ApplicationProvider.getApplicationContext<Context>()
+        setAppLocales("pt-BR")
         context.getSharedPreferences("display", Context.MODE_PRIVATE).edit()
             .putBoolean("map_privacy_accepted_v1", true)
             .commit()
-        LocationFilterPreferences(context).save(LocationFilterMode.OFF)
+        LocationFilterPreferences(context).save(LocationFilterMode.CONSERVATIVE)
         TimelineSourceStore(context).clear()
         val source = File(context.cacheDir, "dense-long-gap-timeline.json")
         writeDenseLongGapTimeline(source, 14L * 1024 * 1024)
@@ -34,9 +39,16 @@ class LargeTimelineImportDeviceTest {
             assertTrue(source.length() >= 14L * 1024 * 1024)
             assertTrue(source.length() < 16L * 1024 * 1024)
         } finally {
+            setAppLocales("")
             LocationFilterPreferences(context).reset()
             TimelineSourceStore(context).clear()
             source.delete()
+        }
+    }
+
+    private fun setAppLocales(languageTags: String) {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(languageTags))
         }
     }
 
@@ -61,24 +73,25 @@ class LargeTimelineImportDeviceTest {
 
     private fun assertImportCompletes(context: Context, source: File) {
         val intent = Intent(context, MainActivity::class.java).apply {
-            action = Intent.ACTION_VIEW
-            data = Uri.fromFile(source)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        var sawLoading = false
         var imported = false
         val sourceStore = TimelineSourceStore(context)
         ActivityScenario.launch<MainActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.importTimeline(Uri.fromFile(source))
+                assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loadingGroup).visibility)
+                assertEquals(false, activity.findViewById<View>(R.id.importButton).isEnabled)
+            }
             val deadline = System.currentTimeMillis() + 300_000L
             while (System.currentTimeMillis() < deadline && !imported) {
                 scenario.onActivity { activity ->
                     val loading = activity.findViewById<View>(R.id.loadingGroup).visibility == View.VISIBLE
-                    if (loading) {
-                        sawLoading = true
-                        assertEquals(false, activity.findViewById<View>(R.id.importButton).isEnabled)
-                    }
+                    if (loading) assertEquals(false, activity.findViewById<View>(R.id.importButton).isEnabled)
                     imported = activity.findViewById<View>(R.id.editorGroup).visibility == View.VISIBLE &&
-                        !loading && sourceStore.importInProgress() == null
+                        !loading && sourceStore.importInProgress() == null &&
+                        activity.findViewById<TimelineView>(R.id.timelineView).isCameraReady &&
+                        activity.findViewById<View>(R.id.playButton).isEnabled
                 }
                 if (!imported) Thread.sleep(100)
             }
@@ -86,9 +99,9 @@ class LargeTimelineImportDeviceTest {
                 assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.editorGroup).visibility)
                 assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)
                 assertEquals(true, activity.findViewById<View>(R.id.importButton).isEnabled)
+                assertEquals(true, activity.findViewById<View>(R.id.playButton).isEnabled)
             }
         }
-        assertTrue(sawLoading)
         assertTrue(imported)
         assertEquals(null, sourceStore.importInProgress())
     }
@@ -104,9 +117,11 @@ class LargeTimelineImportDeviceTest {
                 writer.write("{\"startTime\":\"2020-01-01T00:00:00Z\",\"timelinePath\":[")
                 repeat(1_000) { offset ->
                     if (offset > 0) writer.write(','.code)
-                    val longitude = if (pointIndex % 2 == 0) 0.0 else 179.0
+                    val region = (pointIndex / 1_000) % 2
+                    val latitude = 35.0 + region * 10.0 + (pointIndex % 1_000) / 1_000_000.0
+                    val longitude = 10.0 + region * 120.0 + (pointIndex % 1_000) / 1_000_000.0
                     writer.write(
-                        "{\"point\":\"0.0,$longitude\"," +
+                        "{\"point\":\"$latitude,$longitude\"," +
                             "\"durationMinutesOffsetFromStartTime\":$pointIndex}",
                     )
                     pointIndex += 1
@@ -129,7 +144,7 @@ class LargeTimelineImportDeviceTest {
                 if (!firstSegment) writer.write(','.code)
                 firstSegment = false
                 writer.write("{\"startTime\":\"2020-01-01T00:00:00Z\",\"timelinePath\":[")
-                repeat(10) { offset ->
+                repeat(1_000) { offset ->
                     if (offset > 0) writer.write(','.code)
                     val latitude = 35.0 + (pointIndex % 100_000) / 1_000_000.0
                     val longitude = 126.0 + (pointIndex % 100_000) / 1_000_000.0
@@ -139,9 +154,7 @@ class LargeTimelineImportDeviceTest {
                     )
                     pointIndex += 1
                 }
-                writer.write("],\"testPadding\":\"")
-                repeat(3_072) { writer.write('x'.code) }
-                writer.write("\"}")
+                writer.write("]}")
                 segmentCount += 1
                 if (segmentCount % 100 == 0) {
                     writer.flush()

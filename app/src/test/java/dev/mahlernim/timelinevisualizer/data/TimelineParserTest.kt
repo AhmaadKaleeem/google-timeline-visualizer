@@ -187,6 +187,8 @@ class TimelineParserTest {
             TimelineParseReason.NO_USABLE_LOCATIONS,
             parseFailure("""{"semanticSegments": []}""").reason,
         )
+        assertEquals(TimelineParseReason.EMPTY_EXPORT, parseFailure("").reason)
+        assertEquals(TimelineParseReason.EMPTY_EXPORT, parseFailure("  \n\t").reason)
         assertEquals(
             TimelineParseReason.MALFORMED_JSON,
             parseFailure("""{"semanticSegments": [""").reason,

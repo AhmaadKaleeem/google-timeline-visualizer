@@ -26,7 +26,7 @@
     <string name="timeline_error_malformed">Ce fichier ne contient pas de JSON valide ou complet.</string>
     <string name="timeline_error_legacy">Il s\'agit d\'un ancien format Google Takeout. Exportez les données Timeline depuis votre téléphone.</string>
     <string name="timeline_error_raw_only">Cette exportation contient des signaux bruts, mais aucun trajet Timeline reconstruit.</string>
-    <string name="timeline_error_no_locations">Cette exportation Timeline ne contient aucun point de localisation utilisable.</string>
+    <string name="timeline_error_no_locations">Cette exportation Timeline ne contient aucune donnée de localisation. Timeline n’était peut-être pas activé, donc Google n’avait aucune donnée à exporter.</string>
     <string name="remembered_timeline_unavailable">Le Timeline précédemment utilisé n’est plus disponible.</string>
     <string name="choose_timeline_again">Choisissez à nouveau le fichier Timeline.json.</string>
     <string name="video_export_failed">Impossible de créer une vidéo</string>
@@ -215,6 +215,7 @@
     <string name="location_filter_summary">Le filtrage prudent ignore uniquement les courts allers-retours impossibles. Votre fichier Timeline n\'est jamais modifié.</string>
     <string name="location_filter_conservative">Prudent</string>
     <string name="location_filter_off">Désactivé</string>
+    <string name="preparing_preview">Préparation de l’aperçu…</string>
     <plurals name="location_outliers_ignored">
         <item quantity="one">%1$d position suspecte ignorée</item>
         <item quantity="many">%1$d positions suspectes ignorées</item>

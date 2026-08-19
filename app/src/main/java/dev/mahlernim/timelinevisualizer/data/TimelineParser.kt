@@ -29,7 +29,15 @@ class TimelineParser {
         val points = mutableListOf<GeoPoint>()
         JsonReader(InputStreamReader(input, Charsets.UTF_8)).use { reader ->
             reader.isLenient = true
-            when (reader.peek()) {
+            val rootToken = try {
+                reader.peek()
+            } catch (_: EOFException) {
+                throw TimelineParseException(
+                    TimelineParseReason.EMPTY_EXPORT,
+                    "Timeline JSON is empty",
+                )
+            }
+            when (rootToken) {
                 JsonToken.BEGIN_ARRAY -> readSegments(reader, points)
                 JsonToken.BEGIN_OBJECT -> readRootObject(reader, points)
                 else -> throw TimelineParseException(
@@ -358,6 +366,7 @@ class TimelineParser {
 
 enum class TimelineParseReason {
     MALFORMED_JSON,
+    EMPTY_EXPORT,
     LEGACY_FORMAT,
     RAW_SIGNALS_ONLY,
     UNSUPPORTED_FORMAT,

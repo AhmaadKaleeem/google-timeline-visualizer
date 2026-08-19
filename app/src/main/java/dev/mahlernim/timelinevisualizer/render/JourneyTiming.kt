@@ -34,23 +34,23 @@ class JourneyTiming private constructor(
             if (compression == LongTripCompression.OFF || journey.points.size < 2) {
                 return JourneyTiming(doubleArrayOf(), doubleArrayOf(), doubleArrayOf(), journey.totalDistanceKm)
             }
-            val distances = ArrayList<Double>(journey.cumulativeDistanceKm.size)
-            val effective = ArrayList<Double>(journey.cumulativeDistanceKm.size)
-            distances += 0.0
-            effective += 0.0
+            val distances = DoubleArray(journey.cumulativeDistanceKm.size)
+            val effective = DoubleArray(journey.cumulativeDistanceKm.size)
+            var count = 1
             var effectiveTotal = 0.0
             for (index in 1..journey.cumulativeDistanceKm.lastIndex) {
                 val segmentKm = journey.cumulativeDistanceKm[index] - journey.cumulativeDistanceKm[index - 1]
                 if (segmentKm <= 0.0) continue
                 effectiveTotal += segmentKm.pow(compression.exponent)
-                distances += journey.cumulativeDistanceKm[index]
-                effective += effectiveTotal
+                distances[count] = journey.cumulativeDistanceKm[index]
+                effective[count] = effectiveTotal
+                count += 1
             }
-            if (effectiveTotal <= 0.0 || distances.size < 2) {
+            if (effectiveTotal <= 0.0 || count < 2) {
                 return JourneyTiming(doubleArrayOf(), doubleArrayOf(), doubleArrayOf(), journey.totalDistanceKm)
             }
-            val x = DoubleArray(effective.size) { effective[it] / effectiveTotal }
-            val y = distances.toDoubleArray()
+            val x = DoubleArray(count) { effective[it] / effectiveTotal }
+            val y = distances.copyOf(count)
             return JourneyTiming(x, y, monotoneSlopes(x, y), null)
         }
 

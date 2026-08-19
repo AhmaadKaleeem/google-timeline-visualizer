@@ -3,9 +3,14 @@ package dev.mahlernim.timelinevisualizer.render
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.content.Context
+import android.content.res.Configuration
+import androidx.test.core.app.ApplicationProvider
+import dev.mahlernim.timelinevisualizer.R
 import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import java.time.Instant
+import java.util.Locale
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -18,6 +23,48 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TimelinePainterTest {
+    @Test
+    fun firstPreviewFrameRendersInEverySupportedLocale() {
+        val application = ApplicationProvider.getApplicationContext<Context>()
+        val journey = Journey.from(
+            listOf(
+                GeoPoint(Instant.parse("2025-01-01T00:00:00Z"), 37.50, 126.90),
+                GeoPoint(Instant.parse("2025-02-01T00:00:00Z"), 37.55, 126.95),
+            ),
+            2025,
+        )
+
+        listOf("en", "de", "es", "fr", "ja", "ko", "pt-BR", "zh-CN", "zh-TW").forEach { tag ->
+            val locale = Locale.forLanguageTag(tag)
+            val configuration = Configuration(application.resources.configuration).apply { setLocale(locale) }
+            val localized = application.createConfigurationContext(configuration)
+            val renderText = RenderText(
+                localeTag = tag,
+                fallbackTitle = localized.getString(R.string.default_title),
+                datePattern = localized.getString(R.string.render_date_pattern),
+                distanceUnit = localized.getString(R.string.distance_unit),
+                attribution = localized.getString(R.string.map_attribution),
+            )
+            val bitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
+            try {
+                TimelinePainter().draw(
+                    canvas = Canvas(bitmap),
+                    width = SIZE,
+                    height = SIZE,
+                    journey = journey,
+                    frame = TimelineFrame(0f, 0f),
+                    journeyDurationSeconds = 45,
+                    title = renderText.fallbackTitle,
+                    renderText = renderText,
+                    allowCameraTrackBuild = false,
+                    tiles = { null },
+                )
+            } finally {
+                bitmap.recycle()
+            }
+        }
+    }
+
     @Test
     fun fixedCameraKeepsTheSameZoomSpanAcrossTheJourney() {
         val journey = Journey.from(
@@ -102,6 +149,90 @@ class TimelinePainterTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun indexedCameraBoundsMatchThePreviousRouteScan() {
+        val routes = listOf(
+            List(2_000) { index ->
+                GeoPoint(
+                    Instant.parse("2025-01-01T00:00:00Z").plusSeconds(index.toLong()),
+                    37.45 + (index % 100) * 0.00001,
+                    126.90 + index * 0.00001,
+                )
+            },
+            listOf(point(10.0, 179.0), point(20.0, -179.0), point(-15.0, 170.0)),
+            listOf(point(70.0, -150.0), point(-55.0, 0.0), point(60.0, 150.0)),
+        )
+        val settings = listOf(
+            CameraSettings.DEFAULT,
+            CameraSettings(cameraMovement = CameraMovement.FIXED, longTripCompression = LongTripCompression.OFF),
+            CameraSettings(cameraMovement = CameraMovement.DYNAMIC, longTripCompression = LongTripCompression.STRONG),
+        )
+
+        routes.forEach { points ->
+            val journey = Journey.from(points, 2025)
+            settings.forEach { cameraSettings ->
+                listOf(0f, 0.17f, 0.5f, 0.83f, 1f).forEach { progress ->
+                    val indexed = TimelinePainter().rawViewportForTest(
+                        journey, progress, SIZE, SIZE, cameraSettings, useRangeIndex = true,
+                    )
+                    val previous = TimelinePainter().rawViewportForTest(
+                        journey, progress, SIZE, SIZE, cameraSettings, useRangeIndex = false,
+                    )
+                    assertEquals(previous, indexed)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun denseCameraTrackDoesNotRescanEveryPointForEveryCameraSample() {
+        val points = List(20_000) { index ->
+            GeoPoint(
+                Instant.parse("2025-01-01T00:00:00Z").plusSeconds(index.toLong()),
+                37.50 + (index % 100) * 0.000001,
+                126.95 + index * 0.000001,
+            )
+        }
+        val journey = Journey.from(points, 2025)
+        val painter = TimelinePainter()
+
+        painter.viewport(journey, 0f, SIZE, SIZE)
+
+        assertTrue(
+            "Camera evaluated ${painter.cameraRoutePointEvaluations} route points",
+            painter.cameraRoutePointEvaluations < 100_000,
+        )
+    }
+
+    @Test
+    fun lightweightInitialFrameDoesNotPrepareTheFullRoute() {
+        val points = List(5_000) { index ->
+            GeoPoint(
+                Instant.parse("2025-01-01T00:00:00Z").plusSeconds(index.toLong()),
+                37.50 + (index % 100) * 0.000001,
+                126.95 + index * 0.000001,
+            )
+        }
+        val journey = Journey.from(points, 2025)
+        val painter = TimelinePainter()
+        val bitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
+
+        painter.draw(
+            canvas = Canvas(bitmap),
+            width = SIZE,
+            height = SIZE,
+            journey = journey,
+            frame = TimelineFrame(0f, 0f),
+            journeyDurationSeconds = 45,
+            title = "Timeline",
+            allowCameraTrackBuild = false,
+            tiles = { null },
+        )
+
+        assertEquals(0L, painter.cameraRoutePointEvaluations)
+        bitmap.recycle()
     }
 
     private fun point(latitude: Double, longitude: Double) = GeoPoint(

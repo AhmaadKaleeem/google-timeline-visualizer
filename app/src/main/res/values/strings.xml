@@ -25,7 +25,7 @@
     <string name="timeline_error_malformed">This file is not valid or complete JSON.</string>
     <string name="timeline_error_legacy">This is an older Google Takeout format. Export Timeline data from your phone instead.</string>
     <string name="timeline_error_raw_only">This export contains raw signals but no reconstructed Timeline journeys.</string>
-    <string name="timeline_error_no_locations">This Timeline export contains no usable location points.</string>
+    <string name="timeline_error_no_locations">This Timeline export contains no location data. Timeline may not have been enabled, so Google had no data to export.</string>
     <string name="remembered_timeline_unavailable">The previously used Timeline is no longer available.</string>
     <string name="choose_timeline_again">Choose the Timeline.json file again.</string>
     <string name="video_export_failed">Could not create video</string>
@@ -217,6 +217,7 @@
     <string name="location_filter_summary">Conservative filtering ignores only short, impossible round trips. Your Timeline file is never changed.</string>
     <string name="location_filter_conservative">Conservative</string>
     <string name="location_filter_off">Off</string>
+    <string name="preparing_preview">Preparing preview…</string>
     <plurals name="location_outliers_ignored">
         <item quantity="one">%1$d suspicious location ignored</item>
         <item quantity="other">%1$d suspicious locations ignored</item>

@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.JourneyPosition
+import dev.mahlernim.timelinevisualizer.model.MutableRenderSampleLocation
 import dev.mahlernim.timelinevisualizer.model.WebMercator
 import dev.mahlernim.timelinevisualizer.model.WorldPoint
 import java.time.ZoneId
@@ -43,6 +44,8 @@ class TimelinePainter {
     private var cachedTimingJourney: Journey? = null
     private var cachedCompression = LongTripCompression.BALANCED
     private var cachedTiming: JourneyTiming? = null
+    internal val cameraRoutePointEvaluations: Long
+        get() = cachedPrepared?.pointEvaluations ?: 0L
     private val oldTrailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(233, 0, 100)
         style = Paint.Style.STROKE
@@ -101,8 +104,16 @@ class TimelinePainter {
         width: Int,
         height: Int,
         cameraSettings: CameraSettings = CameraSettings.DEFAULT,
+        allowCameraTrackBuild: Boolean = true,
     ): Viewport {
-        return viewport(journey, TimelineFrame(progress, 0f), width, height, cameraSettings)
+        return viewport(
+            journey,
+            TimelineFrame(progress, 0f),
+            width,
+            height,
+            cameraSettings,
+            allowCameraTrackBuild,
+        )
     }
 
     fun viewport(
@@ -111,11 +122,15 @@ class TimelinePainter {
         width: Int,
         height: Int,
         cameraSettings: CameraSettings = CameraSettings.DEFAULT,
+        allowCameraTrackBuild: Boolean = true,
     ): Viewport {
         if (width <= 0 || height <= 0) {
             return rawViewport(journey, frame.journeyProgress, width, height, cameraSettings)
         }
-        val journeyViewport = cameraTrack(journey, width, height, cameraSettings).viewportAt(frame.journeyProgress)
+        val track = cachedCameraTrack(journey, width, height, cameraSettings)
+            ?: if (allowCameraTrackBuild) cameraTrack(journey, width, height, cameraSettings) else null
+        val journeyViewport = track?.viewportAt(frame.journeyProgress)
+            ?: lightweightViewport(journey, frame.journeyProgress, width, height, cameraSettings)
         if (frame.outroProgress <= 0f) return journeyViewport
         return blendViewport(
             journeyViewport,
@@ -126,12 +141,48 @@ class TimelinePainter {
         )
     }
 
+    private fun lightweightViewport(
+        journey: Journey,
+        progress: Float,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings,
+    ): Viewport {
+        val current = if (progress <= 0f) {
+            journey.positionAtDistance(0.0)
+        } else {
+            playbackPosition(journey, progress, cameraSettings)
+        }
+        val movement = cameraSettings.cameraMovement
+        val proportionalContextKm = (journey.totalDistanceKm * movement.contextFraction)
+            .coerceIn(movement.minimumContextKm, movement.maximumContextKm)
+        val tail = journey.positionAtDistance(max(0.0, current.distanceKm - proportionalContextKm)).point
+        val lookahead = journey.positionAtDistance(min(journey.totalDistanceKm, current.distanceKm + proportionalContextKm)).point
+        val center = WebMercator.project(current.point)
+        val before = WebMercator.project(tail)
+        val after = WebMercator.project(lookahead)
+        val beforeX = unwrapNear(before.x, center.x)
+        val afterX = unwrapNear(after.x, center.x)
+        val contentSpanX = max(0.00015, max(center.x, max(beforeX, afterX)) - min(center.x, min(beforeX, afterX)))
+        val contentSpanY = max(0.00015, max(center.y, max(before.y, after.y)) - min(center.y, min(before.y, after.y)))
+        val aspect = width.toDouble() / height.coerceAtLeast(1)
+        val spanY = max(contentSpanY * movement.padding, contentSpanX * movement.padding / aspect)
+            .coerceIn(movement.minimumViewportSpan, MAX_VIEWPORT_SPAN)
+        val spanX = spanY * aspect
+        val minY = (center.y - spanY / 2).coerceAtLeast(0.0)
+        val maxY = (center.y + spanY / 2).coerceAtMost(1.0)
+        val zoom = floor(log2(width.coerceAtLeast(1) / (256.0 * spanX))).toInt()
+            .coerceIn(MIN_TILE_ZOOM, MAX_TILE_ZOOM)
+        return Viewport(center.x - spanX / 2, center.x + spanX / 2, minY, maxY, zoom)
+    }
+
     private fun rawViewport(
         journey: Journey,
         progress: Float,
         width: Int,
         height: Int,
         cameraSettings: CameraSettings,
+        useRangeIndex: Boolean = true,
     ): Viewport {
         val prepared = prepare(journey)
         val current = playbackPosition(journey, progress, cameraSettings)
@@ -165,8 +216,20 @@ class TimelinePainter {
         include(WebMercator.project(journey.positionAtDistance(tailDistance).point))
         val start = prepared.lowerBound(tailDistance)
         val end = prepared.upperBound(lookaheadDistance)
-        for (index in start..end) {
-            if (index in 0 until prepared.size) include(prepared.worldPointAt(index))
+        if (useRangeIndex) {
+            prepared.boundsForRange(start, end, centerX)?.let { bounds ->
+                minFocusX = min(minFocusX, bounds.minX)
+                maxFocusX = max(maxFocusX, bounds.maxX)
+                minFocusY = min(minFocusY, bounds.minY)
+                maxFocusY = max(maxFocusY, bounds.maxY)
+            }
+        } else {
+            for (index in start..end) {
+                if (index in 0 until prepared.size) {
+                    prepared.countPointEvaluation()
+                    include(prepared.worldPointAt(index))
+                }
+            }
         }
         include(WebMercator.project(journey.positionAtDistance(lookaheadDistance).point))
         val contentSpanX = max(0.00015, maxFocusX - minFocusX)
@@ -184,6 +247,15 @@ class TimelinePainter {
             .coerceIn(2, 15)
         return Viewport(minX, maxX, minY, maxY, zoom)
     }
+
+    internal fun rawViewportForTest(
+        journey: Journey,
+        progress: Float,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings = CameraSettings.DEFAULT,
+        useRangeIndex: Boolean,
+    ): Viewport = rawViewport(journey, progress, width, height, cameraSettings, useRangeIndex)
 
     private fun playbackPosition(
         journey: Journey,
@@ -221,21 +293,66 @@ class TimelinePainter {
         return track
     }
 
+    private fun cachedCameraTrack(
+        journey: Journey,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings,
+    ): CameraTrack? = cachedCameraTrack?.takeIf {
+        cachedCameraJourney === journey &&
+            cachedCameraWidth == width &&
+            cachedCameraHeight == height &&
+            cachedCameraSettings == cameraSettings
+    }
+
+    internal fun buildCameraTrackForBackground(
+        journey: Journey,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings,
+        onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
+    ): CameraPreparation {
+        val track = buildCameraTrack(journey, width, height, cameraSettings, onProgress)
+        return CameraPreparation(track, prepare(journey))
+    }
+
+    internal fun installCameraPreparation(
+        journey: Journey,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings,
+        preparation: CameraPreparation,
+    ) {
+        cachedJourney = journey
+        cachedPrepared = preparation.prepared
+        cachedCameraJourney = journey
+        cachedCameraWidth = width
+        cachedCameraHeight = height
+        cachedCameraSettings = cameraSettings
+        cachedCameraTrack = preparation.track
+    }
+
     private fun buildCameraTrack(
         journey: Journey,
         width: Int,
         height: Int,
         cameraSettings: CameraSettings,
+        onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): CameraTrack {
         val aspect = width.toDouble() / height.coerceAtLeast(1)
         val movement = cameraSettings.cameraMovement
         val rawSamples = (0..CAMERA_TRACK_SAMPLES).map { sample ->
             val progress = sample.toFloat() / CAMERA_TRACK_SAMPLES
             val raw = rawViewport(journey, progress, width, height, cameraSettings)
-            RawCameraSample(
+            val result = RawCameraSample(
                 viewport = raw,
                 marker = WebMercator.project(playbackPosition(journey, progress, cameraSettings).point),
             )
+            val completed = sample + 1
+            if (sample == 0 || completed % CAMERA_PROGRESS_INTERVAL == 0 || sample == CAMERA_TRACK_SAMPLES) {
+                onProgress(completed, CAMERA_TRACK_SAMPLES + 1)
+            }
+            result
         }
         val fixedSpanY = if (movement.fixedZoom) {
             val spans = rawSamples.map { it.viewport.maxY - it.viewport.minY }.sorted()
@@ -444,6 +561,7 @@ class TimelinePainter {
         progress: Float,
         title: String,
         cameraSettings: CameraSettings = CameraSettings.DEFAULT,
+        allowCameraTrackBuild: Boolean = true,
         tiles: (TileId) -> Bitmap?,
     ) {
         draw(
@@ -456,6 +574,7 @@ class TimelinePainter {
             title,
             RenderText.ENGLISH,
             cameraSettings,
+            allowCameraTrackBuild,
             tiles,
         )
     }
@@ -470,36 +589,48 @@ class TimelinePainter {
         title: String,
         renderText: RenderText = RenderText.ENGLISH,
         cameraSettings: CameraSettings = CameraSettings.DEFAULT,
+        allowCameraTrackBuild: Boolean = true,
         tiles: (TileId) -> Bitmap?,
     ) {
         if (journey.points.isEmpty() || width <= 0 || height <= 0) return
-        val viewport = viewport(journey, frame, width, height, cameraSettings)
-        val prepared = prepare(journey)
+        val viewport = viewport(journey, frame, width, height, cameraSettings, allowCameraTrackBuild)
+        val prepared = if (allowCameraTrackBuild) prepare(journey) else null
         drawBackground(canvas, width, height)
         drawTiles(canvas, width, height, viewport, tiles)
 
-        val current = playbackPosition(journey, frame.journeyProgress, cameraSettings)
-        val currentScreen = screenPoint(current, prepared, viewport, width, height)
+        val current = if (!allowCameraTrackBuild && frame.journeyProgress <= 0f) {
+            journey.positionAtDistance(0.0)
+        } else {
+            playbackPosition(journey, frame.journeyProgress, cameraSettings)
+        }
+        val currentScreen = if (prepared == null) {
+            val projected = WebMercator.project(current.point)
+            worldToScreen(projected, viewport, width, height)
+        } else {
+            screenPoint(current, prepared, viewport, width, height)
+        }
         val trailWindow = trailWindowDistance(journey, journeyDurationSeconds)
         val trailStart = max(0.0, current.distanceKm - trailWindow)
         val visibleTrail = current.distanceKm - trailStart
         val oldEnd = trailStart + visibleTrail * 0.45
         val middleEnd = trailStart + visibleTrail * 0.75
         val activeAlpha = (255 * (1f - easeOutCubic(frame.outroProgress))).toInt().coerceIn(0, 255)
-        drawRouteRange(
-            canvas, journey, prepared, viewport, width, height,
-            trailStart, min(oldEnd, current.distanceKm), oldTrailPaint, activeAlpha,
-        )
-        drawRouteRange(
-            canvas, journey, prepared, viewport, width, height,
-            min(oldEnd, current.distanceKm), min(middleEnd, current.distanceKm), middleTrailPaint, activeAlpha,
-        )
-        drawRouteRange(
-            canvas, journey, prepared, viewport, width, height,
-            min(middleEnd, current.distanceKm), current.distanceKm, recentTrailPaint, activeAlpha,
-        )
+        if (prepared != null) {
+            drawRouteRange(
+                canvas, journey, prepared, viewport, width, height,
+                trailStart, min(oldEnd, current.distanceKm), oldTrailPaint, activeAlpha,
+            )
+            drawRouteRange(
+                canvas, journey, prepared, viewport, width, height,
+                min(oldEnd, current.distanceKm), min(middleEnd, current.distanceKm), middleTrailPaint, activeAlpha,
+            )
+            drawRouteRange(
+                canvas, journey, prepared, viewport, width, height,
+                min(middleEnd, current.distanceKm), current.distanceKm, recentTrailPaint, activeAlpha,
+            )
+        }
 
-        if (frame.outroProgress > 0f) {
+        if (frame.outroProgress > 0f && prepared != null) {
             overviewCompositePaint.alpha = (OVERVIEW_ROUTE_ALPHA * easeInOutCubic(frame.outroProgress))
                 .toInt()
                 .coerceIn(0, 255)
@@ -685,13 +816,18 @@ class TimelinePainter {
         return result
     }
 
-    private class PreparedJourney(private val journey: Journey) {
+    internal class PreparedJourney(private val journey: Journey) {
         private val unwrappedPointX = DoubleArray(journey.points.size)
+        private val pointY = DoubleArray(journey.points.size)
+        private val blockBounds = mutableMapOf<Int, RouteBounds>()
+        var pointEvaluations: Long = 0L
+            private set
         val size: Int get() = journey.renderPath.size
 
         init {
             for (index in journey.points.indices) {
                 val projected = WebMercator.project(journey.points[index])
+                pointY[index] = projected.y
                 unwrappedPointX[index] = if (index == 0) projected.x else {
                     unwrap(projected.x, unwrappedPointX[index - 1])
                 }
@@ -699,17 +835,111 @@ class TimelinePainter {
         }
 
         fun worldPointAt(index: Int): WorldPoint {
-            val sample = journey.renderPath[index]
-            val projected = WebMercator.project(sample.point)
-            val location = journey.renderSampleLocation(index)
-            val reference = if (location == null) {
-                unwrappedPointX.firstOrNull() ?: 0.5
-            } else {
-                val from = location.toPointIndex - 1
-                unwrappedPointX[from] +
-                    (unwrappedPointX[location.toPointIndex] - unwrappedPointX[from]) * location.fraction
+            val point = MutableWorldPoint()
+            fillWorldPoint(index, point)
+            return WorldPoint(point.x, point.y)
+        }
+
+        private fun fillWorldPoint(index: Int, point: MutableWorldPoint) {
+            val location = point.location
+            if (!journey.fillRenderSampleLocation(index, location)) {
+                point.x = unwrappedPointX.firstOrNull() ?: 0.5
+                point.y = pointY.firstOrNull() ?: 0.5
+                return
             }
-            return WorldPoint(unwrap(projected.x, reference), projected.y)
+            if (location.step == location.steps) {
+                point.x = unwrappedPointX[location.toPointIndex]
+                point.y = pointY[location.toPointIndex]
+                return
+            }
+            val from = location.toPointIndex - 1
+            val interpolated = Journey.interpolate(
+                journey.points[from],
+                journey.points[location.toPointIndex],
+                location.fraction,
+            )
+            val projected = WebMercator.project(interpolated)
+            val reference = unwrappedPointX[from] +
+                (unwrappedPointX[location.toPointIndex] - unwrappedPointX[from]) * location.fraction
+            point.x = unwrap(projected.x, reference)
+            point.y = projected.y
+        }
+
+        fun countPointEvaluation() {
+            pointEvaluations += 1
+        }
+
+        fun boundsForRange(firstIndex: Int, lastIndex: Int, referenceX: Double): RouteBounds? {
+            if (size == 0) return null
+            val first = firstIndex.coerceIn(0, size - 1)
+            val last = lastIndex.coerceIn(-1, size - 1)
+            if (first > last) return null
+
+            val result = MutableRouteBounds()
+            val point = MutableWorldPoint()
+            var index = first
+            while (index <= last && index % ROUTE_BOUNDS_BLOCK_SIZE != 0) {
+                includePoint(result, point, index, referenceX)
+                index += 1
+            }
+            while (index + ROUTE_BOUNDS_BLOCK_SIZE - 1 <= last) {
+                val block = index / ROUTE_BOUNDS_BLOCK_SIZE
+                val bounds = blockBounds.getOrPut(block) {
+                    calculateBlockBounds(index, index + ROUTE_BOUNDS_BLOCK_SIZE - 1)
+                }
+                val adjustedMinX = unwrap(bounds.minX, referenceX)
+                val adjustedMaxX = unwrap(bounds.maxX, referenceX)
+                val minShift = adjustedMinX - bounds.minX
+                val maxShift = adjustedMaxX - bounds.maxX
+                if (minShift == maxShift) {
+                    val adjusted = RouteBounds(
+                        minX = adjustedMinX,
+                        maxX = adjustedMaxX,
+                        minY = bounds.minY,
+                        maxY = bounds.maxY,
+                    )
+                    result.include(adjusted)
+                } else {
+                    for (pointIndex in index until index + ROUTE_BOUNDS_BLOCK_SIZE) {
+                        includePoint(result, point, pointIndex, referenceX)
+                    }
+                }
+                index += ROUTE_BOUNDS_BLOCK_SIZE
+            }
+            while (index <= last) {
+                includePoint(result, point, index, referenceX)
+                index += 1
+            }
+            return result.toRouteBounds()
+        }
+
+        private fun calculateBlockBounds(firstIndex: Int, lastIndex: Int): RouteBounds {
+            val point = MutableWorldPoint()
+            evaluatedWorldPoint(firstIndex, point)
+            val firstX = point.x
+            val firstY = point.y
+            val result = MutableRouteBounds().apply { include(firstX, firstY) }
+            for (index in firstIndex + 1..lastIndex) {
+                evaluatedWorldPoint(index, point)
+                result.include(point.x, point.y)
+            }
+            return result.toRouteBounds()
+        }
+
+        private fun includePoint(
+            bounds: MutableRouteBounds,
+            point: MutableWorldPoint,
+            index: Int,
+            referenceX: Double,
+        ) {
+            evaluatedWorldPoint(index, point)
+            val x = unwrap(point.x, referenceX)
+            bounds.include(x, point.y)
+        }
+
+        private fun evaluatedWorldPoint(index: Int, point: MutableWorldPoint) {
+            pointEvaluations += 1
+            fillWorldPoint(index, point)
         }
 
         private fun distanceAt(index: Int): Double = journey.renderPath[index].distanceKm
@@ -755,7 +985,7 @@ class TimelinePainter {
         }
     }
 
-    private data class CameraFrame(
+    internal data class CameraFrame(
         val centerX: Double,
         val centerY: Double,
         val spanY: Double,
@@ -767,9 +997,52 @@ class TimelinePainter {
         val marker: WorldPoint,
     )
 
-    private data class CameraTrack(
-        val frames: List<CameraFrame>,
-        val aspect: Double,
+    internal data class RouteBounds(
+        val minX: Double,
+        val maxX: Double,
+        val minY: Double,
+        val maxY: Double,
+    )
+
+    private class MutableRouteBounds {
+        private var initialized = false
+        private var minX = 0.0
+        private var maxX = 0.0
+        private var minY = 0.0
+        private var maxY = 0.0
+
+        fun include(x: Double, y: Double) {
+            if (!initialized) {
+                initialized = true
+                minX = x
+                maxX = x
+                minY = y
+                maxY = y
+                return
+            }
+            minX = min(minX, x)
+            maxX = max(maxX, x)
+            minY = min(minY, y)
+            maxY = max(maxY, y)
+        }
+
+        fun include(bounds: RouteBounds) {
+            include(bounds.minX, bounds.minY)
+            include(bounds.maxX, bounds.maxY)
+        }
+
+        fun toRouteBounds(): RouteBounds = RouteBounds(minX, maxX, minY, maxY)
+    }
+
+    private class MutableWorldPoint(
+        var x: Double = 0.0,
+        var y: Double = 0.0,
+        val location: MutableRenderSampleLocation = MutableRenderSampleLocation(),
+    )
+
+    internal class CameraTrack(
+        private val frames: List<CameraFrame>,
+        private val aspect: Double,
     ) {
         fun viewportAt(progress: Float): Viewport {
             if (frames.size == 1) return frames.first().toViewport(aspect)
@@ -795,6 +1068,11 @@ class TimelinePainter {
         }
     }
 
+    internal data class CameraPreparation(
+        val track: CameraTrack,
+        val prepared: PreparedJourney,
+    )
+
     companion object {
         private const val TRANSFER_PADDING = 2.8
         private const val DEFAULT_JOURNEY_DURATION_SECONDS = 30
@@ -809,6 +1087,8 @@ class TimelinePainter {
         private const val OVERVIEW_HEADER_GAP = 20f
         private const val OVERVIEW_BOTTOM_INSET = 34f
         private const val CAMERA_TRACK_SAMPLES = 480
+        private const val CAMERA_PROGRESS_INTERVAL = 32
+        private const val ROUTE_BOUNDS_BLOCK_SIZE = 256
         private const val CAMERA_DEAD_ZONE_HALF = 0.20
         private const val FIXED_ZOOM_PERCENTILE = 0.80
         private const val TILE_ZOOM_HYSTERESIS = 0.15

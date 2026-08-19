@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.3
+
+- Fix invalid translated preview date patterns that terminated the first frame in German, Spanish, French, and Portuguese.
+- Render a first preview frame in every supported language during regression testing.
+- Show the initial Timeline preview without synchronously building the complete camera track.
+- Build all 481 smooth camera positions in the background and keep playback controls disabled until ready.
+- Reuse exact route-range bounds instead of rescanning dense routes for every camera position.
+- Reduce temporary allocations in route projection, location filtering, range selection, and transfer preparation.
+- Replace padded import fixtures with point-dense compact and long-gap device coverage.
+- Preserve Timeline points, filtering, ordering, distances, route geometry, and completed camera behavior.
+- Open Create video on a cold launch when the video library is empty, while preserving export recovery and restored navigation state.
+- Explain that an empty Timeline export may mean Timeline was not enabled and Google had no location data to export.
+- Set Android version code 18 and version name 2.1.3.
+
 ## 2.1.2
 
 - Keep interpolated route samples virtual instead of retaining millions of route objects.

@@ -15,7 +15,7 @@ Google マップから書き出した Timeline JSON を使い、Android 端末�
 [最新リリース](https://github.com/mahlernim/google-timeline-visualizer/releases/latest)から
 次の手順でインストールします。
 
-1. **Assets** にある `TimelineVisualizer-v2.1.2.apk` をダウンロードします。
+1. **Assets** にある `TimelineVisualizer-v2.1.3.apk` をダウンロードします。
 2. ダウンロードしたファイルを開きます。
 3. インストールがブロックされた場合は、ブラウザまたはファイル管理アプリに
    **不明なアプリのインストール**を一時的に許可します。

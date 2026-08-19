@@ -14,10 +14,13 @@ import dev.mahlernim.timelinevisualizer.render.TimelinePainter
 import dev.mahlernim.timelinevisualizer.render.RenderText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
 class TimelineView @JvmOverloads constructor(
@@ -32,12 +35,20 @@ class TimelineView @JvmOverloads constructor(
     private var frameCanvas: Canvas? = null
     private var frameDirty = true
     private var redrawPosted = false
-    private var afterNextFrameRendered: (() -> Unit)? = null
+    private val afterNextFrameRendered = mutableListOf<() -> Unit>()
+    private var cameraPreparationJob: Job? = null
+    private var cameraPreparationGeneration = 0
+
+    var onCameraPreparationChanged: ((ready: Boolean) -> Unit)? = null
+    var onCameraPreparationFailed: ((error: Throwable) -> Unit)? = null
+    var isCameraReady: Boolean = false
+        private set
 
     var journey: Journey? = null
         set(value) {
             field = value
             markFrameDirty()
+            restartCameraPreparation()
         }
     var progress: Float = 0f
         set(value) {
@@ -70,6 +81,7 @@ class TimelineView @JvmOverloads constructor(
             if (field == value) return
             field = value
             markFrameDirty()
+            restartCameraPreparation()
         }
 
     override fun onAttachedToWindow() {
@@ -78,10 +90,12 @@ class TimelineView @JvmOverloads constructor(
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         }
         if (frame == null && width > 0 && height > 0) allocateFrame(width, height)
+        restartCameraPreparation()
     }
 
     override fun onDetachedFromWindow() {
         scope.cancel()
+        cameraPreparationJob = null
         frame?.recycle()
         frame = null
         frameCanvas = null
@@ -91,6 +105,7 @@ class TimelineView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         allocateFrame(w, h)
         frameDirty = true
+        if (w != oldw || h != oldh) restartCameraPreparation()
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -112,10 +127,24 @@ class TimelineView @JvmOverloads constructor(
         }
         val animationFrame = TimelineAnimation.frameAtOverallProgress(progress, journeyDurationSeconds)
         val tilesToLoad = buildSet {
-            listOf(progress, (progress + 0.015f).coerceAtMost(1f), (progress + 0.03f).coerceAtMost(1f)).forEach {
+            val tileProgress = if (isCameraReady) {
+                listOf(progress, (progress + 0.015f).coerceAtMost(1f), (progress + 0.03f).coerceAtMost(1f))
+            } else {
+                listOf(progress)
+            }
+            tileProgress.forEach {
                 val lookahead = TimelineAnimation.frameAtOverallProgress(it, journeyDurationSeconds)
                 addAll(
-                    painter.requiredTiles(painter.viewport(data, lookahead, width, height, cameraSettings))
+                    painter.requiredTiles(
+                        painter.viewport(
+                            data,
+                            lookahead,
+                            width,
+                            height,
+                            cameraSettings,
+                            allowCameraTrackBuild = isCameraReady,
+                        ),
+                    )
                         .map { tile -> tile.id },
                 )
             }
@@ -141,7 +170,8 @@ class TimelineView @JvmOverloads constructor(
             videoTitle,
             renderText,
             cameraSettings,
-            tiles::cached,
+            allowCameraTrackBuild = isCameraReady,
+            tiles = tiles::cached,
         )
         frameDirty = false
         canvas.drawBitmap(target, 0f, 0f, null)
@@ -149,8 +179,57 @@ class TimelineView @JvmOverloads constructor(
     }
 
     fun runAfterNextFrameRendered(action: () -> Unit) {
-        afterNextFrameRendered = action
+        afterNextFrameRendered += action
         markFrameDirty()
+    }
+
+    private fun restartCameraPreparation() {
+        cameraPreparationJob?.cancel()
+        cameraPreparationGeneration += 1
+        val generation = cameraPreparationGeneration
+        val data = journey
+        val targetWidth = width
+        val targetHeight = height
+        val settings = cameraSettings
+        if (data == null || data.points.isEmpty()) {
+            setCameraReady(data != null)
+            return
+        }
+        setCameraReady(false)
+        if (targetWidth <= 0 || targetHeight <= 0 || !isAttachedToWindow) return
+
+        cameraPreparationJob = scope.launch(Dispatchers.Default) {
+            try {
+                val preparation = TimelinePainter().buildCameraTrackForBackground(
+                    data,
+                    targetWidth,
+                    targetHeight,
+                    settings,
+                ) { _, _ ->
+                    coroutineContext.ensureActive()
+                }
+                withContext(Dispatchers.Main.immediate) {
+                    if (generation != cameraPreparationGeneration || journey !== data || cameraSettings != settings) {
+                        return@withContext
+                    }
+                    painter.installCameraPreparation(data, targetWidth, targetHeight, settings, preparation)
+                    setCameraReady(true)
+                    markFrameDirty()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                withContext(Dispatchers.Main.immediate) {
+                    if (generation == cameraPreparationGeneration) onCameraPreparationFailed?.invoke(error)
+                }
+            }
+        }
+    }
+
+    private fun setCameraReady(ready: Boolean) {
+        if (isCameraReady == ready) return
+        isCameraReady = ready
+        onCameraPreparationChanged?.invoke(ready)
     }
 
     private fun allocateFrame(width: Int, height: Int) {
@@ -175,8 +254,9 @@ class TimelineView @JvmOverloads constructor(
     }
 
     private fun notifyFrameRendered() {
-        val action = afterNextFrameRendered ?: return
-        afterNextFrameRendered = null
-        post(action)
+        if (afterNextFrameRendered.isEmpty()) return
+        val actions = afterNextFrameRendered.toList()
+        afterNextFrameRendered.clear()
+        actions.forEach { action -> post { action() } }
     }
 }
