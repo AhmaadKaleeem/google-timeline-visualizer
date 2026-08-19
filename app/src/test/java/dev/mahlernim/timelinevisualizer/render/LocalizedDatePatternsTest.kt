@@ -30,8 +30,13 @@ class LocalizedDatePatternsTest {
         val problems = mutableListOf<String>()
         var patternsChecked = 0
         patternFiles.forEach { stringsFile ->
-            val pattern = renderDatePattern(stringsFile) ?: return@forEach
+            val resource = renderDatePattern(stringsFile) ?: return@forEach
             patternsChecked += 1
+            val folder = stringsFile.parentFile.name
+            if (folder == "values" && resource.translatable != "false") {
+                problems += "$folder: render_date_pattern must stay translatable=\"false\" so translation tooling skips it"
+            }
+            val pattern = resource.pattern
             val formatter = try {
                 DateTimeFormatter.ofPattern(pattern)
             } catch (error: IllegalArgumentException) {
@@ -50,13 +55,20 @@ class LocalizedDatePatternsTest {
         if (problems.isNotEmpty()) fail(problems.joinToString("\n"))
     }
 
-    private fun renderDatePattern(stringsFile: File): String? {
+    private data class PatternResource(val pattern: String, val translatable: String?)
+
+    private fun renderDatePattern(stringsFile: File): PatternResource? {
         val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(stringsFile)
         val strings = document.getElementsByTagName("string")
         for (index in 0 until strings.length) {
             val node = strings.item(index)
             val name = node.attributes?.getNamedItem("name")?.nodeValue
-            if (name == "render_date_pattern") return node.textContent
+            if (name == "render_date_pattern") {
+                return PatternResource(
+                    pattern = node.textContent,
+                    translatable = node.attributes?.getNamedItem("translatable")?.nodeValue,
+                )
+            }
         }
         return null
     }
