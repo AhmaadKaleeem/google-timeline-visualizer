@@ -26,7 +26,7 @@
     <string name="timeline_error_malformed">此檔案不是有效或完整的 JSON。</string>
     <string name="timeline_error_legacy">這是舊版 Google Takeout 格式。請改為從手機匯出 Timeline 資料。</string>
     <string name="timeline_error_raw_only">此匯出僅包含原始訊號，沒有重建的 Timeline 行程。</string>
-    <string name="timeline_error_no_locations">此 Timeline 匯出不包含可用的位置點。</string>
+    <string name="timeline_error_no_locations">此 Timeline 匯出不包含位置資料。Timeline 可能未啟用，因此 Google 沒有可匯出的資料。</string>
     <string name="remembered_timeline_unavailable">之前使用的Timeline不再可用。</string>
     <string name="choose_timeline_again">再次選擇 Timeline.json 檔案。</string>
     <string name="video_export_failed">無法創建視頻</string>
@@ -208,6 +208,7 @@
     <string name="location_filter_summary">保守篩選只會忽略短時間內不可能的往返移動，不會變更您的時間軸檔案。</string>
     <string name="location_filter_conservative">保守</string>
     <string name="location_filter_off">關閉</string>
+    <string name="preparing_preview">正在準備預覽…</string>
     <plurals name="location_outliers_ignored">
         <item quantity="other">已忽略%1$d個可疑位置</item>
     </plurals>

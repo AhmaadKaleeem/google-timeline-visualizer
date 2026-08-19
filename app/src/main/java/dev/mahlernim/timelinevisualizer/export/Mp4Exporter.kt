@@ -179,7 +179,7 @@ class Mp4Exporter(
                     title,
                     renderText,
                     cameraSettings,
-                    tileRepository::cached,
+                    tiles = tileRepository::cached,
                 )
                 bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
                 argbToYuv420(pixels, yuv, width, height, encoder.colorFormat)
@@ -237,7 +237,7 @@ class Mp4Exporter(
                 title,
                 renderText,
                 cameraSettings,
-                tileRepository::cached,
+                tiles = tileRepository::cached,
             )
             onProgress(ExportProgress(1f, ExportPhase.COMPLETE, 1, 1))
             overview

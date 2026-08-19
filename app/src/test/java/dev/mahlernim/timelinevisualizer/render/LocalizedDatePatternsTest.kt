@@ -21,9 +21,10 @@ class LocalizedDatePatternsTest {
         val resources = sequenceOf(File("src/main/res"), File("app/src/main/res"))
             .firstOrNull(File::isDirectory)
             ?: error("Resource directory not found from ${File(".").absolutePath}")
-        val patternFiles = resources.listFiles { file -> file.name.startsWith("values") }
+        val patternFiles: List<File> = resources.listFiles { file -> file.name.startsWith("values") }
+            ?.filterNotNull()
+            ?.mapNotNull { valuesDir -> File(valuesDir, "strings.xml").takeIf(File::isFile) }
             .orEmpty()
-            .mapNotNull { valuesDir -> File(valuesDir, "strings.xml").takeIf(File::isFile) }
         assertTrue("No strings.xml files found", patternFiles.isNotEmpty())
 
         val sample = ZonedDateTime.of(2025, 8, 19, 12, 0, 0, 0, ZoneOffset.UTC)
@@ -32,7 +33,7 @@ class LocalizedDatePatternsTest {
         patternFiles.forEach { stringsFile ->
             val resource = renderDatePattern(stringsFile) ?: return@forEach
             patternsChecked += 1
-            val folder = stringsFile.parentFile.name
+            val folder = stringsFile.parentFile?.name ?: stringsFile.path
             if (folder == "values" && resource.translatable != "false") {
                 problems += "$folder: render_date_pattern must stay translatable=\"false\" so translation tooling skips it"
             }
@@ -40,15 +41,15 @@ class LocalizedDatePatternsTest {
             val formatter = try {
                 DateTimeFormatter.ofPattern(pattern)
             } catch (error: IllegalArgumentException) {
-                problems += "${stringsFile.parentFile.name}: pattern \"$pattern\" is invalid (${error.message})"
+                problems += "$folder: pattern \"$pattern\" is invalid (${error.message})"
                 return@forEach
             }
             val formatted = formatter.format(sample)
             if (!formatted.contains("2025")) {
-                problems += "${stringsFile.parentFile.name}: pattern \"$pattern\" renders \"$formatted\" without the year"
+                problems += "$folder: pattern \"$pattern\" renders \"$formatted\" without the year"
             }
             if (formatted == formatter.format(sample.withMonth(9))) {
-                problems += "${stringsFile.parentFile.name}: pattern \"$pattern\" renders \"$formatted\" without the month"
+                problems += "$folder: pattern \"$pattern\" renders \"$formatted\" without the month"
             }
         }
         assertTrue("render_date_pattern missing from default resources", patternsChecked > 0)

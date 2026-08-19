@@ -25,7 +25,7 @@
     <string name="timeline_error_malformed">有効または完全な JSON ファイルではありません。</string>
     <string name="timeline_error_legacy">以前の Google Takeout 形式です。端末からタイムライン データを書き出してください。</string>
     <string name="timeline_error_raw_only">この書き出しには生の信号だけがあり、再構成された移動経路がありません。</string>
-    <string name="timeline_error_no_locations">このタイムラインの書き出しには使用できる位置情報がありません。</string>
+    <string name="timeline_error_no_locations">このタイムラインの書き出しには位置情報がありません。タイムラインが有効になっていなかったため、Google に書き出すデータがなかった可能性があります。</string>
     <string name="remembered_timeline_unavailable">前回使用したタイムラインを開けなくなりました。</string>
     <string name="choose_timeline_again">Timeline.jsonをもう一度選択してください。</string>
     <string name="video_export_failed">動画を作成できませんでした</string>
@@ -207,6 +207,7 @@
     <string name="location_filter_summary">慎重なフィルターで、短時間では不可能な往復移動だけを無視します。タイムライン ファイルは変更されません。</string>
     <string name="location_filter_conservative">慎重</string>
     <string name="location_filter_off">オフ</string>
+    <string name="preparing_preview">プレビューを準備しています…</string>
     <plurals name="location_outliers_ignored">
         <item quantity="other">疑わしい位置情報を%1$d件無視しました</item>
     </plurals>

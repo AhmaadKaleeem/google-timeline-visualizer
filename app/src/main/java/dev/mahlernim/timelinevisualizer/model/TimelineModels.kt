@@ -28,6 +28,15 @@ data class GeoPoint(
 data class Timeline(
     val points: List<GeoPoint>,
 ) {
+    private val chronological = run {
+        var ordered = true
+        var index = 1
+        while (index < points.size && ordered) {
+            ordered = points[index - 1].instant <= points[index].instant
+            index += 1
+        }
+        ordered
+    }
     val years: List<Int> = points.asSequence().map { it.year }.distinct().sortedDescending().toList()
 
     fun forYear(year: Int): Journey {
@@ -46,10 +55,16 @@ data class Timeline(
 
     fun forRange(period: TimelinePeriod): Journey {
         val zone = ZoneId.systemDefault()
-        val selected = points.filter {
-            val date = it.instant.atZone(zone)
-            val month = YearMonth.of(date.year, date.monthValue)
-            month >= period.start && month <= period.endInclusive
+        val selected = if (chronological) {
+            chronologicalRange(
+                lowerMatches = { point -> yearMonth(point, zone) >= period.start },
+                upperMatches = { point -> yearMonth(point, zone) > period.endInclusive },
+            )
+        } else {
+            points.filter {
+                val month = yearMonth(it, zone)
+                month >= period.start && month <= period.endInclusive
+            }
         }
         return Journey.from(selected, period)
     }
@@ -66,9 +81,16 @@ data class Timeline(
     fun forDateRange(start: LocalDate, endInclusive: LocalDate): Journey {
         require(endInclusive >= start)
         val zone = ZoneId.systemDefault()
-        val selected = points.filter {
-            val date = it.instant.atZone(zone).toLocalDate()
-            date >= start && date <= endInclusive
+        val selected = if (chronological) {
+            chronologicalRange(
+                lowerMatches = { point -> point.instant.atZone(zone).toLocalDate() >= start },
+                upperMatches = { point -> point.instant.atZone(zone).toLocalDate() > endInclusive },
+            )
+        } else {
+            points.filter {
+                val date = it.instant.atZone(zone).toLocalDate()
+                date >= start && date <= endInclusive
+            }
         }
         return Journey.from(
             selected,
@@ -83,6 +105,29 @@ data class Timeline(
             val date = it.instant.atZone(zone).toLocalDate()
             date >= start && date <= endInclusive
         }
+    }
+
+    private fun chronologicalRange(
+        lowerMatches: (GeoPoint) -> Boolean,
+        upperMatches: (GeoPoint) -> Boolean,
+    ): List<GeoPoint> {
+        fun lowerBound(predicate: (GeoPoint) -> Boolean): Int {
+            var low = 0
+            var high = points.size
+            while (low < high) {
+                val middle = (low + high) ushr 1
+                if (predicate(points[middle])) high = middle else low = middle + 1
+            }
+            return low
+        }
+        val fromIndex = lowerBound(lowerMatches)
+        val toIndex = lowerBound(upperMatches).coerceAtLeast(fromIndex)
+        return points.subList(fromIndex, toIndex)
+    }
+
+    private fun yearMonth(point: GeoPoint, zone: ZoneId): YearMonth {
+        val date = point.instant.atZone(zone)
+        return YearMonth.of(date.year, date.monthValue)
     }
 }
 
@@ -129,6 +174,14 @@ internal data class RenderSampleLocation(
     val fraction: Double get() = step.toDouble() / steps
 }
 
+internal class MutableRenderSampleLocation(
+    var toPointIndex: Int = 0,
+    var step: Int = 0,
+    var steps: Int = 0,
+) {
+    val fraction: Double get() = step.toDouble() / steps
+}
+
 private class JourneyRenderPath(
     private val points: List<GeoPoint>,
     private val cumulativeDistanceKm: DoubleArray,
@@ -164,6 +217,12 @@ private class JourneyRenderPath(
     }
 
     fun locationAt(index: Int): RenderSampleLocation {
+        val location = MutableRenderSampleLocation()
+        fillLocationAt(index, location)
+        return RenderSampleLocation(location.toPointIndex, location.step, location.steps)
+    }
+
+    fun fillLocationAt(index: Int, location: MutableRenderSampleLocation) {
         require(index in 1 until size)
         var low = 0
         var high = segmentEnds.size
@@ -173,7 +232,9 @@ private class JourneyRenderPath(
         }
         val previousEnd = if (low == 0) 1 else segmentEnds[low - 1]
         val steps = segmentEnds[low] - previousEnd
-        return RenderSampleLocation(low + 1, index - previousEnd + 1, steps)
+        location.toPointIndex = low + 1
+        location.step = index - previousEnd + 1
+        location.steps = steps
     }
 }
 
@@ -253,6 +314,12 @@ data class Journey(
     internal fun renderSampleLocation(index: Int): RenderSampleLocation? =
         if (index == 0 || renderPath.isEmpty()) null else renderPathData.locationAt(index)
 
+    internal fun fillRenderSampleLocation(index: Int, location: MutableRenderSampleLocation): Boolean {
+        if (index == 0 || renderPath.isEmpty()) return false
+        renderPathData.fillLocationAt(index, location)
+        return true
+    }
+
     private fun calculateTransferThresholdKm(): Double {
         val candidates = DoubleArray((cumulativeDistanceKm.size - 1).coerceAtLeast(0))
         var count = 0
@@ -275,18 +342,24 @@ data class Journey(
 
     private fun buildLegs(thresholdKm: Double): List<JourneyLeg> {
         if (points.size < 2 || totalDistanceKm <= 0.0) return emptyList()
-        return buildList {
-            var localStartKm = 0.0
-            for (index in 1..points.lastIndex) {
-                val transferStartKm = cumulativeDistanceKm[index - 1]
-                val transferEndKm = cumulativeDistanceKm[index]
-                if (transferEndKm - transferStartKm < thresholdKm.coerceAtLeast(1.0)) continue
-                if (transferStartKm > localStartKm) add(JourneyLeg(localStartKm, transferStartKm, false))
-                add(JourneyLeg(transferStartKm, transferEndKm, true))
-                localStartKm = transferEndKm
-            }
-            if (totalDistanceKm > localStartKm) add(JourneyLeg(localStartKm, totalDistanceKm, false))
+        val cutoff = thresholdKm.coerceAtLeast(1.0)
+        var transferCount = 0
+        for (index in 1..points.lastIndex) {
+            if (cumulativeDistanceKm[index] - cumulativeDistanceKm[index - 1] >= cutoff) transferCount += 1
         }
+        val capacity = (transferCount.toLong() * 2L + 1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        val result = ArrayList<JourneyLeg>(capacity)
+        var localStartKm = 0.0
+        for (index in 1..points.lastIndex) {
+            val transferStartKm = cumulativeDistanceKm[index - 1]
+            val transferEndKm = cumulativeDistanceKm[index]
+            if (transferEndKm - transferStartKm < cutoff) continue
+            if (transferStartKm > localStartKm) result.add(JourneyLeg(localStartKm, transferStartKm, false))
+            result.add(JourneyLeg(transferStartKm, transferEndKm, true))
+            localStartKm = transferEndKm
+        }
+        if (totalDistanceKm > localStartKm) result.add(JourneyLeg(localStartKm, totalDistanceKm, false))
+        return result
     }
 
     companion object {

@@ -128,6 +128,23 @@ class MainActivityTest {
     }
 
     @Test
+    fun emptyTimelineExplainsThatTimelineMayNotHaveBeenEnabled() {
+        acceptPrivacyDisclosure()
+        val empty = File.createTempFile("empty-timeline", ".json", context.cacheDir)
+        try {
+            val activity = launchActivity(Intent(Intent.ACTION_VIEW, Uri.fromFile(empty)))
+            waitUntil { activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE }
+
+            assertEquals(
+                activity.getString(R.string.timeline_error_no_locations),
+                activity.findViewById<TextView>(R.id.statusText).text.toString(),
+            )
+        } finally {
+            empty.delete()
+        }
+    }
+
+    @Test
     fun privacyPolicyOpensPublicEnglishPolicy() {
         val activity = launchActivity()
         activity.findViewById<View>(R.id.privacyPolicyButton).performClick()
@@ -353,8 +370,6 @@ class MainActivityTest {
         acceptPrivacyDisclosure()
 
         val activity = launchActivity()
-        assertEquals(missing, timelineSourceStore.load())
-        activity.findViewById<View>(R.id.navigationCreate).performClick()
         waitUntil { timelineSourceStore.load() == null }
 
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)
@@ -421,16 +436,67 @@ class MainActivityTest {
     fun compactBrazilianPortugueseButtonsRemainSingleLine() = assertCompactButtons()
 
     @Test
-    fun normalLaunchOpensVideosAndDefersRememberedTimeline() {
-        val remembered = Uri.fromFile(File(context.cacheDir, "missing-deferred.json"))
-        assertTrue(timelineSourceStore.replace(remembered))
-        acceptPrivacyDisclosure()
+    fun normalLaunchOpensCreateVideoWhenLibraryIsEmpty() {
+        val activity = launchActivity()
+
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.videosScreen).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
+        assertEquals(R.id.navigationCreate, activity.findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.bottomNavigation).selectedItemId)
+    }
+
+    @Test
+    fun normalLaunchOpensVideosWhenLibraryIsNotEmpty() {
+        store.upsert(
+            VideoRecord(
+                uri = "content://example/video",
+                title = "Trip",
+                fileName = "trip.mp4",
+                createdAtMillis = 1L,
+                durationSeconds = 30,
+            ),
+        )
 
         val activity = launchActivity()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
-        assertEquals(remembered, timelineSourceStore.load())
+    }
+
+    @Test
+    fun runningExportOpensVideosWhenLibraryIsEmpty() {
+        VideoExportStateStore(context).save(
+            VideoExportSnapshot(status = VideoExportStatus.RUNNING, startedAtMillis = 123L),
+        )
+
+        val activity = launchActivity()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.homeExportGroup).visibility)
+    }
+
+    @Test
+    fun recreatedActivityRestoresVideosInsteadOfReapplyingEmptyLibraryRule() {
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.navigationVideos).performClick()
+
+        controller.recreate()
+        val recreated = controller.get()
+
+        assertEquals(View.VISIBLE, recreated.findViewById<View>(R.id.videosScreen).visibility)
+        assertEquals(View.GONE, recreated.findViewById<View>(R.id.newVideoScreen).visibility)
+    }
+
+    @Test
+    fun emptyVideosRemainsReachableAndBackFromAutomaticCreateDoesNotLoop() {
+        val activity = launchActivity()
+
+        activity.onBackPressedDispatcher.onBackPressed()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
+
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
+        activity.onBackPressedDispatcher.onBackPressed()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
     }
 
     @Test
@@ -586,8 +652,10 @@ class MainActivityTest {
 
         val activity = launchActivity(Intent(Intent.ACTION_VIEW, explicit))
         waitUntil { activity.findViewById<View>(R.id.editorGroup).visibility == View.VISIBLE }
-        drawActivity(activity)
-        waitUntil { timelineSourceStore.importInProgress() == null }
+        waitUntil {
+            drawActivity(activity)
+            timelineSourceStore.importInProgress() == null
+        }
 
         assertEquals(explicit, timelineSourceStore.load())
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)

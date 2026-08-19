@@ -24,7 +24,7 @@ object LocationOutlierFilter {
             return LocationFilterResult(points, 0)
         }
 
-        val kept = mutableListOf(points.first())
+        val kept = ArrayList<GeoPoint>(points.size).apply { add(points.first()) }
         var removedCount = 0
         var index = 1
         while (index < points.lastIndex) {
@@ -44,7 +44,7 @@ object LocationOutlierFilter {
     private fun suspiciousRunEnd(points: List<GeoPoint>, before: GeoPoint, start: Int): Int? {
         val latestEnd = min(start + MAX_OUTLIER_RUN_POINTS - 1, points.lastIndex - 1)
         for (end in latestEnd downTo start) {
-            if (isSuspiciousExcursion(before, points.subList(start, end + 1), points[end + 1])) {
+            if (isSuspiciousExcursion(before, points, start, end, points[end + 1])) {
                 return end
             }
         }
@@ -53,28 +53,32 @@ object LocationOutlierFilter {
 
     private fun isSuspiciousExcursion(
         before: GeoPoint,
-        candidates: List<GeoPoint>,
+        points: List<GeoPoint>,
+        start: Int,
+        end: Int,
         after: GeoPoint,
     ): Boolean {
         val window = Duration.between(before.instant, after.instant)
         if (window.isNegative || window > MAX_EXCURSION_DURATION) return false
         if (haversineKm(before, after) > MAX_REJOIN_DISTANCE_KM) return false
 
-        val first = candidates.first()
-        val last = candidates.last()
+        val first = points[start]
+        val last = points[end]
         val ingressKm = haversineKm(before, first)
         val egressKm = haversineKm(last, after)
         if (ingressKm < MIN_OUTLIER_HOP_KM || egressKm < MIN_OUTLIER_HOP_KM) return false
         if (speedKmPerHour(before, first, ingressKm) <= MAX_PLAUSIBLE_SPEED_KMH) return false
         if (speedKmPerHour(last, after, egressKm) <= MAX_PLAUSIBLE_SPEED_KMH) return false
 
-        val clusterAnchor = candidates.first()
-        if (candidates.any { haversineKm(clusterAnchor, it) > MAX_OUTLIER_CLUSTER_SPAN_KM }) return false
-        if (candidates.any {
-                haversineKm(before, it) < MIN_OUTLIER_HOP_KM ||
-                    haversineKm(it, after) < MIN_OUTLIER_HOP_KM
-            }
-        ) return false
+        val clusterAnchor = first
+        for (index in start..end) {
+            val candidate = points[index]
+            if (haversineKm(clusterAnchor, candidate) > MAX_OUTLIER_CLUSTER_SPAN_KM) return false
+            if (
+                haversineKm(before, candidate) < MIN_OUTLIER_HOP_KM ||
+                haversineKm(candidate, after) < MIN_OUTLIER_HOP_KM
+            ) return false
+        }
         return true
     }
 
