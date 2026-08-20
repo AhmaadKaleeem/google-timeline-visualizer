@@ -45,6 +45,7 @@ class VideoExportRequestStore(context: Context) {
             output.writeUTF(request.renderText.datePattern)
             output.writeUTF(request.renderText.distanceUnit)
             output.writeUTF(request.renderText.attribution)
+            output.writeDouble(request.renderText.distanceScale)
             output.writeUTF(request.cameraSettings.cameraMovement.name)
             output.writeUTF(request.cameraSettings.longTripCompression.name)
             output.writeUTF(request.cameraSettings.videoQuality.name)
@@ -85,12 +86,19 @@ class VideoExportRequestStore(context: Context) {
                 } else {
                     endYear = input.readInt()
                     endMonth = input.readInt()
+                    val localeTag = input.readUTF()
+                    val fallbackTitle = input.readUTF()
+                    val datePattern = input.readUTF()
+                    val distanceUnit = input.readUTF()
+                    val attribution = input.readUTF()
+                    val distanceScale = if (version >= 5) input.readDouble() else 1.0
                     renderText = RenderText(
-                        localeTag = input.readUTF(),
-                        fallbackTitle = input.readUTF(),
-                        datePattern = input.readUTF(),
-                        distanceUnit = input.readUTF(),
-                        attribution = input.readUTF(),
+                        localeTag = localeTag,
+                        fallbackTitle = fallbackTitle,
+                        datePattern = datePattern,
+                        distanceUnit = distanceUnit,
+                        attribution = attribution,
+                        distanceScale = distanceScale,
                     )
                     cameraSettings = if (version >= 4) {
                         CameraSettings(
@@ -142,7 +150,7 @@ class VideoExportRequestStore(context: Context) {
     }
 
     companion object {
-        private const val CURRENT_FILE_VERSION = 4
+        private const val CURRENT_FILE_VERSION = 5
         private const val MAX_POINT_COUNT = 2_000_000
         private const val REQUEST_FILE = "pending-video-export.bin"
         private const val TEMPORARY_FILE = "pending-video-export.tmp"

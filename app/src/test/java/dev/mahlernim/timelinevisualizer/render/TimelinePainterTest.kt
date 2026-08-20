@@ -42,7 +42,7 @@ class TimelinePainterTest {
                 localeTag = tag,
                 fallbackTitle = localized.getString(R.string.default_title),
                 datePattern = localized.getString(R.string.render_date_pattern),
-                distanceUnit = localized.getString(R.string.distance_unit),
+                distanceUnit = DistanceUnit.KILOMETERS.symbol,
                 attribution = localized.getString(R.string.map_attribution),
             )
             val bitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)

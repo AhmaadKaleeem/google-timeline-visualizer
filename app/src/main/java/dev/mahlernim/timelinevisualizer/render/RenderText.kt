@@ -1,6 +1,7 @@
 package dev.mahlernim.timelinevisualizer.render
 
 import java.time.format.DateTimeFormatter
+import java.text.NumberFormat
 import java.util.Locale
 
 data class RenderText(
@@ -9,6 +10,7 @@ data class RenderText(
     val datePattern: String,
     val distanceUnit: String,
     val attribution: String,
+    val distanceScale: Double = 1.0,
 ) {
     val locale: Locale get() = Locale.forLanguageTag(localeTag).takeUnless { it.language.isBlank() } ?: Locale.ENGLISH
 
@@ -18,6 +20,11 @@ data class RenderText(
     val dateFormatter: DateTimeFormatter by lazy(LazyThreadSafetyMode.PUBLICATION) {
         runCatching { DateTimeFormatter.ofPattern(datePattern, locale) }
             .getOrElse { DateTimeFormatter.ofPattern(DEFAULT_DATE_PATTERN, locale) }
+    }
+
+    fun formatDistance(kilometers: Double): String {
+        val number = NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 0 }
+        return "${number.format(kilometers * distanceScale)} $distanceUnit"
     }
 
     companion object {

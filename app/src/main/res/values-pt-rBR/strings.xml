@@ -67,7 +67,6 @@
     <string name="video_creation_notification_channel">Criação de vídeo</string>
     <string name="video_creation_notification_channel_description">Alertas de progresso e conclusão para vídeos timeline</string>
     <string name="no_video_player">Nenhum aplicativo está disponível para reproduzir este vídeo</string>
-    <string name="journey_summary">Pontos %1$s · %2$s km · %3$s</string>
     <string name="period_same_year">%1$s–%2$s %3$d</string>
     <string name="period_cross_year">%1$s %2$d–%3$s %4$d</string>
     <string name="preparing_map_progress">Preparando mapa · %1$d/%2$d</string>
@@ -130,7 +129,6 @@
     <string name="project_on_github">Projeto em GitHub</string>
     <string name="update_page_unavailable">Não foi possível abrir a página de atualização</string>
     <string name="web_page_unavailable">Não foi possível abrir a página da web</string>
-    <string name="distance_unit">km</string>
     <string name="map_attribution">© OpenStreetMap</string>
     <string name="timeline_video">Vídeo Timeline</string>
     <string name="default_video_filename">Vídeo Timeline.mp4</string>
@@ -156,7 +154,7 @@
     <string name="no_videos">Os vídeos que você criar ou adicionar aparecerão aqui.</string>
     <string name="show_all_videos">Mostrar tudo (%1$d)</string>
     <string name="show_fewer_videos">Mostrar menos</string>
-    <string name="selected_period_summary">Pontos %1$s · sobre %2$s km · %3$s</string>
+    <string name="selected_period_summary">Pontos %1$s · cerca de %2$s %3$s · %4$s</string>
     <string name="selected_period_empty">Nenhum ponto de localização neste período</string>
     <string name="selected_period_one_point">1 ponto de localização · escolha um período mais amplo</string>
     <string name="selected_period_no_movement">Pontos %1$s · nenhum movimento detectado</string>
@@ -207,7 +205,7 @@
     <string name="raw_accuracy_limit">Limite de precisão (metros)</string>
     <string name="raw_accuracy_helper">Locais menos precisos são excluídos. Deixe em branco para incluir todos os locais utilizáveis.</string>
     <string name="raw_accuracy_invalid">Digite zero ou um número positivo, ou deixe em branco.</string>
-    <string name="raw_location_summary">%1$s locais · %2$s km estimados · %3$s excluídos</string>
+    <string name="raw_location_summary">%1$s locais · %2$s %3$s estimados · %4$s excluídos</string>
     <string name="raw_only_title">Apenas dados de localização brutos encontrados</string>
     <string name="raw_only_message">Este arquivo contém dados de localização brutos, mas não contém visitas ou trajetos processados. Você pode continuar, mas a rota pode ficar imprecisa ou incompleta, e a distância será apenas uma estimativa.\n\nPara obter resultados melhores, abra o Google Maps, confirme ou restaure sua Linha do tempo e verifique se as visitas e os trajetos aparecem. Depois, exporte a Linha do tempo novamente e carregue o novo arquivo neste app.</string>
     <string name="open_google_maps">Abrir o Google Maps</string>
@@ -224,6 +222,11 @@
     <string name="settings_summary">Defina os padrões usados ​​para visualizações e novos vídeos.</string>
     <string name="video_defaults">Padrões de vídeo</string>
     <string name="video_defaults_summary">As alterações se aplicam à visualização e ao próximo vídeo que você criar.</string>
+    <string name="distance_unit_setting">Unidade de distância</string>
+    <string name="distance_unit_automatic">Automático</string>
+    <string name="distance_unit_kilometers">Quilômetros</string>
+    <string name="distance_unit_miles">Milhas</string>
+    <string name="distance_unit_automatic_resolved">%1$s · %2$s</string>
     <string name="timeline_processing">Processamento da Timeline</string>
     <string name="location_filter">Filtro de valores GPS atípicos</string>
     <string name="location_filter_summary">O filtro conservador ignora apenas viagens curtas de ida e volta impossíveis. O arquivo da Timeline nunca é alterado.</string>

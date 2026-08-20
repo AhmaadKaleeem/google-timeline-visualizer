@@ -45,7 +45,14 @@ class VideoExportRequestStoreTest {
             ),
             title = "2026 Mina's Timeline",
             durationSeconds = 60,
-            renderText = RenderText("ja", "マイタイムライン", "yyyy年M月", "km", "attribution"),
+            renderText = RenderText(
+                "ja",
+                "マイタイムライン",
+                "yyyy年M月",
+                "mi",
+                "attribution",
+                distanceScale = 0.621371192237334,
+            ),
             cameraSettings = CameraSettings(
                 CameraMovement.FIXED,
                 LongTripCompression.STRONG,
@@ -121,6 +128,39 @@ class VideoExportRequestStoreTest {
         assertEquals(RenderText.ENGLISH, restored.renderText)
         assertEquals(CameraSettings.DEFAULT, restored.cameraSettings)
         assertEquals(1, restored.journey.points.size)
+    }
+
+    @Test
+    fun readsVersionFourPendingExportsAsKilometers() {
+        val requestFile = File(context.filesDir, "pending-video-export.bin")
+        DataOutputStream(requestFile.outputStream().buffered()).use { output ->
+            output.writeInt(4)
+            output.writeUTF("content://documents/version-four.mp4")
+            output.writeUTF("Version four")
+            output.writeInt(30)
+            output.writeInt(2026)
+            output.writeInt(1)
+            output.writeInt(2026)
+            output.writeInt(12)
+            output.writeUTF("en-US")
+            output.writeUTF("My Timeline")
+            output.writeUTF("MMMM yyyy")
+            output.writeUTF("km")
+            output.writeUTF("attribution")
+            output.writeUTF(CameraMovement.STEADY.name)
+            output.writeUTF(LongTripCompression.BALANCED.name)
+            output.writeUTF(VideoQuality.STANDARD.name)
+            output.writeInt(1)
+            output.writeLong(Instant.parse("2026-06-01T00:00:00Z").toEpochMilli())
+            output.writeDouble(35.0)
+            output.writeDouble(139.0)
+        }
+
+        val restored = store.load()!!
+
+        assertEquals("km", restored.renderText.distanceUnit)
+        assertEquals(1.0, restored.renderText.distanceScale, 0.0)
+        assertEquals(CameraSettings.DEFAULT, restored.cameraSettings)
     }
 
     @Test

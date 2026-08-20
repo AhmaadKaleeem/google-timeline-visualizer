@@ -34,4 +34,14 @@ class RenderTextTest {
         val text = RenderText.ENGLISH.copy(localeTag = "ja", datePattern = "yyyy年M月")
         assertEquals("2025年8月", text.dateFormatter.format(august2025))
     }
+
+    @Test
+    fun distanceScaleChangesTheValueAndUnitTogether() {
+        val text = RenderText.ENGLISH.copy(
+            distanceUnit = "mi",
+            distanceScale = DistanceUnit.MILES.kilometersMultiplier,
+        )
+
+        assertEquals("62 mi", text.formatDistance(100.0))
+    }
 }

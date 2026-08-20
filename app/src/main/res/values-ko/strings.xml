@@ -64,7 +64,6 @@
     <string name="video_creation_notification_channel">영상 만들기</string>
     <string name="video_creation_notification_channel_description">타임라인 영상의 진행률과 완성 알림</string>
     <string name="no_video_player">이 영상을 재생할 앱이 없습니다</string>
-    <string name="journey_summary">위치 %1$s개 · %2$s km · %3$s</string>
     <string name="period_same_year">%3$d년 %1$s–%2$s</string>
     <string name="period_cross_year">%2$d년 %1$s–%4$d년 %3$s</string>
     <string name="preparing_map_progress">지도 준비 중 · 타일 %1$d/%2$d</string>
@@ -122,7 +121,6 @@
     <string name="update_page_unavailable">업데이트 페이지를 열 수 없습니다</string>
     <string name="web_page_unavailable">웹페이지를 열 수 없습니다</string>
     <string name="render_date_pattern" tools:ignore="ExtraTranslation">yyyy년 M월</string>
-    <string name="distance_unit">km</string>
     <string name="map_attribution">© OpenStreetMap  © CARTO</string>
     <string name="timeline_video">타임라인 영상</string>
     <string name="default_video_filename">타임라인 영상.mp4</string>
@@ -148,7 +146,7 @@
     <string name="no_videos">직접 만들거나 추가한 영상이 여기에 표시됩니다.</string>
     <string name="show_all_videos">전체 보기 (%1$d)</string>
     <string name="show_fewer_videos">간단히 보기</string>
-    <string name="selected_period_summary">위치 %1$s개 · 약 %2$s km · %3$s</string>
+    <string name="selected_period_summary">위치 %1$s개 · 약 %2$s %3$s · %4$s</string>
     <string name="selected_period_empty">이 기간에는 위치 정보가 없습니다</string>
     <string name="selected_period_one_point">위치 1개 · 기간을 넓혀 주세요</string>
     <string name="selected_period_no_movement">위치 %1$s개 · 이동 없음</string>
@@ -199,7 +197,7 @@
     <string name="raw_accuracy_limit">정확도 한도(미터)</string>
     <string name="raw_accuracy_helper">정확도가 낮은 위치는 제외됩니다. 사용 가능한 모든 위치를 포함하려면 비워 두세요.</string>
     <string name="raw_accuracy_invalid">0 이상의 숫자를 입력하거나 비워 두세요.</string>
-    <string name="raw_location_summary">위치 %1$s개 · 추정 거리 %2$s km · %3$s개 제외</string>
+    <string name="raw_location_summary">위치 %1$s개 · 추정 거리 %2$s %3$s · %4$s개 제외</string>
     <string name="raw_only_title">원시 위치 데이터만 발견됨</string>
     <string name="raw_only_message">이 파일에는 처리된 방문 및 이동 기록 없이 원시 위치 정보만 포함되어 있습니다. 계속할 수 있지만 경로가 부정확하거나 일부 누락될 수 있으며, 이동 거리는 추정값으로 표시됩니다.\n\n더 정확한 결과를 얻으려면 Google 지도에서 타임라인을 확인하거나 복원하고, 방문 및 이동 기록이 표시되는지 확인하세요. 그런 다음 타임라인을 다시 내보낸 후 이 앱에서 불러오세요.</string>
     <string name="open_google_maps">Google 지도 열기</string>
@@ -216,6 +214,11 @@
     <string name="settings_summary">미리보기와 새 동영상에 사용할 기본값을 설정합니다.</string>
     <string name="video_defaults">동영상 기본값</string>
     <string name="video_defaults_summary">변경 사항은 미리보기와 다음에 만드는 동영상에 적용됩니다.</string>
+    <string name="distance_unit_setting">거리 단위</string>
+    <string name="distance_unit_automatic">자동</string>
+    <string name="distance_unit_kilometers">킬로미터</string>
+    <string name="distance_unit_miles">마일</string>
+    <string name="distance_unit_automatic_resolved">%1$s · %2$s</string>
     <string name="timeline_processing">타임라인 처리</string>
     <string name="location_filter">GPS 이상치 필터링</string>
     <string name="location_filter_summary">보수적 필터링은 짧고 불가능한 왕복 이동만 무시합니다. 타임라인 파일은 변경되지 않습니다.</string>

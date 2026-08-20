@@ -65,7 +65,6 @@
     <string name="video_creation_notification_channel">影片創作</string>
     <string name="video_creation_notification_channel_description">timeline 影片的進度和完成提醒</string>
     <string name="no_video_player">沒有可用的應用程式來播放該視頻</string>
-    <string name="journey_summary">%1$s 分 · %2$s km · %3$s</string>
     <string name="period_same_year">%1$s–%2$s %3$d</string>
     <string name="period_cross_year">%1$s %2$d–%3$s %4$d</string>
     <string name="preparing_map_progress">準備地圖·%1$d/%2$d</string>
@@ -123,7 +122,6 @@
     <string name="update_page_unavailable">無法開啟更新頁面</string>
     <string name="web_page_unavailable">無法開啟網頁</string>
     <string name="render_date_pattern" tools:ignore="ExtraTranslation">yyyy年M月</string>
-    <string name="distance_unit">km</string>
     <string name="map_attribution">© OpenStreetMap © CARTO</string>
     <string name="timeline_video">Timeline視頻</string>
     <string name="default_video_filename">Timeline 影片.mp4</string>
@@ -149,7 +147,7 @@
     <string name="no_videos">您建立或新增的影片將顯示在此。</string>
     <string name="show_all_videos">顯示全部 (%1$d)</string>
     <string name="show_fewer_videos">顯示較少</string>
-    <string name="selected_period_summary">%1$s 積分 · 關於 %2$s km · %3$s</string>
+    <string name="selected_period_summary">%1$s 個點 · 約 %2$s %3$s · %4$s</string>
     <string name="selected_period_empty">此期間沒有位置點</string>
     <string name="selected_period_one_point">1個位置點·選擇範圍更廣</string>
     <string name="selected_period_no_movement">%1$s 點 · 未偵測到移動</string>
@@ -200,7 +198,7 @@
     <string name="raw_accuracy_limit">精確度上限（公尺）</string>
     <string name="raw_accuracy_helper">精確度較低的位置會被排除。留空可包含所有可用位置。</string>
     <string name="raw_accuracy_invalid">請輸入零或正數，或將此欄留空。</string>
-    <string name="raw_location_summary">%1$s 個位置 · 估算 %2$s 公里 · 已排除 %3$s 個</string>
+    <string name="raw_location_summary">%1$s 個位置 · 估算 %2$s %3$s · 已排除 %4$s 個</string>
     <string name="raw_only_title">僅找到原始位置資料</string>
     <string name="raw_only_message">此檔案包含原始位置資料，但沒有已處理的造訪記錄或行程。你可以繼續，但路線可能不準確或不完整，距離也只是估算值。\n\n若要獲得更好的結果，請開啟 Google 地圖，確認或還原時間軸，並確定其中顯示造訪記錄和行程。然後再次匯出時間軸，並在此應用程式中載入新檔案。</string>
     <string name="open_google_maps">開啟 Google 地圖</string>
@@ -217,6 +215,11 @@
     <string name="settings_summary">設定用於預覽和新影片的預設值。</string>
     <string name="video_defaults">影片預設值</string>
     <string name="video_defaults_summary">更改適用於預覽和您創建的下一個影片。</string>
+    <string name="distance_unit_setting">距離單位</string>
+    <string name="distance_unit_automatic">自動</string>
+    <string name="distance_unit_kilometers">公里</string>
+    <string name="distance_unit_miles">英里</string>
+    <string name="distance_unit_automatic_resolved">%1$s · %2$s</string>
     <string name="timeline_processing">時間軸處理</string>
     <string name="location_filter">GPS異常點篩選</string>
     <string name="location_filter_summary">保守篩選只會忽略短時間內不可能的往返移動，不會變更您的時間軸檔案。</string>

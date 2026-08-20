@@ -65,7 +65,6 @@
     <string name="video_creation_notification_channel">视频创作</string>
     <string name="video_creation_notification_channel_description">timeline 视频的进度和完成提醒</string>
     <string name="no_video_player">没有可用的应用程序来播放该视频</string>
-    <string name="journey_summary">%1$s 分 · %2$s km · %3$s</string>
     <string name="period_same_year">%1$s–%2$s %3$d</string>
     <string name="period_cross_year">%1$s %2$d–%3$s %4$d</string>
     <string name="preparing_map_progress">准备地图·%1$d/%2$d</string>
@@ -123,7 +122,6 @@
     <string name="update_page_unavailable">无法打开更新页面</string>
     <string name="web_page_unavailable">无法打开网页</string>
     <string name="render_date_pattern" tools:ignore="ExtraTranslation">yyyy年M月</string>
-    <string name="distance_unit">km</string>
     <string name="map_attribution">© OpenStreetMap © CARTO</string>
     <string name="timeline_video">Timeline视频</string>
     <string name="default_video_filename">Timeline 视频.mp4</string>
@@ -149,7 +147,7 @@
     <string name="no_videos">您创建或添加的视频将显示在此处。</string>
     <string name="show_all_videos">显示全部 (%1$d)</string>
     <string name="show_fewer_videos">显示较少</string>
-    <string name="selected_period_summary">%1$s 积分 · 关于 %2$s km · %3$s</string>
+    <string name="selected_period_summary">%1$s 个点 · 约 %2$s %3$s · %4$s</string>
     <string name="selected_period_empty">此期间没有位置点</string>
     <string name="selected_period_one_point">1个位置点·选择范围更广</string>
     <string name="selected_period_no_movement">%1$s 点 · 未检测到移动</string>
@@ -200,7 +198,7 @@
     <string name="raw_accuracy_limit">精度上限（米）</string>
     <string name="raw_accuracy_helper">精度较低的位置会被排除。留空可包含所有可用位置。</string>
     <string name="raw_accuracy_invalid">请输入零或正数，或者留空。</string>
-    <string name="raw_location_summary">%1$s 个位置 · 估算 %2$s 公里 · 已排除 %3$s 个</string>
+    <string name="raw_location_summary">%1$s 个位置 · 估算 %2$s %3$s · 已排除 %4$s 个</string>
     <string name="raw_only_title">仅发现原始位置数据</string>
     <string name="raw_only_message">此文件包含原始位置数据，但没有经过处理的到访记录或行程。你可以继续，但路线可能不准确或不完整，距离也只是估算值。\n\n为了获得更好的结果，请打开 Google 地图，确认或恢复你的时间轴，并确保其中显示到访记录和行程。然后再次导出时间轴，并在此应用中加载新文件。</string>
     <string name="open_google_maps">打开 Google 地图</string>
@@ -217,6 +215,11 @@
     <string name="settings_summary">设置用于预览和新视频的默认值。</string>
     <string name="video_defaults">视频默认值</string>
     <string name="video_defaults_summary">更改适用于预览和您创建的下一个视频。</string>
+    <string name="distance_unit_setting">距离单位</string>
+    <string name="distance_unit_automatic">自动</string>
+    <string name="distance_unit_kilometers">公里</string>
+    <string name="distance_unit_miles">英里</string>
+    <string name="distance_unit_automatic_resolved">%1$s · %2$s</string>
     <string name="timeline_processing">时间轴处理</string>
     <string name="location_filter">GPS异常点过滤</string>
     <string name="location_filter_summary">保守过滤仅忽略短时间内不可能的往返移动。不会更改您的时间轴文件。</string>
