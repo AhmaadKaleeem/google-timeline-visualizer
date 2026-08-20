@@ -130,7 +130,7 @@
          changed only through code review, with tools:ignore="ExtraTranslation". -->
     <string name="render_date_pattern" tools:ignore="ExtraTranslation">yyyy 年 M 月</string>
     <string name="distance_unit">km</string>
-    <string name="map_attribution">© OpenStreetMap  © CARTO/string>
+    <string name="map_attribution">© OpenStreetMap  © CARTO</string>
     <string name="timeline_video">時間軸影片</string>
     <string name="default_video_filename">時間軸影片.mp4</string>
     <string name="videos">影片</string>
