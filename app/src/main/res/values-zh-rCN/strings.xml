@@ -55,6 +55,7 @@
     <string name="cancel_video_creation">取消视频创建</string>
     <string name="video_creation_cancelled">视频创作已取消</string>
     <string name="cancel">取消</string>
+    <string name="retry">重试</string>
     <string name="not_now">现在不要</string>
     <string name="background_video_title">继续在后台创建</string>
     <string name="background_video_message">允许通知在离开应用程序后查看视频进度，并在视频准备就绪时收到提醒。即使不允许通知，视频创建也会继续。</string>

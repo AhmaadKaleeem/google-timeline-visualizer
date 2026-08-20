@@ -158,6 +158,7 @@ class MainActivity : AppCompatActivity() {
     private var rememberedTimelineLoaded = false
     private var interruptedTimelineRecovered = false
     private var lastRenderedExportStatus = VideoExportStatus.IDLE
+    private var lastAnnouncedExportPhase: ExportPhase? = null
     private var videoPlayer: ExoPlayer? = null
     private var playerUri: Uri? = null
     private var playerPositionMs = 0L
@@ -241,7 +242,10 @@ class MainActivity : AppCompatActivity() {
             }
             true
         }
-        home.homeCancelExportButton.setOnClickListener { VideoExportService.cancel(applicationContext) }
+        binding.exportTrayCancelButton.setOnClickListener { VideoExportService.cancel(applicationContext) }
+        binding.exportTrayRetryButton.setOnClickListener { retryVideoExport() }
+        binding.exportTrayWatchButton.setOnClickListener { lastVideoUri?.let(::watchVideo) }
+        binding.exportTrayShareButton.setOnClickListener { lastVideoUri?.let(::shareVideo) }
         editor.doneButton.setOnClickListener {
             VideoExportCoordinator.clear(applicationContext)
             editor.videoReadyGroup.visibility = View.GONE
@@ -253,7 +257,6 @@ class MainActivity : AppCompatActivity() {
         editor.restoreTimelineHelpLink.setOnClickListener { openRestoreGuide() }
         editor.playButton.setOnClickListener { togglePreview() }
         editor.exportButton.setOnClickListener { chooseExportDestination() }
-        editor.cancelExportButton.setOnClickListener { VideoExportService.cancel(applicationContext) }
         editor.shareButton.setOnClickListener { lastVideoUri?.let(::shareVideo) }
         editor.saveOverviewButton.setOnClickListener { lastVideoUri?.let(::chooseOverviewDestination) }
         editor.shareOverviewButton.setOnClickListener { lastVideoUri?.let(::shareOverviewImage) }
@@ -1419,7 +1422,6 @@ class MainActivity : AppCompatActivity() {
         )
         VideoExportCoordinator.publish(applicationContext, snapshot)
         runCatching { VideoExportService.start(applicationContext) }.onFailure {
-            VideoExportRequestStore(applicationContext).clear()
             generatedMedia.discard(uri)
             VideoExportCoordinator.publish(
                 applicationContext,
@@ -1442,11 +1444,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderVideoExport(snapshot: VideoExportSnapshot) {
-        home.homeExportGroup.visibility = if (snapshot.status == VideoExportStatus.RUNNING) View.VISIBLE else View.GONE
         when (snapshot.status) {
-            VideoExportStatus.IDLE -> setExporting(false)
+            VideoExportStatus.IDLE -> {
+                setExporting(false)
+                hideExportTray()
+            }
             VideoExportStatus.RUNNING -> {
                 setExporting(true)
+                showRunningExportTray()
                 snapshot.progress?.let { showExportProgress(it, snapshot.startedAtMillis) }
             }
             VideoExportStatus.COMPLETE -> {
@@ -1461,23 +1466,68 @@ class MainActivity : AppCompatActivity() {
                     editor.shareOverviewButton.isEnabled = hasOverview
                 }
                 editor.statusText.text = getString(R.string.video_saved)
+                showCompletedExportTray()
                 if (lastRenderedExportStatus != VideoExportStatus.COMPLETE) renderVideos()
             }
             VideoExportStatus.CANCELLED -> {
                 setExporting(false)
+                hideExportTray()
                 editor.statusText.text = getString(R.string.video_creation_cancelled)
             }
             VideoExportStatus.FAILED -> {
                 setExporting(false)
                 editor.statusText.setText(R.string.video_export_failed)
+                showFailedExportTray(snapshot.errorMessage)
             }
         }
         lastRenderedExportStatus = snapshot.status
     }
 
+    private fun showRunningExportTray() {
+        binding.exportStatusTray.visibility = View.VISIBLE
+        binding.exportTrayProgress.visibility = View.VISIBLE
+        binding.exportTrayCancelButton.visibility = View.VISIBLE
+        binding.exportTrayWatchButton.visibility = View.GONE
+        binding.exportTrayShareButton.visibility = View.GONE
+        binding.exportTrayRetryButton.visibility = View.GONE
+    }
+
+    private fun showCompletedExportTray() {
+        binding.exportStatusTray.visibility = View.VISIBLE
+        binding.exportTrayProgress.visibility = View.GONE
+        binding.exportTrayCancelButton.visibility = View.GONE
+        binding.exportTrayRetryButton.visibility = View.GONE
+        binding.exportTrayWatchButton.visibility = if (lastVideoUri != null) View.VISIBLE else View.GONE
+        binding.exportTrayShareButton.visibility = if (lastVideoUri != null) View.VISIBLE else View.GONE
+        binding.exportTrayStatusText.setText(R.string.video_ready)
+        if (lastRenderedExportStatus != VideoExportStatus.COMPLETE) {
+            announceExportStatus(getString(R.string.video_ready))
+        }
+        lastAnnouncedExportPhase = null
+    }
+
+    private fun showFailedExportTray(message: String?) {
+        binding.exportStatusTray.visibility = View.VISIBLE
+        binding.exportTrayProgress.visibility = View.GONE
+        binding.exportTrayCancelButton.visibility = View.GONE
+        binding.exportTrayWatchButton.visibility = View.GONE
+        binding.exportTrayShareButton.visibility = View.GONE
+        binding.exportTrayRetryButton.visibility = View.VISIBLE
+        binding.exportTrayRetryButton.isEnabled = true
+        binding.exportTrayStatusText.text = message ?: getString(R.string.video_export_failed)
+        if (lastRenderedExportStatus != VideoExportStatus.FAILED) {
+            announceExportStatus(binding.exportTrayStatusText.text)
+        }
+        lastAnnouncedExportPhase = null
+    }
+
+    private fun hideExportTray() {
+        binding.exportStatusTray.visibility = View.GONE
+        lastAnnouncedExportPhase = null
+    }
+
     private fun showExportProgress(progress: ExportProgress, startedAtMillis: Long) {
-        editor.exportProgress.progress = (progress.fraction * 1000).toInt()
-        home.homeExportProgress.progress = (progress.fraction * 1000).toInt()
+        binding.exportTrayProgress.progress = (progress.fraction * 1000).toInt()
         if (progress.phase == ExportPhase.COMPLETE) return
         val base = when (progress.phase) {
             ExportPhase.PREPARING_MAP -> getString(
@@ -1503,7 +1553,55 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.progress_with_eta, base, formatRemainingTime(remaining))
         } else base
         editor.statusText.text = status
-        home.homeExportStatusText.text = status
+        binding.exportTrayStatusText.text = status
+        if (lastAnnouncedExportPhase != progress.phase) {
+            announceExportStatus(base)
+            lastAnnouncedExportPhase = progress.phase
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun announceExportStatus(status: CharSequence) {
+        binding.exportTrayStatusText.announceForAccessibility(status)
+    }
+
+    private fun retryVideoExport() {
+        binding.exportTrayRetryButton.isEnabled = false
+        lifecycleScope.launch {
+            val request = withContext(Dispatchers.IO) {
+                VideoExportRequestStore(applicationContext).load()
+            }
+            retryVideoExport(request)
+        }
+    }
+
+    private fun retryVideoExport(request: VideoExportRequest?) {
+        if (request == null) {
+            VideoExportCoordinator.clear(applicationContext)
+            showNewVideo(loadRemembered = true)
+            Snackbar.make(binding.root, R.string.video_request_unavailable, Snackbar.LENGTH_LONG).show()
+            return
+        }
+        binding.exportTrayRetryButton.isEnabled = true
+        pendingExport = request.copy(outputUri = "")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val retryRequest = pendingExport ?: return
+            pendingExport = null
+            runCatching { generatedMedia.createVideoDestination(retryRequest.title, retryRequest.journey.period) }
+                .onSuccess { uri -> uri?.let { startVideoExport(it, retryRequest) } }
+                .onFailure {
+                    VideoExportCoordinator.publish(
+                        applicationContext,
+                        VideoExportSnapshot(
+                            status = VideoExportStatus.FAILED,
+                            title = retryRequest.title,
+                            errorMessage = getString(R.string.video_request_unavailable),
+                        ),
+                    )
+                }
+        } else {
+            createVideo.launch("${generatedMedia.fileBaseName(request.title, request.journey.period)}.mp4")
+        }
     }
 
     private fun formatRemainingTime(seconds: Int): String = if (seconds < 90) {
@@ -1516,8 +1614,6 @@ class MainActivity : AppCompatActivity() {
     private fun setExporting(exporting: Boolean) {
         exportingVideo = exporting
         val canCreate = journey?.let(::canCreateVideo) == true && editor.timelineView.isCameraReady
-        editor.exportProgress.visibility = if (exporting) View.VISIBLE else View.GONE
-        editor.cancelExportButton.visibility = if (exporting) View.VISIBLE else View.GONE
         home.deleteAllVideosButton.isEnabled = !exporting
         editor.importButton.isEnabled = !exporting && editor.loadingGroup.visibility != View.VISIBLE
         editor.playButton.isEnabled = !exporting && canCreate

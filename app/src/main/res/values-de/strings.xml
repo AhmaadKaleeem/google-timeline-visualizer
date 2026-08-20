@@ -56,6 +56,7 @@
     <string name="cancel_video_creation">Videoerstellung abbrechen</string>
     <string name="video_creation_cancelled">Videoerstellung abgebrochen</string>
     <string name="cancel">Stornieren</string>
+    <string name="retry">Erneut versuchen</string>
     <string name="not_now">Nicht jetzt</string>
     <string name="background_video_title">Erstellen Sie im Hintergrund weiter</string>
     <string name="background_video_message">Erlauben Sie Benachrichtigungen, um den Videofortschritt nach dem Verlassen der App zu sehen und eine Benachrichtigung zu erhalten, wenn Ihr Video fertig ist. Die Videoerstellung wird auch dann fortgesetzt, wenn Benachrichtigungen nicht zulässig sind.</string>

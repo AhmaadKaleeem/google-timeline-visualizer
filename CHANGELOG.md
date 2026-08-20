@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.2.4
+
+- Keep video-generation progress visible above bottom navigation while scrolling or switching app tabs.
+- Show the current generation phase, percentage, estimated remaining time when available, and Cancel in one persistent tray.
+- Change the tray to Watch and Share when a video is ready, or Retry when generation fails.
+- Keep the preview playback scrubber separate from generation progress.
+- Announce major generation phase and result changes without announcing every percentage update.
+- Preserve the existing export service, background notifications, saved export recovery, and cancellation behavior.
+- Translate the new Retry action in all nine supported app languages.
+- Set Android version code 23 and version name 2.2.4.
+
 ## 2.2.3
 
 - Recognize raw location records that may accompany or replace processed Timeline visits and trips.

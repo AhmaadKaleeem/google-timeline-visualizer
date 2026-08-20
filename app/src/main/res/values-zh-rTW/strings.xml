@@ -55,6 +55,7 @@
     <string name="cancel_video_creation">取消影片創建</string>
     <string name="video_creation_cancelled">影片創作已取消</string>
     <string name="cancel">取消</string>
+    <string name="retry">重試</string>
     <string name="not_now">現在不要</string>
     <string name="background_video_title">繼續在背景創建</string>
     <string name="background_video_message">允許通知在離開應用程式後查看視訊進度，並在視訊準備就緒時收到提醒。即使不允許通知，視訊建立也會繼續。</string>
