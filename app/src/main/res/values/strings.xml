@@ -25,7 +25,7 @@
     <string name="timeline_error_malformed">This file is not valid or complete JSON.</string>
     <string name="timeline_error_legacy">This is an older Google Takeout format. Export Timeline data from your phone instead.</string>
     <string name="timeline_error_raw_only">This export contains raw signals but no reconstructed Timeline journeys.</string>
-    <string name="timeline_error_no_locations">This Timeline export contains no usable location points.</string>
+    <string name="timeline_error_no_locations">This Timeline export contains no location data. Timeline may not have been enabled, so Google had no data to export.</string>
     <string name="remembered_timeline_unavailable">The previously used Timeline is no longer available.</string>
     <string name="choose_timeline_again">Choose the Timeline.json file again.</string>
     <string name="video_export_failed">Could not create video</string>
@@ -38,6 +38,11 @@
         <item quantity="one">%1$d second</item>
         <item quantity="other">%1$d seconds</item>
     </plurals>
+    <string name="custom_duration">Custom…</string>
+    <string name="custom_duration_title">Custom route animation length</string>
+    <string name="custom_duration_hint">Seconds</string>
+    <string name="custom_duration_range">Enter a whole number from 10 through 300.</string>
+    <string name="long_duration_warning">Long videos require more rendering time and storage.</string>
     <string name="reading_timeline">Reading Timeline file</string>
     <string name="opening_timeline">Opening file</string>
     <string name="opening_file">Opening file</string>
@@ -119,7 +124,13 @@
     <string name="project_on_github">Project on GitHub</string>
     <string name="update_page_unavailable">Could not open the update page</string>
     <string name="web_page_unavailable">Could not open the web page</string>
-    <string name="render_date_pattern">MMMM yyyy</string>
+    <!-- java.time.DateTimeFormatter pattern, deliberately developer-owned: letters a-z are
+         reserved format symbols, and translating them (e.g. "aaaa" or "jjjj" for "yyyy")
+         makes the pattern invalid and used to crash the first rendered frame. It is marked
+         translatable="false" so translation tooling skips it; locales that need a different
+         date shape (ja, ko, zh) carry a hand-maintained override in their strings.xml,
+         changed only through code review, with tools:ignore="ExtraTranslation". -->
+    <string name="render_date_pattern" translatable="false">MMMM yyyy</string>
     <string name="distance_unit">km</string>
     <string name="map_attribution">© OpenStreetMap  © CARTO</string>
     <string name="timeline_video">Timeline video</string>
@@ -201,6 +212,16 @@
     <string name="settings_summary">Set the defaults used for previews and new videos.</string>
     <string name="video_defaults">Video defaults</string>
     <string name="video_defaults_summary">Changes apply to the preview and the next video you create.</string>
+    <string name="timeline_processing">Timeline processing</string>
+    <string name="location_filter">GPS outlier filtering</string>
+    <string name="location_filter_summary">Conservative filtering ignores only short, impossible round trips. Your Timeline file is never changed.</string>
+    <string name="location_filter_conservative">Conservative</string>
+    <string name="location_filter_off">Off</string>
+    <string name="preparing_preview">Preparing preview…</string>
+    <plurals name="location_outliers_ignored">
+        <item quantity="one">%1$d suspicious location ignored</item>
+        <item quantity="other">%1$d suspicious locations ignored</item>
+    </plurals>
     <string name="about_and_privacy">About and privacy</string>
     <string name="video_playback_failed">This video could not be played inside Timeline Visualizer.</string>
     <string name="open_in_another_app">Open in another app</string>

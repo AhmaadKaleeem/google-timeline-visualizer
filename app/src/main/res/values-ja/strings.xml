@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">タイムライン可視化</string>
     <string name="import_timeline">ファイルを選択</string>
     <string name="how_to_export">タイムライン ファイルを取得</string>
@@ -25,7 +25,7 @@
     <string name="timeline_error_malformed">有効または完全な JSON ファイルではありません。</string>
     <string name="timeline_error_legacy">以前の Google Takeout 形式です。端末からタイムライン データを書き出してください。</string>
     <string name="timeline_error_raw_only">この書き出しには生の信号だけがあり、再構成された移動経路がありません。</string>
-    <string name="timeline_error_no_locations">このタイムラインの書き出しには使用できる位置情報がありません。</string>
+    <string name="timeline_error_no_locations">このタイムラインの書き出しには位置情報がありません。タイムラインが有効になっていなかったため、Google に書き出すデータがなかった可能性があります。</string>
     <string name="remembered_timeline_unavailable">前回使用したタイムラインを開けなくなりました。</string>
     <string name="choose_timeline_again">Timeline.jsonをもう一度選択してください。</string>
     <string name="video_export_failed">動画を作成できませんでした</string>
@@ -37,6 +37,11 @@
     <plurals name="duration_seconds">
         <item quantity="other">%1$d秒</item>
     </plurals>
+    <string name="custom_duration">カスタム…</string>
+    <string name="custom_duration_title">経路の再生時間を指定</string>
+    <string name="custom_duration_hint">秒</string>
+    <string name="custom_duration_range">10から300までの整数を入力してください。</string>
+    <string name="long_duration_warning">長い動画ほど、処理時間と保存容量が多く必要です。</string>
     <string name="reading_timeline">タイムライン ファイルを読み込み中</string>
     <string name="opening_timeline">ファイルを開いています</string>
     <string name="opening_file">ファイルを開いています</string>
@@ -115,7 +120,7 @@
     <string name="project_on_github">GitHubのプロジェクト</string>
     <string name="update_page_unavailable">更新ページを開けませんでした</string>
     <string name="web_page_unavailable">ウェブページを開けませんでした</string>
-    <string name="render_date_pattern">yyyy年M月</string>
+    <string name="render_date_pattern" tools:ignore="ExtraTranslation">yyyy年M月</string>
     <string name="distance_unit">km</string>
     <string name="map_attribution">© OpenStreetMap  © CARTO</string>
     <string name="timeline_video">タイムライン動画</string>
@@ -197,6 +202,15 @@
     <string name="settings_summary">プレビューと新しい動画に使用する初期値を設定します。</string>
     <string name="video_defaults">動画の初期設定</string>
     <string name="video_defaults_summary">変更はプレビューと次に作成する動画に適用されます。</string>
+    <string name="timeline_processing">タイムライン処理</string>
+    <string name="location_filter">GPS外れ値フィルター</string>
+    <string name="location_filter_summary">慎重なフィルターで、短時間では不可能な往復移動だけを無視します。タイムライン ファイルは変更されません。</string>
+    <string name="location_filter_conservative">慎重</string>
+    <string name="location_filter_off">オフ</string>
+    <string name="preparing_preview">プレビューを準備しています…</string>
+    <plurals name="location_outliers_ignored">
+        <item quantity="other">疑わしい位置情報を%1$d件無視しました</item>
+    </plurals>
     <string name="about_and_privacy">情報とプライバシー</string>
     <string name="video_playback_failed">Timeline Visualizer内でこの動画を再生できませんでした。</string>
     <string name="open_in_another_app">別のアプリで開く</string>

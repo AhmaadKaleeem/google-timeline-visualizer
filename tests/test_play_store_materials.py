@@ -71,20 +71,33 @@ def test_android_locales_have_matching_resources_and_placeholders():
         "en": ROOT / "app/src/main/res/values/strings.xml",
         "ko": ROOT / "app/src/main/res/values-ko/strings.xml",
         "ja": ROOT / "app/src/main/res/values-ja/strings.xml",
+        "zh-CN": ROOT / "app/src/main/res/values-zh-rCN/strings.xml",
+        "zh-TW": ROOT / "app/src/main/res/values-zh-rTW/strings.xml",
+        "es": ROOT / "app/src/main/res/values-es/strings.xml",
+        "fr": ROOT / "app/src/main/res/values-fr/strings.xml",
+        "de": ROOT / "app/src/main/res/values-de/strings.xml",
+        "pt-BR": ROOT / "app/src/main/res/values-pt-rBR/strings.xml",
     }
 
     def resources(path: Path):
         result = {}
+        developer_owned = set()
         for element in ET.parse(path).getroot():
             name = element.attrib["name"]
             text = " ".join(element.itertext())
             placeholders = sorted(set(re.findall(r"%\d+\$[a-zA-Z]|\{(?:year|name)\}", text)))
-            result[(element.tag, name)] = placeholders
-        return result
+            key = (element.tag, name)
+            result[key] = placeholders
+            if element.attrib.get("translatable") == "false":
+                developer_owned.add(key)
+        return result, developer_owned
 
-    localized = {locale: resources(path) for locale, path in files.items()}
-    assert localized["ko"] == localized["en"]
-    assert localized["ja"] == localized["en"]
+    localized = {locale: resources(path)[0] for locale, path in files.items()}
+    developer_owned = resources(files["en"])[1]
+    expected = {key: value for key, value in localized["en"].items() if key not in developer_owned}
+    for locale, values in localized.items():
+        translated = {key: value for key, value in values.items() if key not in developer_owned}
+        assert translated == expected, locale
 
 
 def test_localized_restoration_guides_are_complete_and_accessible():

@@ -5,6 +5,7 @@ import dev.mahlernim.timelinevisualizer.render.CameraMovement
 import dev.mahlernim.timelinevisualizer.render.CameraSettings
 import dev.mahlernim.timelinevisualizer.render.LongTripCompression
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,6 +32,7 @@ class JourneyTest {
         val journey = timeline.forDateRange(LocalDate.parse("2026-04-02"), LocalDate.parse("2026-04-03"))
 
         assertEquals(2, journey.points.size)
+        assertEquals(2, timeline.countForDateRange(LocalDate.parse("2026-04-02"), LocalDate.parse("2026-04-03")))
         assertEquals(Instant.parse("2026-04-02T12:00:00Z"), journey.points.first().instant)
         assertEquals(Instant.parse("2026-04-03T12:00:00Z"), journey.points.last().instant)
     }
@@ -60,6 +62,68 @@ class JourneyTest {
         assertTrue(journey.renderPath.size > 20)
         val largestStep = journey.renderPath.zipWithNext { a, b -> b.distanceKm - a.distanceKm }.max()
         assertTrue("Largest rendered step was $largestStep km", largestStep <= 75.1)
+    }
+
+    @Test
+    fun virtualRenderPathMatchesThePreviousGeometryExactly() {
+        val points = listOf(
+            seoul,
+            bohol,
+            bohol.copy(
+                instant = Instant.parse("2025-06-01T08:00:00Z"),
+                latitude = 35.6762,
+                longitude = 139.6503,
+            ),
+        )
+        val journey = Journey.from(points, 2025)
+        val expected = legacyRenderPath(journey)
+
+        assertEquals(expected.size, journey.renderPath.size)
+        expected.indices.forEach { index ->
+            assertEquals(expected[index].distanceKm, journey.renderPath[index].distanceKm, 0.0)
+            assertEquals(expected[index].point, journey.renderPath[index].point)
+        }
+        assertSame(points.last(), journey.renderPath.last().point)
+    }
+
+    @Test
+    fun virtualProjectionMatchesThePreviousPreparedRoute() {
+        val points = listOf(
+            seoul.copy(latitude = 10.0, longitude = 179.0),
+            bohol.copy(latitude = 20.0, longitude = -179.0),
+            bohol.copy(
+                instant = Instant.parse("2025-06-01T08:00:00Z"),
+                latitude = 35.6762,
+                longitude = 139.6503,
+            ),
+        )
+        val journey = Journey.from(points, 2025)
+        val expected = unwrapLegacyRoute(legacyRenderPath(journey))
+        val painter = TimelinePainter()
+
+        expected.indices.forEach { index ->
+            val actual = painter.routeWorldPoint(journey, index)
+            assertEquals(expected[index].x, actual.x, 1e-12)
+            assertEquals(expected[index].y, actual.y, 1e-12)
+        }
+    }
+
+    @Test(timeout = 15_000)
+    fun millionsOfRenderSamplesStayVirtual() {
+        val start = Instant.parse("2025-01-01T00:00:00Z")
+        val points = List(30_000) { index ->
+            GeoPoint(
+                instant = start.plusSeconds(index.toLong()),
+                latitude = 0.0,
+                longitude = if (index % 2 == 0) 0.0 else 179.0,
+            )
+        }
+
+        val journey = Journey.from(points, 2025)
+
+        assertTrue("Expected millions of samples, got ${journey.renderPath.size}", journey.renderPath.size > 7_000_000)
+        assertEquals(points.first(), journey.renderPath.first().point)
+        assertSame(points.last(), journey.renderPath.last().point)
     }
 
     @Test
@@ -201,6 +265,7 @@ class JourneyTest {
 
         assertEquals(4, timeline.forYear(2025).points.size)
         assertEquals(2, timeline.forRange(2025, 6, 7).points.size)
+        assertEquals(2, timeline.countForRange(TimelinePeriod.sameYear(2025, 6, 7)))
     }
 
     @Test
@@ -219,6 +284,7 @@ class JourneyTest {
 
         assertEquals(period, journey.period)
         assertEquals(2, journey.points.size)
+        assertEquals(journey.points.size, timeline.countForRange(period))
         assertEquals("2025–2026", journey.period.yearLabel)
     }
 
@@ -247,6 +313,33 @@ class JourneyTest {
             longitude = centerLongitude + if (index % 2 == 0) -0.01 else 0.01,
             hour = startHour + index,
         )
+    }
+
+    private fun legacyRenderPath(journey: Journey): List<RouteSample> = buildList {
+        if (journey.points.isEmpty()) return@buildList
+        add(RouteSample(journey.points.first(), 0.0))
+        for (index in 1..journey.points.lastIndex) {
+            val startDistance = journey.cumulativeDistanceKm[index - 1]
+            val segmentDistance = journey.cumulativeDistanceKm[index] - startDistance
+            val steps = kotlin.math.ceil(segmentDistance / 75.0).toInt().coerceIn(1, 320)
+            for (step in 1..steps) {
+                val fraction = step.toDouble() / steps
+                add(
+                    RouteSample(
+                        Journey.interpolate(journey.points[index - 1], journey.points[index], fraction),
+                        startDistance + segmentDistance * fraction,
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun unwrapLegacyRoute(path: List<RouteSample>): List<WorldPoint> = buildList {
+        path.forEach { sample ->
+            val projected = WebMercator.project(sample.point)
+            val x = if (isEmpty()) projected.x else unwrapNear(projected.x, last().x)
+            add(WorldPoint(x, projected.y))
+        }
     }
 
     private companion object {

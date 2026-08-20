@@ -1,5 +1,47 @@
 # Changelog
 
+## 2.1.3
+
+- Fix invalid translated preview date patterns that terminated the first frame in German, Spanish, French, and Portuguese.
+- Render a first preview frame in every supported language during regression testing.
+- Show the initial Timeline preview without synchronously building the complete camera track.
+- Build all 481 smooth camera positions in the background and keep playback controls disabled until ready.
+- Reuse exact route-range bounds instead of rescanning dense routes for every camera position.
+- Reduce temporary allocations in route projection, location filtering, range selection, and transfer preparation.
+- Replace padded import fixtures with point-dense compact and long-gap device coverage.
+- Preserve Timeline points, filtering, ordering, distances, route geometry, and completed camera behavior.
+- Open Create video on a cold launch when the video library is empty, while preserving export recovery and restored navigation state.
+- Explain that an empty Timeline export may mean Timeline was not enabled and Google had no location data to export.
+- Set Android version code 18 and version name 2.1.3.
+
+## 2.1.2
+
+- Keep interpolated route samples virtual instead of retaining millions of route objects.
+- Replace route-sized first-frame projection collections with compact source-point indexes.
+- Use primitive arrays for transfer-threshold statistics to avoid boxed number collections.
+- Add a dense long-gap import fixture below 16 MB and Android API 36 device coverage.
+- Preserve Timeline points, filtering, ordering, distances, and rendered route geometry.
+- Set Android version code 17 and version name 2.1.2.
+
+## 2.1.1
+
+- Reduce peak memory while normalizing large Timeline JSON exports.
+- Prepare filtered Timeline data and the initial Journey away from the UI thread.
+- Avoid building a second unfiltered Journey only to count ignored locations.
+- Stop automatically reopening a remembered Timeline after an interrupted import.
+- Add generated 45 MB import coverage without storing personal Timeline data.
+- Set Android version code 16 and version name 2.1.1.
+
+## 2.1.0
+
+- Prevent system navigation insets from clipping bottom-navigation icons and labels.
+- Add conservative, local GPS outlier filtering with a persistent Off option and an ignored-point count.
+- Keep the original Timeline JSON unchanged and use one filtered Journey for preview, seeking, overview, and export.
+- Add custom whole-number journey durations from 10 through 300 seconds while keeping the existing presets and 30-second default.
+- Warn when a duration over 60 seconds may require more rendering time and storage.
+- Keep all nine supported app languages complete.
+- Set Android version code 15 and version name 2.1.0.
+
 ## 2.0.1
 
 - Parse current Timeline path points that store a minute offset from the segment
