@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.TimelineVisualizer" parent="Theme.Material3.Light.NoActionBar">
+    <style name="Theme.TimelineVisualizer" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/interactive</item>
         <item name="colorOnPrimary">@color/on_interactive</item>
         <item name="colorSurface">@color/surface</item>
@@ -8,7 +8,7 @@
         <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
         <item name="colorOutline">@color/outline</item>
         <item name="android:colorAccent">@color/interactive</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:statusBarColor">@color/surface</item>
         <item name="android:navigationBarColor">@color/surface_container</item>
         <item name="android:windowBackground">@color/surface</item>

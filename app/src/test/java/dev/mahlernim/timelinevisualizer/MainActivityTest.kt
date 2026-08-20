@@ -11,17 +11,22 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.AutoCompleteTextView
+import android.widget.SeekBar
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.videos.VideoRecord
 import dev.mahlernim.timelinevisualizer.videos.VideoStore
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportCoordinator
+import dev.mahlernim.timelinevisualizer.export.ExportPhase
+import dev.mahlernim.timelinevisualizer.export.ExportProgress
 import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
 import dev.mahlernim.timelinevisualizer.export.VideoExportStateStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
@@ -501,7 +506,71 @@ class MainActivityTest {
         shadowOf(Looper.getMainLooper()).idle()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
-        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.homeExportGroup).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayCancelButton).visibility)
+    }
+
+    @Test
+    fun generationProgressTrayIsIndependentFromPreviewPlaybackControl() {
+        val activity = launchActivity()
+        val playback = activity.findViewById<SeekBar>(R.id.timelineSeek)
+        playback.progress = 375
+
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(
+                status = VideoExportStatus.RUNNING,
+                progress = ExportProgress(0.42f, ExportPhase.CREATING_VIDEO, 42, 100),
+                startedAtMillis = System.currentTimeMillis(),
+            ),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(375, playback.progress)
+        assertEquals(420, activity.findViewById<LinearProgressIndicator>(R.id.exportTrayProgress).progress)
+    }
+
+    @Test
+    fun generationProgressTrayLivesOutsideScrollableScreens() {
+        val activity = launchActivity()
+        val root = activity.findViewById<ViewGroup>(R.id.exportStatusTray).parent as ViewGroup
+        val tray = activity.findViewById<View>(R.id.exportStatusTray)
+        val bottomNavigation = activity.findViewById<View>(R.id.bottomNavigation)
+
+        assertTrue(root.indexOfChild(tray) < root.indexOfChild(bottomNavigation))
+    }
+
+    @Test
+    fun completedExportTrayOffersWatchAndShare() {
+        val activity = launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(
+                status = VideoExportStatus.COMPLETE,
+                outputUri = "content://example/generated-video",
+                title = "Trip",
+            ),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayWatchButton).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayShareButton).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.exportTrayProgress).visibility)
+    }
+
+    @Test
+    fun failedExportTrayOffersRetry() {
+        val activity = launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(status = VideoExportStatus.FAILED, errorMessage = "Could not create video"),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayRetryButton).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.exportTrayProgress).visibility)
     }
 
     @Test
@@ -541,7 +610,7 @@ class MainActivityTest {
         activity.onBackPressedDispatcher.onBackPressed()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
-        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.homeExportGroup).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
         assertEquals(VideoExportStatus.RUNNING, VideoExportStateStore(context).load().status)
     }
 
@@ -605,8 +674,8 @@ class MainActivityTest {
         measureActivity(activity)
 
         val navigation = activity.findViewById<ViewGroup>(R.id.bottomNavigation)
-        assertEquals(bottomInset, root.paddingBottom)
-        assertEquals(0, navigation.paddingBottom)
+        assertEquals(0, root.paddingBottom)
+        assertEquals(bottomInset, navigation.paddingBottom)
         assertNavigationItemsInsideBounds(navigation)
     }
 
@@ -645,10 +714,37 @@ class MainActivityTest {
         measureActivity(activity)
 
         val navigation = activity.findViewById<ViewGroup>(R.id.bottomNavigation)
-        assertEquals(bottomInset, root.paddingBottom)
-        assertEquals(0, navigation.paddingBottom)
-        assertTrue(navigation.measuredHeight >= (80 * density).toInt())
+        assertEquals(topInset, root.paddingTop)
+        assertEquals(0, root.paddingBottom)
+        assertEquals(bottomInset, navigation.paddingBottom)
+        assertTrue(navigation.measuredHeight >= (80 * density).toInt() + bottomInset)
         assertNavigationItemsInsideBounds(navigation)
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "notnight")
+    fun systemLightModeUsesLightThemeAndSystemBars() {
+        val activity = launchActivity()
+
+        assertEquals(activity.getColor(R.color.surface), resolvedColor(activity, com.google.android.material.R.attr.colorSurface))
+        assertEquals(activity.getColor(R.color.surface_container), resolvedColor(activity, com.google.android.material.R.attr.colorSurfaceContainer))
+        assertEquals(true, resolvedBoolean(activity, android.R.attr.windowLightStatusBar))
+        assertEquals(true, WindowInsetsControllerCompat(activity.window, activity.window.decorView).isAppearanceLightNavigationBars)
+        assertEquals(activity.getColor(R.color.surface), resolvedColor(activity, android.R.attr.statusBarColor))
+        assertEquals(activity.getColor(R.color.surface_container), resolvedColor(activity, android.R.attr.navigationBarColor))
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "night")
+    fun systemDarkModeUsesDarkThemeAndSystemBars() {
+        val activity = launchActivity()
+
+        assertEquals(activity.getColor(R.color.surface), resolvedColor(activity, com.google.android.material.R.attr.colorSurface))
+        assertEquals(activity.getColor(R.color.surface_container), resolvedColor(activity, com.google.android.material.R.attr.colorSurfaceContainer))
+        assertEquals(false, resolvedBoolean(activity, android.R.attr.windowLightStatusBar))
+        assertEquals(false, WindowInsetsControllerCompat(activity.window, activity.window.decorView).isAppearanceLightNavigationBars)
+        assertEquals(activity.getColor(R.color.surface), resolvedColor(activity, android.R.attr.statusBarColor))
+        assertEquals(activity.getColor(R.color.surface_container), resolvedColor(activity, android.R.attr.navigationBarColor))
     }
 
     @Test
@@ -688,6 +784,44 @@ class MainActivityTest {
 
         assertEquals(explicit, timelineSourceStore.load())
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)
+    }
+
+    @Test
+    fun rawOnlyTimelineRequiresWarningBeforeUsingEstimatedRoute() {
+        acceptPrivacyDisclosure()
+        val source = File.createTempFile("raw-only-timeline", ".json", context.cacheDir)
+        source.writeText(
+            """
+            {
+              "rawSignals": [
+                {"position":{"LatLng":"geo:37.5000,127.0000","timestamp":"2026-08-01T00:00:00Z","accuracyMeters":10}},
+                {"position":{"LatLng":"geo:37.5100,127.0100","timestamp":"2026-08-01T00:10:00Z","accuracyMeters":10}}
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        try {
+            val activity = launchActivity(Intent(Intent.ACTION_VIEW, Uri.fromFile(source)))
+            waitUntil {
+                (ShadowDialog.getLatestDialog() as? AlertDialog)?.isShowing == true
+            }
+            val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+            assertEquals(activity.getString(R.string.raw_only_message), dialog.findViewById<TextView>(android.R.id.message)?.text)
+            assertEquals(
+                activity.getString(R.string.continue_with_raw_data),
+                dialog.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).text,
+            )
+
+            dialog.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).performClick()
+            waitUntil { activity.findViewById<View>(R.id.editorGroup).visibility == View.VISIBLE }
+
+            assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.rawSignalsDescription).visibility)
+            assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.rawAccuracyLayout).visibility)
+            assertTrue(activity.findViewById<TextView>(R.id.periodSummaryText).text.contains("2"))
+        } finally {
+            source.delete()
+        }
     }
 
     @Test
@@ -773,8 +907,20 @@ class MainActivityTest {
             val label = item.findViewById<TextView>(com.google.android.material.R.id.navigation_bar_item_large_label_view)
             assertTrue(icon.top >= 0 && icon.bottom <= item.height)
             assertTrue(label.height > 0 && label.top >= 0 && label.bottom <= item.height)
-            assertTrue(item.top >= 0 && item.bottom <= navigation.height)
+            assertTrue(item.top >= 0 && item.bottom <= navigation.height - navigation.paddingBottom)
         }
+    }
+
+    private fun resolvedBoolean(activity: MainActivity, attribute: Int): Boolean {
+        val value = TypedValue()
+        assertTrue(activity.theme.resolveAttribute(attribute, value, true))
+        return value.data != 0
+    }
+
+    private fun resolvedColor(activity: MainActivity, attribute: Int): Int {
+        val value = TypedValue()
+        assertTrue(activity.theme.resolveAttribute(attribute, value, true))
+        return value.data
     }
 
     private fun waitUntil(condition: () -> Boolean) {

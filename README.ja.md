@@ -32,7 +32,7 @@ MP4 の作成には H.264 エンコードに対応した Safari 16.4 以降が�
 [最新リリース](https://github.com/mahlernim/google-timeline-visualizer/releases/latest)から
 次の手順でインストールします。
 
-1. **Assets** にある `TimelineVisualizer-v2.2.1.apk` をダウンロードします。
+1. **Assets** にある `TimelineVisualizer-v2.2.4.apk` をダウンロードします。
 2. ダウンロードしたファイルを開きます。
 3. インストールがブロックされた場合は、ブラウザまたはファイル管理アプリに
    **不明なアプリのインストール**を一時的に許可します。
@@ -121,6 +121,7 @@ iPhone または iPad では **Google マップ → プロフィール写真 →
 
 - 現在の Android と iOS の配列形式
 - 従来の `semanticSegments` 形式
+- 警告と端末内ノイズ低減を備えた任意の生位置情報フォールバック
 - タイムライン経路、アクティビティ、訪問地点
 - 文字列、`latLng`、度、`geo:`、E7 座標
 - 日付変更線をまたぐ経路

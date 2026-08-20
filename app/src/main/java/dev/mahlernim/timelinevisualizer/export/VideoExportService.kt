@@ -167,7 +167,6 @@ class VideoExportService : Service() {
         } catch (error: Throwable) {
             Log.e(TAG, "Video export failed", error)
             GeneratedMediaRepository(applicationContext).discard(uri)
-            requestStore.clear()
             finishWithFailure(request, failureMessage(error), startId)
             return
         } finally {
@@ -205,7 +204,7 @@ class VideoExportService : Service() {
     }
 
     private fun finishWithFailure(request: VideoExportRequest?, message: String, startId: Int) {
-        requestStore.clear()
+        if (request == null) requestStore.clear()
         publish(
             VideoExportSnapshot(
                 status = VideoExportStatus.FAILED,

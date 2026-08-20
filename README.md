@@ -35,7 +35,7 @@ use Safari's Share menu and choose **Add to Home Screen**.
 The app is not yet on Google Play. Install it from this repository's
 [latest release](https://github.com/mahlernim/google-timeline-visualizer/releases/latest):
 
-1. Under **Assets**, download `TimelineVisualizer-v2.2.1.apk` on your phone.
+1. Under **Assets**, download `TimelineVisualizer-v2.2.4.apk` on your phone.
 2. Open the downloaded file.
 3. If Android blocks the installation, select **Settings**, allow your browser or
    file manager to **Install unknown apps**, then return and try again.
@@ -156,6 +156,7 @@ without changing or removing any Timeline points.
 
 - Current Android and iOS direct-array Timeline exports
 - Older `{ "semanticSegments": [...] }` exports
+- Optional raw location fallback with a warning and local noise reduction
 - Timeline paths, activities, and visits
 - String, `latLng`, degree, `geo:`, and E7 coordinates
 - Routes crossing the international date line
