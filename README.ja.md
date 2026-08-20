@@ -32,7 +32,7 @@ MP4 の作成には H.264 エンコードに対応した Safari 16.4 以降が�
 [最新リリース](https://github.com/mahlernim/google-timeline-visualizer/releases/latest)から
 次の手順でインストールします。
 
-1. **Assets** にある `TimelineVisualizer-v2.2.0.apk` をダウンロードします。
+1. **Assets** にある `TimelineVisualizer-v2.2.1.apk` をダウンロードします。
 2. ダウンロードしたファイルを開きます。
 3. インストールがブロックされた場合は、ブラウザまたはファイル管理アプリに
    **不明なアプリのインストール**を一時的に許可します。
