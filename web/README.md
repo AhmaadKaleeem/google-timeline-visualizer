@@ -30,19 +30,17 @@ pnpm dev
 The Vite base path targets the default GitHub Pages project URL at
 `/google-timeline-visualizer/`.
 
-The current test deployment is available at
-<https://ahn-lab.org/google-timeline-visualizer/>. Before merging the Pages
-workflow, change the repository's Pages publishing source from `gh-pages` to
-GitHub Actions. Keep the project base path unchanged unless a dedicated custom
-subdomain is configured at the same time.
+The production deployment is available at
+<https://ahn-lab.org/google-timeline-visualizer/>. The Pages workflow builds and
+deploys this directory from `main`. Keep the project base path unchanged unless
+a dedicated custom subdomain is configured at the same time.
 
 Set `VITE_PREVIEW=true` when building a public test deployment. Preview builds
-show a visible warning. The current web app includes `noindex`, `nofollow`, and
-`noarchive` directives until the physical iPhone gate is complete.
+show a visible warning.
 
-## Current proof-of-concept scope
+## Current web app scope
 
-The current implementation proves the complete private browser path.
+The current implementation supports the complete private browser path.
 
 1. Load current direct-array or older `semanticSegments` Timeline JSON.
    A built-in fictional journey is available for privacy-safe device testing.
@@ -58,6 +56,7 @@ The current implementation proves the complete private browser path.
 8. Keep the screen awake when supported and allow video creation to be cancelled.
 9. Preview, share, or download the completed MP4.
 
-The browser layout, animated preview, and encoded sample output are validated at
-an iPhone-sized viewport. Longer exports still benefit from representative-device
-memory, thermal, interruption, and foreground execution testing.
+The browser layout, animated preview, encoded sample output, and camera following
+were validated at an iPhone-sized viewport and on a physical iPhone. Longer
+exports still benefit from representative-device memory, thermal, interruption,
+and foreground execution testing.

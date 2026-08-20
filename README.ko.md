@@ -12,7 +12,7 @@ JSON 파일과 영상 렌더링은 휴대전화 안에서 처리됩니다.
 
 ## iPhone에서 사용하기
 
-Safari에서 [iPhone 웹 미리보기](https://ahn-lab.org/google-timeline-visualizer/)를
+Safari에서 [iPhone 웹 앱](https://ahn-lab.org/google-timeline-visualizer/)을
 여세요. 별도 앱 설치가 필요 없고 타임라인 파일은 서버로 업로드되지 않습니다.
 
 1. Google 지도에서 **프로필 사진 → 설정 → 개인 콘텐츠 → 타임라인 데이터
@@ -25,7 +25,7 @@ Safari에서 [iPhone 웹 미리보기](https://ahn-lab.org/google-timeline-visua
 
 MP4를 만들려면 H.264 인코딩을 지원하는 Safari 16.4 이상이 필요합니다. 영상을
 만드는 동안 탭을 열어 두세요. 홈 화면에 보관하려면 Safari 공유 메뉴에서
-**홈 화면에 추가**를 선택합니다. 현재 미리보기 화면은 영어로 제공됩니다.
+**홈 화면에 추가**를 선택합니다. 현재 웹 앱 화면은 영어로 제공됩니다.
 
 ## Android에 설치하기
 
@@ -59,7 +59,7 @@ Android에서는 Google 지도 앱이 아니라 **휴대전화 설정**에서 �
 다만 Android에는 타임라인 화면까지 바로 여는 표준 링크가 없습니다.
 
 iPhone에서는 내보낸 JSON을
-[iPhone 웹 미리보기](https://ahn-lab.org/google-timeline-visualizer/)에서 바로 사용할
+[iPhone 웹 앱](https://ahn-lab.org/google-timeline-visualizer/)에서 바로 사용할
 수 있습니다. Android 앱에서 사용하려면 Android 휴대전화로 옮겨도 됩니다.
 
 ## 보이지 않는 Google 지도 타임라인 복원하기

@@ -15,7 +15,7 @@ exact dates, preview the Journey, and create an MP4 ready to watch or share.
 
 ## Use on iPhone
 
-Open the [iPhone web preview](https://ahn-lab.org/google-timeline-visualizer/)
+Open the [iPhone web app](https://ahn-lab.org/google-timeline-visualizer/)
 in Safari. There is no app to install and no Timeline file is uploaded.
 
 1. In Google Maps, open **profile picture → Settings → Personal content →
@@ -64,7 +64,7 @@ shows these instructions and can open Location settings for you. Android does no
 provide apps with a standard link directly to the Timeline page.
 
 On iPhone, the exported JSON can be used directly in the
-[iPhone web preview](https://ahn-lab.org/google-timeline-visualizer/). It can also
+[iPhone web app](https://ahn-lab.org/google-timeline-visualizer/). It can also
 be moved to an Android phone and opened in the Android app.
 
 ## Restore a missing Google Maps Timeline

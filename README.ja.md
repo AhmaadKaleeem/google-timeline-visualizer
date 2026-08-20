@@ -11,7 +11,7 @@ Google マップから書き出した Timeline JSON を使い、Android 端末�
 
 ## iPhone で使用する
 
-Safari で [iPhone Web プレビュー](https://ahn-lab.org/google-timeline-visualizer/)
+Safari で [iPhone Web アプリ](https://ahn-lab.org/google-timeline-visualizer/)
 を開きます。アプリのインストールは不要で、Timeline ファイルはサーバーへ
 アップロードされません。
 
@@ -24,7 +24,7 @@ Safari で [iPhone Web プレビュー](https://ahn-lab.org/google-timeline-visu
 
 MP4 の作成には H.264 エンコードに対応した Safari 16.4 以降が必要です。
 作成中はタブを開いたままにしてください。ホーム画面へ追加するには Safari の
-共有メニューから **ホーム画面に追加**を選びます。現在のプレビュー画面は英語です。
+共有メニューから **ホーム画面に追加**を選びます。現在の Web アプリ画面は英語です。
 
 ## Android にインストールする
 
