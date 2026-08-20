@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@Suppress("DEPRECATION")
 class VideoEncoderSupportTest {
     @Test
     fun acceptsSquarePortraitAndLandscapeWhenTheEncoderSupportsThem() {

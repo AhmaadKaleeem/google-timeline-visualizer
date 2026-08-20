@@ -39,6 +39,8 @@ internal class UnsupportedVideoFormatException(
 )
 
 internal object VideoEncoderSupport {
+    // Flexible YUV does not identify the planar or semi-planar byte layout required by the frame converter.
+    @Suppress("DEPRECATION")
     private val preferredColorFormats = listOf(
         MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar,
         MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar,

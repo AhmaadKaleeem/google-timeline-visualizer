@@ -10,6 +10,10 @@
 - Disable unsupported output with a localized message instead of silently substituting another format.
 - Preserve existing saved settings and pending exports without a storage migration.
 - Retain the original route-stroke appearance for square videos.
+- Keep every Settings dropdown choice available after selection and navigation.
+- Add an in-app language selector for System default and all nine supported languages.
+- Show the installed version name and version code in Settings.
+- Replace deprecated Gson leniency handling and document the required legacy H.264 color layouts without changing import or export behavior.
 - Credit Rafiqi Rachmat (`@akunlainfiqi`) for the format-preset design and implementation contributed in PR #57.
 - Set Android version code 19 and version name 2.2.0.
 
