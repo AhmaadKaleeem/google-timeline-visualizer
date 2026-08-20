@@ -166,7 +166,7 @@
     <string name="save_as_failed">Could not save a copy of the video</string>
     <string name="video_copy_saved">Video copy saved</string>
     <string name="advanced_settings">Advanced settings</string>
-    <string name="advanced_settings_summary">Choose camera movement, long-trip timing, and export quality.</string>
+    <string name="advanced_settings_summary">Choose camera movement, long-trip timing, and export format.</string>
     <string name="camera_movement">Camera movement</string>
     <string name="camera_fixed">Fixed</string>
     <string name="camera_steady">Steady</string>
@@ -193,10 +193,13 @@
     <string name="compression_gentle">Gentle · 0.92</string>
     <string name="compression_balanced">Balanced · 0.85</string>
     <string name="compression_strong">Strong · 0.75</string>
-    <string name="video_quality">Video quality</string>
-    <string name="quality_standard">Standard · 480p</string>
-    <string name="quality_high">High · 720p</string>
-    <string name="quality_ultra">Ultra · 1080p</string>
+    <string name="video_format">Video format</string>
+    <string name="format_square_480">Square · 480p</string>
+    <string name="format_square_720">Square · 720p</string>
+    <string name="format_square_1080">Square · 1080p</string>
+    <string name="format_portrait_1080">Portrait · 1080×1920</string>
+    <string name="format_landscape_1080">Landscape · 1920×1080</string>
+    <string name="format_not_supported">This device cannot create %1$d×%2$d videos. Choose another format.</string>
     <string name="restore_advanced_defaults">Restore defaults</string>
     <string name="advanced_defaults_restored">Advanced settings restored</string>
     <string name="use_exact_dates">Choose exact dates</string>

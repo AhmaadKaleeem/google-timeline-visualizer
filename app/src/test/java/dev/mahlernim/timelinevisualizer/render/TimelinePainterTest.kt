@@ -152,6 +152,23 @@ class TimelinePainterTest {
     }
 
     @Test
+    fun titleCardFitsAndStaysProportionateInEveryExportShape() {
+        val painter = TimelinePainter()
+        listOf(480 to 480, 1080 to 1080, 1080 to 1920, 1920 to 1080).forEach { (width, height) ->
+            val card = painter.overlayCard(width, height)
+
+            assertTrue("Card escaped ${width}x$height", card.left >= 0f && card.right <= width)
+            assertTrue("Card escaped ${width}x$height", card.top >= 0f && card.bottom <= height)
+            assertEquals(width / 2f, card.centerX(), 0.5f)
+        }
+
+        val square = painter.overlayCard(1080, 1080)
+        val landscape = painter.overlayCard(1920, 1080)
+        assertEquals(square.width(), landscape.width(), 0.5f)
+        assertTrue(landscape.width() < 1920 * 0.75f)
+    }
+
+    @Test
     fun indexedCameraBoundsMatchThePreviousRouteScan() {
         val routes = listOf(
             List(2_000) { index ->

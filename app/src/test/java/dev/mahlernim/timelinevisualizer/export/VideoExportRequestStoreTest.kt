@@ -81,6 +81,23 @@ class VideoExportRequestStoreTest {
     }
 
     @Test
+    fun restoresPortraitAndLandscapePendingExports() {
+        listOf(VideoQuality.PORTRAIT, VideoQuality.LANDSCAPE).forEach { format ->
+            val request = VideoExportRequest(
+                outputUri = "content://documents/${format.name.lowercase()}.mp4",
+                journey = Journey.from(emptyList(), 2026),
+                title = format.name,
+                durationSeconds = 30,
+                cameraSettings = CameraSettings(videoQuality = format),
+            )
+
+            store.save(request)
+
+            assertEquals(format, store.load()!!.cameraSettings.videoQuality)
+        }
+    }
+
+    @Test
     fun readsVersionOneAsASameYearEnglishRequest() {
         val requestFile = File(context.filesDir, "pending-video-export.bin")
         DataOutputStream(requestFile.outputStream().buffered()).use { output ->
