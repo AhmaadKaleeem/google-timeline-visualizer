@@ -112,6 +112,37 @@ describe('camera track', () => {
     });
   });
 
+  it('calculates the same overview above browser argument limits', () => {
+    const endpoints = unwrapWorldPoints([project(70, 20), project(-55, 20)]);
+    const denseJourney = {
+      worldPoints: Array.from({ length: 200_000 }, (_, index) => endpoints[index % endpoints.length]),
+      cumulativeDistanceKm: [],
+      totalDistanceKm: 0,
+    };
+    const endpointJourney = {
+      worldPoints: endpoints,
+      cumulativeDistanceKm: [],
+      totalDistanceKm: 0,
+    };
+
+    expect(overviewViewport(denseJourney, 480)).toEqual(overviewViewport(endpointJourney, 480));
+  });
+
+  it('builds the moving camera above browser argument limits', () => {
+    const point = koreanJourney.worldPoints[0];
+    const pointCount = 130_000;
+    const denseJourney = {
+      worldPoints: Array.from({ length: pointCount }, () => point),
+      cumulativeDistanceKm: new Array<number>(pointCount).fill(0),
+      totalDistanceKm: 0,
+    };
+
+    const track = buildCameraTrack(denseJourney, 480, 'steady');
+
+    expect(track.frames).toHaveLength(481);
+    expect(track.frames.every((frame) => Number.isFinite(frame.spanY))).toBe(true);
+  });
+
   it('blends from the final following view to the full-route ending view', () => {
     const track = buildCameraTrack(koreanJourney, 480, 'dynamic');
     const following = cameraViewportAt(track, 1);

@@ -1,4 +1,5 @@
 import type { CameraFrame, CameraMovement, CameraTrack, Viewport, WorldPoint } from './types';
+import { worldBounds } from './geo';
 
 interface CameraMovementProfile {
   contextFraction: number;
@@ -222,12 +223,7 @@ export function overviewSafeArea(size: number): OverviewSafeArea {
 }
 
 export function overviewViewport(journey: CameraJourney, size: number): Viewport {
-  const xs = journey.worldPoints.map((point) => point.x);
-  const ys = journey.worldPoints.map((point) => point.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
+  const { minX, maxX, minY, maxY } = worldBounds(journey.worldPoints);
   const contentCenterX = (minX + maxX) / 2;
   const contentCenterY = (minY + maxY) / 2;
   const contentSpanX = Math.max(maxX - minX, MIN_OVERVIEW_VIEWPORT_SPAN);
@@ -319,10 +315,19 @@ function rawViewport(
   focus.push(current.point, worldPositionAtDistance(journey, lookaheadDistance).point);
 
   const centerX = current.point.x;
-  const wrappedX = focus.map((point) => unwrapNear(point.x, centerX));
-  const ys = focus.map((point) => point.y);
-  const contentSpanX = Math.max(0.00015, Math.max(...wrappedX) - Math.min(...wrappedX));
-  const contentSpanY = Math.max(0.00015, Math.max(...ys) - Math.min(...ys));
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const point of focus) {
+    const x = unwrapNear(point.x, centerX);
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (point.y < minY) minY = point.y;
+    if (point.y > maxY) maxY = point.y;
+  }
+  const contentSpanX = Math.max(0.00015, maxX - minX);
+  const contentSpanY = Math.max(0.00015, maxY - minY);
   const aspect = 1;
   const spanY = clamp(
     Math.max(contentSpanY * padding, contentSpanX * padding / aspect),

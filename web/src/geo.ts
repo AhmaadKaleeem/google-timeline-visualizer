@@ -55,11 +55,32 @@ export function overviewRouteSegments(points: WorldPoint[]): WorldPoint[][] {
   return segments;
 }
 
+export function worldBounds(points: WorldPoint[]): {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+} {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const point of points) {
+    if (point.x < minX) minX = point.x;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.y > maxY) maxY = point.y;
+  }
+  return { minX, maxX, minY, maxY };
+}
+
 export function viewportFor(points: WorldPoint[], size: number): Viewport {
-  const minPointX = Math.min(...points.map((point) => point.x));
-  const maxPointX = Math.max(...points.map((point) => point.x));
-  const minPointY = Math.min(...points.map((point) => point.y));
-  const maxPointY = Math.max(...points.map((point) => point.y));
+  const {
+    minX: minPointX,
+    maxX: maxPointX,
+    minY: minPointY,
+    maxY: maxPointY,
+  } = worldBounds(points);
   const centerX = (minPointX + maxPointX) / 2;
   const centerY = (minPointY + maxPointY) / 2;
   const span = Math.max(maxPointX - minPointX, maxPointY - minPointY, 0.002) * 1.28;
