@@ -6,7 +6,7 @@ import {
   overviewViewport,
   worldPositionAtProgress,
 } from './camera';
-import { cumulativeDistances, project, unwrapWorldPoints } from './geo';
+import { cumulativeDistances, overviewRouteSegments, project, unwrapWorldPoints } from './geo';
 import type {
   CameraMovement,
   GeoPoint,
@@ -159,7 +159,11 @@ export async function prepareJourney(
     totalDistanceKm: distances.at(-1) ?? 0,
   };
   const cameraTrack = buildCameraTrack(journey, size, cameraMovement);
-  const endingOverview = overviewViewport(journey, size);
+  const overviewSegments = overviewRouteSegments(worldPoints);
+  const endingOverview = overviewViewport(
+    { ...journey, worldPoints: overviewSegments.flat() },
+    size,
+  );
   const sampleCount = Math.max(
     20,
     Math.min(durationSeconds * 8, Math.max(durationSeconds * 2, Math.ceil(journey.totalDistanceKm / 250))),
@@ -176,7 +180,13 @@ export async function prepareJourney(
     for (const tile of requiredTiles(ending)) required.set(tileKey(tile), tile);
   }
   const tiles = await loadRequiredTiles([...required.values()], signal, onProgress);
-  return { ...journey, cameraTrack, overviewViewport: endingOverview, tiles };
+  return {
+    ...journey,
+    overviewRouteSegments: overviewSegments,
+    cameraTrack,
+    overviewViewport: endingOverview,
+    tiles,
+  };
 }
 
 function pointAtProgress(journey: PreparedJourney, progress: number): { point: WorldPoint; completedIndex: number } {
@@ -267,13 +277,15 @@ export function drawFrame(
     context.globalAlpha = (190 / 255) * easeInOutCubic(frame.outroProgress);
     context.strokeStyle = '#e90064';
     context.lineWidth = 3.5;
-    strokeRoute(
-      context,
-      journey.worldPoints.slice(0, -1),
-      journey.worldPoints.at(-1) ?? current.point,
-      viewport,
-      size,
-    );
+    for (const segment of journey.overviewRouteSegments) {
+      strokeRoute(
+        context,
+        segment.slice(0, -1),
+        segment.at(-1) ?? current.point,
+        viewport,
+        size,
+      );
+    }
     context.restore();
   }
 

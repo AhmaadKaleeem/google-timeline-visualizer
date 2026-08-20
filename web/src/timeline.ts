@@ -57,6 +57,13 @@ interface ParsedInstant {
   timeZoneMissing: boolean;
 }
 
+interface ParsedTimelineSegment {
+  anchor: Date | null;
+  points: GeoPoint[];
+}
+
+const SEGMENT_DIRECTION_SIGNAL_MS = 36 * 60 * 60 * 1000;
+
 function parseInstant(value: unknown): ParsedInstant | null {
   if (typeof value !== 'string' || value.trim() === '') return null;
   const raw = value.trim();
@@ -108,6 +115,26 @@ function addPoint(output: GeoPoint[], time: unknown, coordinate: unknown): void 
   });
 }
 
+function normalizeSegmentDirection(segments: ParsedTimelineSegment[]): ParsedTimelineSegment[] {
+  const anchors = segments
+    .map((segment) => segment.anchor?.getTime())
+    .filter((timestamp): timestamp is number => timestamp !== undefined);
+  let ascendingSignals = 0;
+  let descendingSignals = 0;
+  for (let index = 1; index < anchors.length; index += 1) {
+    const delta = anchors[index] - anchors[index - 1];
+    if (Math.abs(delta) < SEGMENT_DIRECTION_SIGNAL_MS) continue;
+    if (delta > 0) ascendingSignals += 1;
+    else descendingSignals += 1;
+  }
+  const endpointDelta = (anchors.at(-1) ?? 0) - (anchors[0] ?? 0);
+  if (Math.abs(endpointDelta) >= SEGMENT_DIRECTION_SIGNAL_MS) {
+    if (endpointDelta > 0) ascendingSignals += 2;
+    else descendingSignals += 2;
+  }
+  return descendingSignals > ascendingSignals ? [...segments].reverse() : segments;
+}
+
 export function parseTimelineJson(data: unknown): GeoPoint[] {
   let segments: unknown[];
   if (Array.isArray(data)) {
@@ -131,18 +158,19 @@ export function parseTimelineJson(data: unknown): GeoPoint[] {
     );
   }
 
-  const points: GeoPoint[] = [];
+  const parsedSegments: ParsedTimelineSegment[] = [];
   for (const rawSegment of segments) {
     if (!isObject(rawSegment)) continue;
     const startTime = rawSegment.startTime;
     const endTime = rawSegment.endTime;
+    const segmentPoints: GeoPoint[] = [];
 
     if (isObject(rawSegment.activity)) {
-      addPoint(points, startTime, rawSegment.activity.start);
+      addPoint(segmentPoints, startTime, rawSegment.activity.start);
     }
 
     if (isObject(rawSegment.visit) && isObject(rawSegment.visit.topCandidate)) {
-      addPoint(points, startTime, rawSegment.visit.topCandidate.placeLocation);
+      addPoint(segmentPoints, startTime, rawSegment.visit.topCandidate.placeLocation);
     }
 
     if (Array.isArray(rawSegment.timelinePath)) {
@@ -153,7 +181,7 @@ export function parseTimelineJson(data: unknown): GeoPoint[] {
         const coordinate = parseCoordinate(rawPathPoint.point);
         if ((absolute || offsetInstant) && coordinate) {
           const segmentStart = absolute ? null : parseInstant(startTime);
-          points.push({
+          segmentPoints.push({
             instant: absolute?.instant ?? offsetInstant!,
             latitude: coordinate[0],
             longitude: coordinate[1],
@@ -166,10 +194,17 @@ export function parseTimelineJson(data: unknown): GeoPoint[] {
     }
 
     if (isObject(rawSegment.activity)) {
-      addPoint(points, endTime, rawSegment.activity.end);
+      addPoint(segmentPoints, endTime, rawSegment.activity.end);
+    }
+    if (segmentPoints.length > 0) {
+      parsedSegments.push({
+        anchor: parseInstant(startTime)?.instant ?? segmentPoints[0].instant,
+        points: segmentPoints,
+      });
     }
   }
 
+  const points = normalizeSegmentDirection(parsedSegments).flatMap((segment) => segment.points);
   const unique = new Map<string, GeoPoint>();
   for (const point of points) {
     const key = `${point.instant.getTime()}:${point.latitude}:${point.longitude}`;

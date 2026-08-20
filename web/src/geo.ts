@@ -22,6 +22,39 @@ export function unwrapWorldPoints(points: WorldPoint[]): WorldPoint[] {
   return output;
 }
 
+function wrapNear(value: number, reference: number): number {
+  return value - Math.floor(value - reference + 0.5);
+}
+
+export function overviewRouteSegments(points: WorldPoint[]): WorldPoint[][] {
+  if (points.length === 0) return [];
+  const referenceX = points.at(-1)?.x ?? 0.5;
+  const lowerEdge = referenceX - 0.5;
+  const upperEdge = referenceX + 0.5;
+  const wrapped = points.map((point) => ({ x: wrapNear(point.x, referenceX), y: point.y }));
+  const segments: WorldPoint[][] = [[wrapped[0]]];
+  for (let index = 1; index < wrapped.length; index += 1) {
+    const previous = wrapped[index - 1];
+    const current = wrapped[index];
+    const active = segments.at(-1)!;
+    const delta = current.x - previous.x;
+    if (Math.abs(delta) <= 0.5) {
+      active.push(current);
+      continue;
+    }
+
+    const crossingRight = delta < -0.5;
+    const adjustedCurrentX = current.x + (crossingRight ? 1 : -1);
+    const exitX = crossingRight ? upperEdge : lowerEdge;
+    const enterX = crossingRight ? lowerEdge : upperEdge;
+    const fraction = (exitX - previous.x) / (adjustedCurrentX - previous.x);
+    const crossingY = previous.y + (current.y - previous.y) * fraction;
+    active.push({ x: exitX, y: crossingY });
+    segments.push([{ x: enterX, y: crossingY }, current]);
+  }
+  return segments;
+}
+
 export function viewportFor(points: WorldPoint[], size: number): Viewport {
   const minPointX = Math.min(...points.map((point) => point.x));
   const maxPointX = Math.max(...points.map((point) => point.x));

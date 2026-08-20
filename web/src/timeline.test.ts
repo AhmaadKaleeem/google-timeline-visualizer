@@ -112,6 +112,52 @@ describe('parseTimelineJson', () => {
     expect(points.map((point) => point.longitude)).toEqual([179, -179, -178]);
   });
 
+  it('normalizes a reverse-ordered timezone-less segment array', () => {
+    const points = parseTimelineJson([
+      {
+        startTime: '2026-01-03T10:00:00',
+        visit: { topCandidate: { placeLocation: '35,129' } },
+      },
+      {
+        startTime: '2026-01-02T10:00:00',
+        visit: { topCandidate: { placeLocation: '37,127' } },
+      },
+      {
+        startTime: '2026-01-01T10:00:00',
+        visit: { topCandidate: { placeLocation: '33,126' } },
+      },
+    ]);
+
+    expect(points.map(pointDateKey)).toEqual([
+      '2026-01-01',
+      '2026-01-02',
+      '2026-01-03',
+    ]);
+  });
+
+  it('does not let one timezone-less segment preserve an otherwise reverse export', () => {
+    const points = parseTimelineJson([
+      {
+        startTime: '2026-03-10T10:00:00Z',
+        visit: { topCandidate: { placeLocation: '35,129' } },
+      },
+      {
+        startTime: '2026-02-10T10:00:00',
+        visit: { topCandidate: { placeLocation: '37,127' } },
+      },
+      {
+        startTime: '2026-01-10T10:00:00Z',
+        visit: { topCandidate: { placeLocation: '33,126' } },
+      },
+    ]);
+
+    expect(points.map(pointDateKey)).toEqual([
+      '2026-01-10',
+      '2026-02-10',
+      '2026-03-10',
+    ]);
+  });
+
   it('rejects unsupported or empty exports', () => {
     expect(() => parseTimelineJson({ locations: [] })).toThrow(TimelineParseError);
     expect(() => parseTimelineJson([])).toThrow('no usable location points');

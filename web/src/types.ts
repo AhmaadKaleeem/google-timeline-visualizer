@@ -46,6 +46,7 @@ export interface TimelineFrame {
 export interface PreparedJourney {
   points: GeoPoint[];
   worldPoints: WorldPoint[];
+  overviewRouteSegments: WorldPoint[][];
   cumulativeDistanceKm: number[];
   totalDistanceKm: number;
   cameraTrack: CameraTrack;
