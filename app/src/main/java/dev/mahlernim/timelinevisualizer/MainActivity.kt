@@ -61,6 +61,9 @@ import dev.mahlernim.timelinevisualizer.export.VideoExportRequestStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportService
 import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
 import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
+import dev.mahlernim.timelinevisualizer.export.EncoderSupport
+import dev.mahlernim.timelinevisualizer.export.VideoEncoderSupport
+import dev.mahlernim.timelinevisualizer.export.describe
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.Timeline
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
@@ -129,7 +132,9 @@ class MainActivity : AppCompatActivity() {
     private val timelineSourceStore by lazy { TimelineSourceStore(applicationContext) }
     private val cameraSettingsPreferences by lazy { CameraSettingsPreferences(applicationContext) }
     private val locationFilterPreferences by lazy { LocationFilterPreferences(applicationContext) }
+    private val videoEncoderProfiles by lazy { VideoEncoderSupport.deviceProfiles() }
     private var cameraSettings = CameraSettings.DEFAULT
+    private var videoFormatSupported = true
     private var locationFilterMode = LocationFilterMode.CONSERVATIVE
     private var routeDurationSeconds = VideoDuration.DEFAULT_SECONDS
     private val applyTitleChanges = Runnable { commitTitlePreferences() }
@@ -897,9 +902,11 @@ class MainActivity : AppCompatActivity() {
             R.string.compression_strong,
         ).map(::getString)
         val qualityLabels = listOf(
-            R.string.quality_standard,
-            R.string.quality_high,
-            R.string.quality_ultra,
+            R.string.format_square_480,
+            R.string.format_square_720,
+            R.string.format_square_1080,
+            R.string.format_portrait_1080,
+            R.string.format_landscape_1080,
         ).map(::getString)
 
         listOf(
@@ -968,7 +975,7 @@ class MainActivity : AppCompatActivity() {
         val ready = editor.timelineView.isCameraReady
         val canCreate = selected?.let(::canCreateVideo) == true && ready
         editor.playButton.isEnabled = !exportingVideo && canCreate
-        editor.exportButton.isEnabled = !exportingVideo && canCreate
+        editor.exportButton.isEnabled = !exportingVideo && canCreate && videoFormatSupported
         editor.timelineSeek.isEnabled = !exportingVideo && ready
         if (selected != null && !ready && !exportingVideo) {
             editor.statusText.setText(R.string.preparing_preview)
@@ -1027,10 +1034,33 @@ class MainActivity : AppCompatActivity() {
             false,
         )
         settingsScreen.videoQualityDropdown.setText(
-            getString(listOf(R.string.quality_standard, R.string.quality_high, R.string.quality_ultra)[settings.videoQuality.ordinal]),
+            videoFormatLabel(settings.videoQuality),
             false,
         )
+        val warning = videoFormatWarning(settings.videoQuality)
+        videoFormatSupported = warning == null
+        settingsScreen.videoFormatWarningText.text = warning
+        settingsScreen.videoFormatWarningText.visibility = if (warning == null) View.GONE else View.VISIBLE
+        updateCameraPreparationUi()
         showProgress(editor.timelineSeek.progress / 1000f)
+    }
+
+    private fun videoFormatLabel(format: VideoQuality): String = getString(
+        when (format) {
+            VideoQuality.STANDARD -> R.string.format_square_480
+            VideoQuality.HIGH -> R.string.format_square_720
+            VideoQuality.ULTRA -> R.string.format_square_1080
+            VideoQuality.PORTRAIT -> R.string.format_portrait_1080
+            VideoQuality.LANDSCAPE -> R.string.format_landscape_1080
+        },
+    )
+
+    private fun videoFormatWarning(format: VideoQuality): String? {
+        if (videoEncoderProfiles.isEmpty()) return null
+        return when (val support = VideoEncoderSupport.select(format, videoEncoderProfiles)) {
+            is EncoderSupport.Supported -> null
+            is EncoderSupport.Unsupported -> support.reason.describe(this, format)
+        }
     }
 
     private fun applyDuration(seconds: Int) {
@@ -1252,7 +1282,7 @@ class MainActivity : AppCompatActivity() {
         home.deleteAllVideosButton.isEnabled = !exporting
         editor.importButton.isEnabled = !exporting && editor.loadingGroup.visibility != View.VISIBLE
         editor.playButton.isEnabled = !exporting && canCreate
-        editor.exportButton.isEnabled = !exporting && canCreate
+        editor.exportButton.isEnabled = !exporting && canCreate && videoFormatSupported
         editor.shareButton.isEnabled = !exporting
         editor.watchVideoButton.isEnabled = !exporting
         editor.createAnotherButton.isEnabled = !exporting

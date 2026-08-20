@@ -46,10 +46,33 @@ class VideoMediaTest {
         }
     }
 
+    @Test
+    fun portraitAndLandscapeOverviewsKeepTheirThumbnailAspect() {
+        listOf(
+            Triple(608 to 1080, 180, 320),
+            Triple(1080 to 608, 320, 180),
+        ).forEachIndexed { index, (source, expectedWidth, expectedHeight) ->
+            val uri = Uri.parse("content://example/generated-format-$index")
+            val overview = Bitmap.createBitmap(source.first, source.second, Bitmap.Config.ARGB_8888)
+            try {
+                media.saveGeneratedOverview(uri, overview)
+
+                val thumbnail = media.loadThumbnail(uri)
+                assertNotNull(thumbnail)
+                assertEquals(expectedWidth, thumbnail!!.width)
+                assertEquals(expectedHeight, thumbnail.height)
+                thumbnail.recycle()
+            } finally {
+                overview.recycle()
+                media.deleteThumbnail(uri)
+                media.deleteOverview(uri)
+            }
+        }
+    }
+
     companion object {
         private val PNG_HEADER = byteArrayOf(
             0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
         )
     }
 }
-

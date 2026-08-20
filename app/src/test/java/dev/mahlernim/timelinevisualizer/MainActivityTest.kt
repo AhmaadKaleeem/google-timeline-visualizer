@@ -28,6 +28,9 @@ import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
 import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
+import dev.mahlernim.timelinevisualizer.render.VideoQuality
+import dev.mahlernim.timelinevisualizer.ui.CameraSettingsPreferences
+import dev.mahlernim.timelinevisualizer.ui.TimelineView
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -292,12 +295,29 @@ class MainActivityTest {
             activity.findViewById<AutoCompleteTextView>(R.id.longTripDropdown).text.toString(),
         )
         assertEquals(
-            activity.getString(R.string.quality_standard),
+            activity.getString(R.string.format_square_480),
             activity.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown).text.toString(),
         )
         assertEquals(
             activity.getString(R.string.location_filter_conservative),
             activity.findViewById<AutoCompleteTextView>(R.id.locationFilterDropdown).text.toString(),
+        )
+    }
+
+    @Test
+    fun portraitFormatUpdatesTheStoredSettingAndPreviewShape() {
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.navigationSettings).performClick()
+        val dropdown = activity.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown)
+
+        dropdown.onItemClickListener?.onItemClick(null, null, VideoQuality.PORTRAIT.ordinal, 0L)
+
+        assertEquals(activity.getString(R.string.format_portrait_1080), dropdown.text.toString())
+        assertEquals(VideoQuality.PORTRAIT, CameraSettingsPreferences(activity).load().videoQuality)
+        assertEquals(
+            VideoQuality.PORTRAIT.aspectRatio,
+            activity.findViewById<TimelineView>(R.id.timelineView).previewAspectRatio,
+            0.001f,
         )
     }
 

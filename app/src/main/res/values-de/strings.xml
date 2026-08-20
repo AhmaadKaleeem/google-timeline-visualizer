@@ -160,7 +160,7 @@
     <string name="save_as_failed">Eine Kopie des Videos konnte nicht gespeichert werden</string>
     <string name="video_copy_saved">Videokopie gespeichert</string>
     <string name="advanced_settings">Erweiterte Einstellungen</string>
-    <string name="advanced_settings_summary">Wählen Sie Kamerabewegung, Langstrecken-Timing und Exportqualität.</string>
+    <string name="advanced_settings_summary">Wählen Sie Kamerabewegung, Langstrecken-Timing und Exportformat.</string>
     <string name="camera_movement">Kamerabewegung</string>
     <string name="camera_fixed">Fest</string>
     <string name="camera_steady">Stetig</string>
@@ -187,10 +187,13 @@
     <string name="compression_gentle">Sanft · 0,92</string>
     <string name="compression_balanced">Ausgewogen · 0,85</string>
     <string name="compression_strong">Stark · 0,75</string>
-    <string name="video_quality">Videoqualität</string>
-    <string name="quality_standard">Standard · 480p</string>
-    <string name="quality_high">Hoch · 720p</string>
-    <string name="quality_ultra">Ultra · 1080p</string>
+    <string name="video_format">Videoformat</string>
+    <string name="format_square_480">Quadratisch · 480p</string>
+    <string name="format_square_720">Quadratisch · 720p</string>
+    <string name="format_square_1080">Quadratisch · 1080p</string>
+    <string name="format_portrait_1080">Hochformat · 1080×1920</string>
+    <string name="format_landscape_1080">Querformat · 1920×1080</string>
+    <string name="format_not_supported">Dieses Gerät kann keine %1$d×%2$d-Videos erstellen. Wählen Sie ein anderes Format.</string>
     <string name="restore_advanced_defaults">Standardeinstellungen wiederherstellen</string>
     <string name="advanced_defaults_restored">Erweiterte Einstellungen wiederhergestellt</string>
     <string name="use_exact_dates">Wählen Sie genaue Daten</string>

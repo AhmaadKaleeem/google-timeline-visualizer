@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.2.0
+
+- Add fixed portrait 1080×1920 and landscape 1920×1080 video formats.
+- Keep the existing square 480p, 720p, and 1080p formats and the square 480p default unchanged.
+- Match the preview and generated journey overview to the selected output aspect ratio.
+- Keep titles, dates, attribution, markers, and the ending overview proportionate in every format.
+- Check H.264 encoder size, frame-rate, bitrate, alignment, and color-layout support before preparing map tiles.
+- Disable unsupported output with a localized message instead of silently substituting another format.
+- Preserve existing saved settings and pending exports without a storage migration.
+- Retain the original route-stroke appearance for square videos.
+- Credit Rafiqi Rachmat (`@akunlainfiqi`) for the format-preset design and implementation contributed in PR #57.
+- Set Android version code 19 and version name 2.2.0.
+
 ## 2.1.3
 
 - Fix invalid translated preview date patterns that terminated the first frame in German, Spanish, French, and Portuguese.

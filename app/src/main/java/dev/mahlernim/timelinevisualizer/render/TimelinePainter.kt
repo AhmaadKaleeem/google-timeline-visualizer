@@ -95,6 +95,15 @@ class TimelinePainter {
         color = Color.argb(220, 255, 248, 250)
     }
 
+    private fun overlayScale(width: Int, height: Int): Float = min(width, height) / 720f
+
+    internal fun overlayCard(width: Int, height: Int): RectF {
+        val scale = overlayScale(width, height)
+        val cardWidth = min(width - CARD_SIDE_INSET * 2f * scale, MAX_CARD_WIDTH * scale)
+        val left = (width - cardWidth) / 2f
+        return RectF(left, CARD_TOP * scale, left + cardWidth, OVERLAY_BOTTOM * scale)
+    }
+
     internal fun routeWorldPoint(journey: Journey, index: Int): WorldPoint =
         prepare(journey).worldPointAt(index)
 
@@ -478,7 +487,7 @@ class TimelinePainter {
     }
 
     internal fun overviewSafeArea(width: Int, height: Int): RectF {
-        val scale = width / 720f
+        val scale = overlayScale(width, height)
         return RectF(
             OVERVIEW_SIDE_INSET * scale,
             OVERLAY_BOTTOM * scale + OVERVIEW_HEADER_GAP * scale,
@@ -655,8 +664,9 @@ class TimelinePainter {
         headPaint.alpha = markerAlpha
         headRingPaint.alpha = markerAlpha
         if (markerAlpha > 0) {
-            canvas.drawCircle(head.first, head.second, width * 0.013f, headPaint)
-            canvas.drawCircle(head.first, head.second, width * 0.017f, headRingPaint)
+            val markerEdge = min(width, height).toFloat()
+            canvas.drawCircle(head.first, head.second, markerEdge * 0.013f, headPaint)
+            canvas.drawCircle(head.first, head.second, markerEdge * 0.017f, headRingPaint)
         }
         headPaint.alpha = previousHeadAlpha
         headRingPaint.alpha = previousRingAlpha
@@ -706,8 +716,8 @@ class TimelinePainter {
         title: String,
         renderText: RenderText,
     ) {
-        val scale = width / 720f
-        val card = RectF(34f * scale, 28f * scale, width - 34f * scale, OVERLAY_BOTTOM * scale)
+        val scale = overlayScale(width, height)
+        val card = overlayCard(width, height)
         canvas.drawRoundRect(card, 24f * scale, 24f * scale, cardPaint)
         titlePaint.textSize = 34f * scale
         bodyPaint.textSize = 20f * scale
@@ -721,13 +731,13 @@ class TimelinePainter {
             val count = titlePaint.breakText(displayTitle, true, availableWidth - titlePaint.measureText("…"), null)
             displayTitle.take(count.coerceAtLeast(1)).trimEnd() + "…"
         }
-        canvas.drawText(fittedTitle, width / 2f, 72f * scale, titlePaint)
+        canvas.drawText(fittedTitle, card.centerX(), 72f * scale, titlePaint)
         val date = renderText.dateFormatter.format(position.point.instant.atZone(ZoneId.systemDefault()))
         val distance = position.distanceKm
         val number = NumberFormat.getNumberInstance(renderText.locale).apply { maximumFractionDigits = 0 }
         canvas.drawText(
             "$date  ·  ${number.format(distance)} ${renderText.distanceUnit}",
-            width / 2f,
+            card.centerX(),
             108f * scale,
             bodyPaint,
         )
@@ -1083,6 +1093,9 @@ class TimelinePainter {
         private const val OVERVIEW_ROUTE_ALPHA = 190
         private const val OVERVIEW_PADDING = 1.22
         private const val OVERLAY_BOTTOM = 132f
+        private const val CARD_TOP = 28f
+        private const val CARD_SIDE_INSET = 34f
+        private const val MAX_CARD_WIDTH = 720f - CARD_SIDE_INSET * 2f
         private const val OVERVIEW_SIDE_INSET = 34f
         private const val OVERVIEW_HEADER_GAP = 20f
         private const val OVERVIEW_BOTTOM_INSET = 34f

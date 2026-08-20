@@ -5,11 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
-import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
-import android.os.Build
 import dev.mahlernim.timelinevisualizer.data.TileRepository
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
@@ -48,9 +46,16 @@ class Mp4Exporter(
         onProgress: (ExportProgress) -> Unit,
     ): Bitmap = withContext(Dispatchers.Default) {
         require(journey.points.size >= 2) { "At least two location points are needed" }
-        val width = cameraSettings.videoQuality.size
-        val height = cameraSettings.videoQuality.size
-        val fps = 24
+        val videoFormat = cameraSettings.videoQuality
+        val encoder = when (val support = VideoEncoderSupport.evaluate(videoFormat)) {
+            is EncoderSupport.Supported -> support
+            is EncoderSupport.Unsupported -> throw UnsupportedVideoFormatException(support.reason, videoFormat)
+        }
+        val width = videoFormat.width
+        val height = videoFormat.height
+        val fps = videoFormat.frameRate
+        val overviewWidth = overviewWidth(videoFormat)
+        val overviewHeight = overviewHeight(videoFormat)
         val painter = TimelinePainter()
 
         val sampleCount = max(durationSeconds * 2, ceil(journey.totalDistanceKm / 250.0).toInt())
@@ -76,8 +81,8 @@ class Mp4Exporter(
                     painter.viewport(
                         journey,
                         TimelineFrame(1f, 1f),
-                        OVERVIEW_SIZE,
-                        OVERVIEW_SIZE,
+                        overviewWidth,
+                        overviewHeight,
                         cameraSettings,
                     ),
                 ).map { it.id },
@@ -97,10 +102,9 @@ class Mp4Exporter(
             )
         }
 
-        val encoder = selectEncoder(width, height, cameraSettings.videoQuality.bitrate)
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, encoder.colorFormat)
-            setInteger(MediaFormat.KEY_BIT_RATE, cameraSettings.videoQuality.bitrate)
+            setInteger(MediaFormat.KEY_BIT_RATE, videoFormat.bitrate)
             setInteger(MediaFormat.KEY_FRAME_RATE, fps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
         }
@@ -226,11 +230,11 @@ class Mp4Exporter(
                 }
             }
             while (!drain(true)) coroutineContext.ensureActive()
-            val overview = Bitmap.createBitmap(OVERVIEW_SIZE, OVERVIEW_SIZE, Bitmap.Config.ARGB_8888)
+            val overview = Bitmap.createBitmap(overviewWidth, overviewHeight, Bitmap.Config.ARGB_8888)
             painter.draw(
                 Canvas(overview),
-                OVERVIEW_SIZE,
-                OVERVIEW_SIZE,
+                overviewWidth,
+                overviewHeight,
                 journey,
                 TimelineFrame(1f, 1f),
                 durationSeconds,
@@ -249,29 +253,6 @@ class Mp4Exporter(
             descriptor.close()
             bitmap.recycle()
         }
-    }
-
-    private fun selectEncoder(width: Int, height: Int, bitrate: Int): EncoderChoice {
-        val preferredFormats = listOf(
-            MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar,
-            MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar,
-        )
-        val codecs = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.toList()
-            .sortedByDescending { info ->
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && info.isHardwareAccelerated) 1 else 0
-            }
-        for (info in codecs) {
-            if (!info.isEncoder || !info.supportedTypes.any { it.equals(MediaFormat.MIMETYPE_VIDEO_AVC, true) }) continue
-            val capabilities = runCatching { info.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC) }.getOrNull()
-                ?: continue
-            val videoCapabilities = capabilities.videoCapabilities ?: continue
-            if (!videoCapabilities.isSizeSupported(width, height) || !videoCapabilities.bitrateRange.contains(bitrate)) {
-                continue
-            }
-            val formats = capabilities.colorFormats.toSet()
-            preferredFormats.firstOrNull(formats::contains)?.let { return EncoderChoice(info.name, it) }
-        }
-        error("This device does not expose a compatible H.264 encoder")
     }
 
     private fun argbToYuv420(pixels: IntArray, output: ByteArray, width: Int, height: Int, colorFormat: Int) {
@@ -303,13 +284,27 @@ class Mp4Exporter(
         }
     }
 
-    private data class EncoderChoice(val name: String, val colorFormat: Int)
-
     companion object {
         private const val OUTRO_TILE_SAMPLES = 12
-        const val OVERVIEW_SIZE = 1080
+        const val OVERVIEW_MAX_EDGE = 1080
         private const val PREPARING_PROGRESS_WEIGHT = 0.10f
         private const val JOURNEY_PROGRESS_WEIGHT = 0.80f
         private const val FINISHING_PROGRESS_WEIGHT = 0.10f
+
+        internal fun overviewWidth(format: dev.mahlernim.timelinevisualizer.render.VideoQuality): Int =
+            if (format.width >= format.height) {
+                OVERVIEW_MAX_EDGE
+            } else {
+                (OVERVIEW_MAX_EDGE * format.aspectRatio).toInt().coerceAtLeast(1).toEven()
+            }
+
+        internal fun overviewHeight(format: dev.mahlernim.timelinevisualizer.render.VideoQuality): Int =
+            if (format.height >= format.width) {
+                OVERVIEW_MAX_EDGE
+            } else {
+                (OVERVIEW_MAX_EDGE / format.aspectRatio).toInt().coerceAtLeast(1).toEven()
+            }
+
+        private fun Int.toEven(): Int = if (this % 2 == 0) this else this + 1
     }
 }

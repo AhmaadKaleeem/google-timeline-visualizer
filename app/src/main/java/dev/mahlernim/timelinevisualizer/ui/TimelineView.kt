@@ -22,6 +22,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
 
 class TimelineView @JvmOverloads constructor(
     context: Context,
@@ -80,8 +81,16 @@ class TimelineView @JvmOverloads constructor(
         set(value) {
             if (field == value) return
             field = value
+            previewAspectRatio = value.videoQuality.aspectRatio
             markFrameDirty()
             restartCameraPreparation()
+        }
+
+    var previewAspectRatio: Float = 1f
+        private set(value) {
+            if (field == value) return
+            field = value
+            requestLayout()
         }
 
     override fun onAttachedToWindow() {
@@ -109,9 +118,11 @@ class TimelineView @JvmOverloads constructor(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val width = MeasureSpec.getSize(widthMeasureSpec)
-        val desiredHeight = width.coerceAtLeast((320 * resources.displayMetrics.density).toInt())
-        setMeasuredDimension(width, resolveSize(desiredHeight, heightMeasureSpec))
+        val availableWidth = MeasureSpec.getSize(widthMeasureSpec).coerceAtLeast(1)
+        val maximumHeight = (MAX_PREVIEW_HEIGHT_DP * resources.displayMetrics.density).roundToInt()
+            .coerceAtLeast(1)
+        val (width, height) = previewSize(availableWidth, maximumHeight, previewAspectRatio)
+        setMeasuredDimension(width, height)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -258,5 +269,22 @@ class TimelineView @JvmOverloads constructor(
         val actions = afterNextFrameRendered.toList()
         afterNextFrameRendered.clear()
         actions.forEach { action -> post { action() } }
+    }
+
+    companion object {
+        private const val MAX_PREVIEW_HEIGHT_DP = 460
+
+        internal fun previewSize(maximumWidth: Int, maximumHeight: Int, aspectRatio: Float): Pair<Int, Int> {
+            val safeWidth = maximumWidth.coerceAtLeast(1)
+            val safeHeight = maximumHeight.coerceAtLeast(1)
+            val safeAspect = aspectRatio.takeIf { it.isFinite() && it > 0f } ?: 1f
+            var width = safeWidth
+            var height = (width / safeAspect).roundToInt().coerceAtLeast(1)
+            if (height > safeHeight) {
+                height = safeHeight
+                width = (height * safeAspect).roundToInt().coerceIn(1, safeWidth)
+            }
+            return width to height
+        }
     }
 }

@@ -50,4 +50,13 @@ class CameraSettingsPreferencesTest {
         assertEquals(LongTripCompression.BALANCED, preferences.load().longTripCompression)
         assertEquals(VideoQuality.STANDARD, preferences.load().videoQuality)
     }
+
+    @Test
+    fun savesAndRestoresPortraitAndLandscapeFormats() {
+        listOf(VideoQuality.PORTRAIT, VideoQuality.LANDSCAPE).forEach { format ->
+            preferences.save(CameraSettings(videoQuality = format))
+
+            assertEquals(format, CameraSettingsPreferences(context).load().videoQuality)
+        }
+    }
 }

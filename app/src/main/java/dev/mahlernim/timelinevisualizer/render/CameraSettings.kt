@@ -24,12 +24,18 @@ enum class LongTripCompression(val exponent: Double) {
 }
 
 enum class VideoQuality(
-    val size: Int,
+    val width: Int,
+    val height: Int,
+    val frameRate: Int,
     val bitrate: Int,
 ) {
-    STANDARD(480, 2_500_000),
-    HIGH(720, 5_000_000),
-    ULTRA(1080, 8_000_000),
+    STANDARD(480, 480, 24, 2_500_000),
+    HIGH(720, 720, 24, 5_000_000),
+    ULTRA(1080, 1080, 24, 8_000_000),
+    PORTRAIT(1080, 1920, 30, 12_000_000),
+    LANDSCAPE(1920, 1080, 30, 12_000_000);
+
+    val aspectRatio: Float get() = width.toFloat() / height
 }
 
 data class CameraSettings(
