@@ -57,6 +57,7 @@
     <string name="cancel_video_creation">Cancelar la creación de vídeo</string>
     <string name="video_creation_cancelled">Creación de vídeo cancelada</string>
     <string name="cancel">Cancelar</string>
+    <string name="retry">Reintentar</string>
     <string name="not_now">Ahora no</string>
     <string name="background_video_title">Continuar creando en segundo plano.</string>
     <string name="background_video_message">Permita que las notificaciones vean el progreso del video después de salir de la aplicación y reciba una alerta cuando su video esté listo. La creación de videos continúa incluso si no se permiten notificaciones.</string>

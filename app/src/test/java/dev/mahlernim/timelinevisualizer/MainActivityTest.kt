@@ -11,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.AutoCompleteTextView
+import android.widget.SeekBar
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.graphics.Insets
@@ -18,11 +19,14 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.videos.VideoRecord
 import dev.mahlernim.timelinevisualizer.videos.VideoStore
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportCoordinator
+import dev.mahlernim.timelinevisualizer.export.ExportPhase
+import dev.mahlernim.timelinevisualizer.export.ExportProgress
 import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
 import dev.mahlernim.timelinevisualizer.export.VideoExportStateStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
@@ -502,7 +506,71 @@ class MainActivityTest {
         shadowOf(Looper.getMainLooper()).idle()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
-        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.homeExportGroup).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayCancelButton).visibility)
+    }
+
+    @Test
+    fun generationProgressTrayIsIndependentFromPreviewPlaybackControl() {
+        val activity = launchActivity()
+        val playback = activity.findViewById<SeekBar>(R.id.timelineSeek)
+        playback.progress = 375
+
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(
+                status = VideoExportStatus.RUNNING,
+                progress = ExportProgress(0.42f, ExportPhase.CREATING_VIDEO, 42, 100),
+                startedAtMillis = System.currentTimeMillis(),
+            ),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(375, playback.progress)
+        assertEquals(420, activity.findViewById<LinearProgressIndicator>(R.id.exportTrayProgress).progress)
+    }
+
+    @Test
+    fun generationProgressTrayLivesOutsideScrollableScreens() {
+        val activity = launchActivity()
+        val root = activity.findViewById<ViewGroup>(R.id.exportStatusTray).parent as ViewGroup
+        val tray = activity.findViewById<View>(R.id.exportStatusTray)
+        val bottomNavigation = activity.findViewById<View>(R.id.bottomNavigation)
+
+        assertTrue(root.indexOfChild(tray) < root.indexOfChild(bottomNavigation))
+    }
+
+    @Test
+    fun completedExportTrayOffersWatchAndShare() {
+        val activity = launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(
+                status = VideoExportStatus.COMPLETE,
+                outputUri = "content://example/generated-video",
+                title = "Trip",
+            ),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayWatchButton).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayShareButton).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.exportTrayProgress).visibility)
+    }
+
+    @Test
+    fun failedExportTrayOffersRetry() {
+        val activity = launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(status = VideoExportStatus.FAILED, errorMessage = "Could not create video"),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayRetryButton).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.exportTrayProgress).visibility)
     }
 
     @Test
@@ -542,7 +610,7 @@ class MainActivityTest {
         activity.onBackPressedDispatcher.onBackPressed()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
-        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.homeExportGroup).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
         assertEquals(VideoExportStatus.RUNNING, VideoExportStateStore(context).load().status)
     }
 

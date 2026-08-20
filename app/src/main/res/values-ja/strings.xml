@@ -54,6 +54,7 @@
     <string name="cancel_video_creation">動画作成をキャンセル</string>
     <string name="video_creation_cancelled">動画作成をキャンセルしました</string>
     <string name="cancel">キャンセル</string>
+    <string name="retry">再試行</string>
     <string name="not_now">後で</string>
     <string name="background_video_title">バックグラウンドで作成を続ける</string>
     <string name="background_video_message">アプリを閉じた後も進行状況を確認し、完成時に通知を受け取るには通知を許可してください。通知を許可しなくても動画作成は続きます。</string>

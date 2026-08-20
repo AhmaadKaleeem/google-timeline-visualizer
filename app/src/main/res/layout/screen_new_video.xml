@@ -251,9 +251,6 @@
                 <com.google.android.material.button.MaterialButton android:id="@+id/exportButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:maxLines="1" android:text="@string/create_video" />
             </LinearLayout>
 
-            <com.google.android.material.button.MaterialButton android:id="@+id/cancelExportButton" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:maxLines="1" android:text="@string/cancel" android:visibility="gone" />
-            <com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/exportProgress" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:max="1000" android:visibility="gone" />
-
             <LinearLayout android:id="@+id/videoReadyGroup" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:orientation="vertical" android:visibility="gone">
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/video_saved" android:textAppearance="?attr/textAppearanceTitleMedium" android:textStyle="bold" />
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:orientation="horizontal">
