@@ -16,6 +16,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.material.button.MaterialButton
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.videos.VideoRecord
@@ -605,8 +606,8 @@ class MainActivityTest {
         measureActivity(activity)
 
         val navigation = activity.findViewById<ViewGroup>(R.id.bottomNavigation)
-        assertEquals(bottomInset, root.paddingBottom)
-        assertEquals(0, navigation.paddingBottom)
+        assertEquals(0, root.paddingBottom)
+        assertEquals(bottomInset, navigation.paddingBottom)
         assertNavigationItemsInsideBounds(navigation)
     }
 
@@ -645,10 +646,37 @@ class MainActivityTest {
         measureActivity(activity)
 
         val navigation = activity.findViewById<ViewGroup>(R.id.bottomNavigation)
-        assertEquals(bottomInset, root.paddingBottom)
-        assertEquals(0, navigation.paddingBottom)
-        assertTrue(navigation.measuredHeight >= (80 * density).toInt())
+        assertEquals(topInset, root.paddingTop)
+        assertEquals(0, root.paddingBottom)
+        assertEquals(bottomInset, navigation.paddingBottom)
+        assertTrue(navigation.measuredHeight >= (80 * density).toInt() + bottomInset)
         assertNavigationItemsInsideBounds(navigation)
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "notnight")
+    fun systemLightModeUsesLightThemeAndSystemBars() {
+        val activity = launchActivity()
+
+        assertEquals(activity.getColor(R.color.surface), resolvedColor(activity, com.google.android.material.R.attr.colorSurface))
+        assertEquals(activity.getColor(R.color.surface_container), resolvedColor(activity, com.google.android.material.R.attr.colorSurfaceContainer))
+        assertEquals(true, resolvedBoolean(activity, android.R.attr.windowLightStatusBar))
+        assertEquals(true, WindowInsetsControllerCompat(activity.window, activity.window.decorView).isAppearanceLightNavigationBars)
+        assertEquals(activity.getColor(R.color.surface), resolvedColor(activity, android.R.attr.statusBarColor))
+        assertEquals(activity.getColor(R.color.surface_container), resolvedColor(activity, android.R.attr.navigationBarColor))
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "night")
+    fun systemDarkModeUsesDarkThemeAndSystemBars() {
+        val activity = launchActivity()
+
+        assertEquals(activity.getColor(R.color.surface), resolvedColor(activity, com.google.android.material.R.attr.colorSurface))
+        assertEquals(activity.getColor(R.color.surface_container), resolvedColor(activity, com.google.android.material.R.attr.colorSurfaceContainer))
+        assertEquals(false, resolvedBoolean(activity, android.R.attr.windowLightStatusBar))
+        assertEquals(false, WindowInsetsControllerCompat(activity.window, activity.window.decorView).isAppearanceLightNavigationBars)
+        assertEquals(activity.getColor(R.color.surface), resolvedColor(activity, android.R.attr.statusBarColor))
+        assertEquals(activity.getColor(R.color.surface_container), resolvedColor(activity, android.R.attr.navigationBarColor))
     }
 
     @Test
@@ -773,8 +801,20 @@ class MainActivityTest {
             val label = item.findViewById<TextView>(com.google.android.material.R.id.navigation_bar_item_large_label_view)
             assertTrue(icon.top >= 0 && icon.bottom <= item.height)
             assertTrue(label.height > 0 && label.top >= 0 && label.bottom <= item.height)
-            assertTrue(item.top >= 0 && item.bottom <= navigation.height)
+            assertTrue(item.top >= 0 && item.bottom <= navigation.height - navigation.paddingBottom)
         }
+    }
+
+    private fun resolvedBoolean(activity: MainActivity, attribute: Int): Boolean {
+        val value = TypedValue()
+        assertTrue(activity.theme.resolveAttribute(attribute, value, true))
+        return value.data != 0
+    }
+
+    private fun resolvedColor(activity: MainActivity, attribute: Int): Int {
+        val value = TypedValue()
+        assertTrue(activity.theme.resolveAttribute(attribute, value, true))
+        return value.data
     }
 
     private fun waitUntil(condition: () -> Boolean) {

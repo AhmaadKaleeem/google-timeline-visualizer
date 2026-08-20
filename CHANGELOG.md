@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.2
+
+- Follow the Android system setting with matching light and dark app interfaces.
+- Keep Road map tiles and exported video appearance unchanged in both system themes.
+- Extend the bottom-navigation surface behind the gesture indicator or navigation-button area.
+- Preserve complete bottom-navigation icons and labels without applying the system inset twice.
+- Set Android version code 21 and version name 2.2.2.
+
 ## 2.2.1
 
 - Prevent repeated or backtracking routes when independent semantic and path histories cover the same time.
