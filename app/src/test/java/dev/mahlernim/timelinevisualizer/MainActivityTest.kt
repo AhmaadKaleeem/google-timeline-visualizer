@@ -34,7 +34,10 @@ import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import dev.mahlernim.timelinevisualizer.render.VideoQuality
+import dev.mahlernim.timelinevisualizer.render.DistanceUnit
+import dev.mahlernim.timelinevisualizer.render.DistanceUnitPreference
 import dev.mahlernim.timelinevisualizer.ui.CameraSettingsPreferences
+import dev.mahlernim.timelinevisualizer.ui.DistanceUnitPreferences
 import dev.mahlernim.timelinevisualizer.ui.TimelineView
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -68,6 +71,7 @@ class MainActivityTest {
         context.getSharedPreferences("display", Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences("camera-settings", Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences("timeline-filter-settings", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("distance-unit-settings", Context.MODE_PRIVATE).edit().clear().commit()
         timelineSourceStore.clearForTest()
     }
 
@@ -303,6 +307,24 @@ class MainActivityTest {
             activity.getString(R.string.format_square_480),
             activity.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown).text.toString(),
         )
+        val automaticDistance = DistanceUnit.automatic(
+            android.content.res.Resources.getSystem().configuration.locales[0],
+        )
+        val automaticDistanceName = activity.getString(
+            if (automaticDistance == DistanceUnit.MILES) {
+                R.string.distance_unit_miles
+            } else {
+                R.string.distance_unit_kilometers
+            },
+        )
+        assertEquals(
+            activity.getString(
+                R.string.distance_unit_automatic_resolved,
+                activity.getString(R.string.distance_unit_automatic),
+                automaticDistanceName,
+            ),
+            activity.findViewById<AutoCompleteTextView>(R.id.distanceUnitDropdown).text.toString(),
+        )
         assertEquals(
             activity.getString(R.string.location_filter_conservative),
             activity.findViewById<AutoCompleteTextView>(R.id.locationFilterDropdown).text.toString(),
@@ -316,6 +338,37 @@ class MainActivityTest {
             activity.getString(R.string.app_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
             activity.findViewById<TextView>(R.id.versionText).text.toString(),
         )
+    }
+
+    @Test
+    fun milesOverrideUpdatesSettingsSummaryAndPreviewRendering() {
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.navigationSettings).performClick()
+        val dropdown = activity.findViewById<AutoCompleteTextView>(R.id.distanceUnitDropdown)
+
+        dropdown.onItemClickListener?.onItemClick(null, null, DistanceUnitPreference.MILES.ordinal, 0L)
+
+        assertEquals(activity.getString(R.string.distance_unit_miles), dropdown.text.toString())
+        assertEquals(DistanceUnitPreference.MILES, DistanceUnitPreferences(activity).load())
+        assertEquals("mi", activity.findViewById<TimelineView>(R.id.timelineView).renderText.distanceUnit)
+        assertEquals(
+            DistanceUnit.MILES.kilometersMultiplier,
+            activity.findViewById<TimelineView>(R.id.timelineView).renderText.distanceScale,
+            0.0,
+        )
+        val journey = Journey.from(
+            listOf(
+                GeoPoint(Instant.parse("2026-01-01T00:00:00Z"), 37.5, 127.0),
+                GeoPoint(Instant.parse("2026-02-01T00:00:00Z"), 35.1, 129.0),
+            ),
+            2026,
+        )
+        assertTrue(activity.selectedPeriodSummary(journey).contains(" mi "))
+
+        activity.findViewById<View>(R.id.resetAdvancedSettingsButton).performClick()
+
+        assertEquals(DistanceUnitPreference.AUTOMATIC, DistanceUnitPreferences(activity).load())
+        assertTrue(dropdown.text.toString().startsWith(activity.getString(R.string.distance_unit_automatic)))
     }
 
     @Test

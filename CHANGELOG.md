@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.2.5
+
+- Add Automatic, Kilometers, and Miles distance-unit choices.
+- Resolve Automatic from the device region and show the resolved unit directly in Settings.
+- Apply the selected unit consistently to selected-period summaries, previews, and exported videos.
+- Restore Automatic together with the other video defaults.
+- Preserve kilometers internally for route processing and convert only user-facing distances.
+- Translate the new distance-unit setting in all nine supported app languages.
+- Set Android version code 24 and version name 2.2.5.
+
 ## 2.2.4
 
 - Keep video-generation progress visible above bottom navigation while scrolling or switching app tabs.

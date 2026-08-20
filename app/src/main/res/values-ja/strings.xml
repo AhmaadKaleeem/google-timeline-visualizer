@@ -64,7 +64,6 @@
     <string name="video_creation_notification_channel">動画作成</string>
     <string name="video_creation_notification_channel_description">タイムライン動画の進行状況と完了通知</string>
     <string name="no_video_player">この動画を再生できるアプリがありません</string>
-    <string name="journey_summary">位置 %1$s件 · %2$s km · %3$s</string>
     <string name="period_same_year">%3$d年%1$s～%2$s</string>
     <string name="period_cross_year">%2$d年%1$s～%4$d年%3$s</string>
     <string name="preparing_map_progress">地図を準備中 · %1$d/%2$d</string>
@@ -122,7 +121,6 @@
     <string name="update_page_unavailable">更新ページを開けませんでした</string>
     <string name="web_page_unavailable">ウェブページを開けませんでした</string>
     <string name="render_date_pattern" tools:ignore="ExtraTranslation">yyyy年M月</string>
-    <string name="distance_unit">km</string>
     <string name="map_attribution">© OpenStreetMap  © CARTO</string>
     <string name="timeline_video">タイムライン動画</string>
     <string name="default_video_filename">タイムライン動画.mp4</string>
@@ -148,7 +146,7 @@
     <string name="no_videos">作成または追加した動画がここに表示されます。</string>
     <string name="show_all_videos">すべて表示（%1$d）</string>
     <string name="show_fewer_videos">表示を減らす</string>
-    <string name="selected_period_summary">位置 %1$s件 · 約%2$s km · %3$s</string>
+    <string name="selected_period_summary">位置 %1$s件 · 約%2$s %3$s · %4$s</string>
     <string name="selected_period_empty">この期間に位置情報はありません</string>
     <string name="selected_period_one_point">位置 1件 · 期間を広げてください</string>
     <string name="selected_period_no_movement">位置 %1$s件 · 移動はありません</string>
@@ -199,7 +197,7 @@
     <string name="raw_accuracy_limit">精度の上限（メートル）</string>
     <string name="raw_accuracy_helper">精度の低い位置は除外されます。使用可能な位置をすべて含める場合は空欄にしてください。</string>
     <string name="raw_accuracy_invalid">0以上の数値を入力するか、空欄にしてください。</string>
-    <string name="raw_location_summary">位置 %1$s件 · 推定 %2$s km · %3$s件除外</string>
+    <string name="raw_location_summary">位置 %1$s件 · 推定 %2$s %3$s · %4$s件除外</string>
     <string name="raw_only_title">未処理の位置情報のみが見つかりました</string>
     <string name="raw_only_message">このファイルには未処理の位置情報のみが含まれ、処理済みの訪問や移動はありません。続行できますが、経路が不正確または不完全になり、距離は推定値になります。\n\nより正確な結果を得るには、Google マップを開いてタイムラインを確認または復元し、訪問や移動が表示されることを確認してください。その後、タイムラインを再度エクスポートし、新しいファイルをこのアプリで読み込んでください。</string>
     <string name="open_google_maps">Google マップを開く</string>
@@ -216,6 +214,11 @@
     <string name="settings_summary">プレビューと新しい動画に使用する初期値を設定します。</string>
     <string name="video_defaults">動画の初期設定</string>
     <string name="video_defaults_summary">変更はプレビューと次に作成する動画に適用されます。</string>
+    <string name="distance_unit_setting">距離の単位</string>
+    <string name="distance_unit_automatic">自動</string>
+    <string name="distance_unit_kilometers">キロメートル</string>
+    <string name="distance_unit_miles">マイル</string>
+    <string name="distance_unit_automatic_resolved">%1$s · %2$s</string>
     <string name="timeline_processing">タイムライン処理</string>
     <string name="location_filter">GPS外れ値フィルター</string>
     <string name="location_filter_summary">慎重なフィルターで、短時間では不可能な往復移動だけを無視します。タイムライン ファイルは変更されません。</string>

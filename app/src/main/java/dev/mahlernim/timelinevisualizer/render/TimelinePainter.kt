@@ -14,7 +14,6 @@ import dev.mahlernim.timelinevisualizer.model.MutableRenderSampleLocation
 import dev.mahlernim.timelinevisualizer.model.WebMercator
 import dev.mahlernim.timelinevisualizer.model.WorldPoint
 import java.time.ZoneId
-import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.floor
 import kotlin.math.ln
@@ -733,10 +732,8 @@ class TimelinePainter {
         }
         canvas.drawText(fittedTitle, card.centerX(), 72f * scale, titlePaint)
         val date = renderText.dateFormatter.format(position.point.instant.atZone(ZoneId.systemDefault()))
-        val distance = position.distanceKm
-        val number = NumberFormat.getNumberInstance(renderText.locale).apply { maximumFractionDigits = 0 }
         canvas.drawText(
-            "$date  ·  ${number.format(distance)} ${renderText.distanceUnit}",
+            "$date  ·  ${renderText.formatDistance(position.distanceKm)}",
             card.centerX(),
             108f * scale,
             bodyPaint,

@@ -7,6 +7,7 @@ import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.content.res.Resources
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -78,10 +79,13 @@ import dev.mahlernim.timelinevisualizer.model.VideoDuration
 import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import dev.mahlernim.timelinevisualizer.render.RenderText
 import dev.mahlernim.timelinevisualizer.render.CameraSettings
+import dev.mahlernim.timelinevisualizer.render.DistanceUnit
+import dev.mahlernim.timelinevisualizer.render.DistanceUnitPreference
 import dev.mahlernim.timelinevisualizer.render.CameraMovement
 import dev.mahlernim.timelinevisualizer.render.LongTripCompression
 import dev.mahlernim.timelinevisualizer.render.VideoQuality
 import dev.mahlernim.timelinevisualizer.ui.CameraSettingsPreferences
+import dev.mahlernim.timelinevisualizer.ui.DistanceUnitPreferences
 import dev.mahlernim.timelinevisualizer.ui.AppLanguage
 import dev.mahlernim.timelinevisualizer.ui.LocationFilterPreferences
 import dev.mahlernim.timelinevisualizer.ui.SelectionArrayAdapter
@@ -123,6 +127,7 @@ class MainActivity : AppCompatActivity() {
     private var rawSignalsEnabled = false
     private var rawOnlyImport = false
     private var journey: Journey? = null
+    private var selectedIgnoredCount = 0
     private var animation: ValueAnimator? = null
     private var pendingExport: VideoExportRequest? = null
     private var lastVideoUri: Uri? = null
@@ -145,9 +150,11 @@ class MainActivity : AppCompatActivity() {
     private val generatedMedia by lazy { GeneratedMediaRepository(applicationContext) }
     private val timelineSourceStore by lazy { TimelineSourceStore(applicationContext) }
     private val cameraSettingsPreferences by lazy { CameraSettingsPreferences(applicationContext) }
+    private val distanceUnitPreferences by lazy { DistanceUnitPreferences(applicationContext) }
     private val locationFilterPreferences by lazy { LocationFilterPreferences(applicationContext) }
     private val videoEncoderProfiles by lazy { VideoEncoderSupport.deviceProfiles() }
     private var cameraSettings = CameraSettings.DEFAULT
+    private var distanceUnitPreference = DistanceUnitPreference.AUTOMATIC
     private var videoFormatSupported = true
     private var locationFilterMode = LocationFilterMode.CONSERVATIVE
     private var routeDurationSeconds = VideoDuration.DEFAULT_SECONDS
@@ -307,6 +314,7 @@ class MainActivity : AppCompatActivity() {
         } + getString(R.string.custom_duration)
         editor.durationDropdown.setAdapter(SelectionArrayAdapter(this, durations))
         applyDuration(VideoDuration.DEFAULT_SECONDS)
+        configureDistanceUnitSelection()
         editor.timelineView.renderText = currentRenderText()
         editor.durationDropdown.setOnItemClickListener { _, _, position, _ ->
             if (position == VideoDuration.presets.size) {
@@ -461,6 +469,9 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (::settingsScreen.isInitialized) updateLanguageSelectionLabel()
+        if (::settingsScreen.isInitialized && distanceUnitPreference == DistanceUnitPreference.AUTOMATIC) {
+            applyDistanceUnitPreference(distanceUnitPreference, save = false)
+        }
     }
 
     override fun onStop() {
@@ -797,6 +808,7 @@ class MainActivity : AppCompatActivity() {
     private fun applySelectedJourney(selected: Journey, ignoredCount: Int) {
         animation?.cancel()
         journey = selected
+        selectedIgnoredCount = ignoredCount
         editor.timelineView.journey = selected
         editor.timelineSeek.progress = 0
         showProgress(0f)
@@ -807,13 +819,15 @@ class MainActivity : AppCompatActivity() {
 
     internal fun selectedPeriodSummary(selected: Journey, ignoredCount: Int = 0): String {
         val number = NumberFormat.getNumberInstance().apply { maximumFractionDigits = 0 }
+        val unit = resolvedDistanceUnit()
         if (selected.points.isEmpty()) return withOutlierSummary(getString(R.string.selected_period_empty), ignoredCount)
         if (selected.points.size == 1) return withOutlierSummary(getString(R.string.selected_period_one_point), ignoredCount)
         if (rawSignalsEnabled) {
             return getString(
                 R.string.raw_location_summary,
                 number.format(selected.points.size),
-                number.format(selected.totalDistanceKm),
+                number.format(unit.fromKilometers(selected.totalDistanceKm)),
+                unit.symbol,
                 number.format(rawSignalProcessing?.rejectedCount ?: ignoredCount),
             )
         }
@@ -856,7 +870,8 @@ class MainActivity : AppCompatActivity() {
             getString(
                 R.string.selected_period_summary,
                 number.format(selected.points.size),
-                number.format(selected.totalDistanceKm),
+                number.format(unit.fromKilometers(selected.totalDistanceKm)),
+                unit.symbol,
                 period,
             ),
             ignoredCount,
@@ -1137,6 +1152,7 @@ class MainActivity : AppCompatActivity() {
             updateAdvancedSettings(cameraSettings.copy(videoQuality = VideoQuality.values()[position]))
         }
         settingsScreen.resetAdvancedSettingsButton.setOnClickListener {
+            applyDistanceUnitPreference(DistanceUnitPreference.AUTOMATIC)
             applyAdvancedSettings(cameraSettingsPreferences.reset())
             Snackbar.make(binding.root, R.string.advanced_defaults_restored, Snackbar.LENGTH_SHORT).show()
         }
@@ -1162,6 +1178,58 @@ class MainActivity : AppCompatActivity() {
         locationFilterMode = locationFilterPreferences.load()
         updateLocationFilterLabel()
     }
+
+    private fun configureDistanceUnitSelection() {
+        distanceUnitPreference = distanceUnitPreferences.load()
+        val dropdown = settingsScreen.distanceUnitDropdown
+        dropdown.setAdapter(SelectionArrayAdapter(this, distanceUnitLabels()))
+        makeDropdownOpenReliably(dropdown)
+        updateDistanceUnitLabel()
+        dropdown.setOnItemClickListener { _, _, position, _ ->
+            applyDistanceUnitPreference(DistanceUnitPreference.entries[position])
+        }
+    }
+
+    private fun applyDistanceUnitPreference(preference: DistanceUnitPreference, save: Boolean = true) {
+        distanceUnitPreference = preference
+        if (save) distanceUnitPreferences.save(preference)
+        updateDistanceUnitLabel()
+        editor.timelineView.renderText = currentRenderText()
+        journey?.let { editor.periodSummaryText.text = selectedPeriodSummary(it, selectedIgnoredCount) }
+        showProgress(editor.timelineSeek.progress / 1000f)
+    }
+
+    private fun updateDistanceUnitLabel() {
+        val dropdown = settingsScreen.distanceUnitDropdown
+        val labels = distanceUnitLabels()
+        dropdown.setAdapter(SelectionArrayAdapter(this, labels))
+        dropdown.setText(labels[distanceUnitPreference.ordinal], false)
+    }
+
+    private fun distanceUnitLabels(): List<String> {
+        val automatic = getString(
+            R.string.distance_unit_automatic_resolved,
+            getString(R.string.distance_unit_automatic),
+            distanceUnitName(DistanceUnit.automatic(systemLocale())),
+        )
+        return listOf(
+            automatic,
+            getString(R.string.distance_unit_kilometers),
+            getString(R.string.distance_unit_miles),
+        )
+    }
+
+    private fun distanceUnitName(unit: DistanceUnit): String = getString(
+        when (unit) {
+            DistanceUnit.KILOMETERS -> R.string.distance_unit_kilometers
+            DistanceUnit.MILES -> R.string.distance_unit_miles
+        },
+    )
+
+    private fun resolvedDistanceUnit(): DistanceUnit = distanceUnitPreference.resolve(systemLocale())
+
+    private fun systemLocale(): Locale =
+        Resources.getSystem().configuration.locales[0] ?: Locale.getDefault(Locale.Category.FORMAT)
 
     private fun configureLanguageSelection() {
         val labels = listOf(
@@ -2086,12 +2154,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun currentRenderText(): RenderText {
         val locale = resources.configuration.locales[0] ?: Locale.getDefault()
+        val distanceUnit = resolvedDistanceUnit()
         return RenderText(
             localeTag = locale.toLanguageTag(),
             fallbackTitle = getString(R.string.default_title),
             datePattern = getString(R.string.render_date_pattern),
-            distanceUnit = getString(R.string.distance_unit),
+            distanceUnit = distanceUnit.symbol,
             attribution = getString(R.string.map_attribution),
+            distanceScale = distanceUnit.kilometersMultiplier,
         )
     }
 
