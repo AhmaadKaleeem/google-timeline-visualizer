@@ -7,7 +7,10 @@ entirely in the browser.
 ## Privacy
 
 - The Timeline JSON is read locally and is not uploaded.
-- No account, analytics, location permission, or broad file permission is used.
+- No account, location permission, or broad file permission is used.
+- The public site uses Cloudflare Web Analytics for aggregate site traffic. The
+  application does not add Timeline contents, coordinates, selected dates,
+  titles, or generated media to analytics events.
 - CARTO receives requests for the map tiles needed to render the selected route.
 - The browser tab must remain open while video creation is running.
 
