@@ -9,6 +9,23 @@ Google マップから書き出した Timeline JSON を使い、Android 端末�
 
 ![新しい動画](play-store/assets/screenshots/ja-JP/03-selected-period.png)
 
+## iPhone で使用する
+
+Safari で [iPhone Web アプリ](https://ahn-lab.org/google-timeline-visualizer/)
+を開きます。アプリのインストールは不要で、Timeline ファイルはサーバーへ
+アップロードされません。
+
+1. Google マップで **プロフィール写真 → 設定 → 個人的なコンテンツ →
+   タイムライン データのエクスポート**を選び、`Timeline.json` をファイルに保存します。
+2. Web アプリへ戻り、**Choose Timeline.json** からファイルを選びます。
+3. 月の範囲または正確な日付とカメラの動きを選び、地図のプライバシー説明を確認します。
+4. 経路をプレビューし、**Create MP4** を選びます。
+5. 完成した動画を再生、共有、またはダウンロードします。
+
+MP4 の作成には H.264 エンコードに対応した Safari 16.4 以降が必要です。
+作成中はタブを開いたままにしてください。ホーム画面へ追加するには Safari の
+共有メニューから **ホーム画面に追加**を選びます。現在の Web アプリ画面は英語です。
+
 ## Android にインストールする
 
 このアプリはまだ Google Play で公開されていません。このリポジトリの

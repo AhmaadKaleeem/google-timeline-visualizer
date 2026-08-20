@@ -10,6 +10,23 @@ JSON 파일과 영상 렌더링은 휴대전화 안에서 처리됩니다.
 
 ![새 영상](play-store/assets/screenshots/ko-KR/03-selected-period.png)
 
+## iPhone에서 사용하기
+
+Safari에서 [iPhone 웹 앱](https://ahn-lab.org/google-timeline-visualizer/)을
+여세요. 별도 앱 설치가 필요 없고 타임라인 파일은 서버로 업로드되지 않습니다.
+
+1. Google 지도에서 **프로필 사진 → 설정 → 개인 콘텐츠 → 타임라인 데이터
+   내보내기**를 선택하고 `Timeline.json`을 파일 앱에 저장합니다.
+2. 웹 앱으로 돌아와 **Choose Timeline.json**을 누르고 파일을 선택합니다.
+3. 월 범위 또는 정확한 날짜와 카메라 움직임을 선택하고 지도 개인정보 안내를
+   확인합니다.
+4. 경로를 미리 본 뒤 **Create MP4**를 누릅니다.
+5. 완성된 영상을 재생하거나 공유 또는 다운로드합니다.
+
+MP4를 만들려면 H.264 인코딩을 지원하는 Safari 16.4 이상이 필요합니다. 영상을
+만드는 동안 탭을 열어 두세요. 홈 화면에 보관하려면 Safari 공유 메뉴에서
+**홈 화면에 추가**를 선택합니다. 현재 웹 앱 화면은 영어로 제공됩니다.
+
 ## Android에 설치하기
 
 아직 Google Play에는 등록되지 않았습니다. 이 저장소의
@@ -41,8 +58,9 @@ Android에서는 Google 지도 앱이 아니라 **휴대전화 설정**에서 �
 **타임라인 파일 받기**에서 이 안내를 다시 볼 수 있고 위치 설정 화면도 열 수 있습니다.
 다만 Android에는 타임라인 화면까지 바로 여는 표준 링크가 없습니다.
 
-iPhone에서는 **Google 지도 → 프로필 사진 → 설정 → 개인 콘텐츠 → 타임라인 데이터
-내보내기**를 사용한 뒤 JSON 파일을 Android 휴대전화로 옮기세요.
+iPhone에서는 내보낸 JSON을
+[iPhone 웹 앱](https://ahn-lab.org/google-timeline-visualizer/)에서 바로 사용할
+수 있습니다. Android 앱에서 사용하려면 Android 휴대전화로 옮겨도 됩니다.
 
 ## 보이지 않는 Google 지도 타임라인 복원하기
 
