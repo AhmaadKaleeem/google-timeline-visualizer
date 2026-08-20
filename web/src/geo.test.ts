@@ -48,6 +48,13 @@ describe('geography helpers', () => {
     expect(segments.flat().every((point) => point.x >= 0 && point.x <= 1)).toBe(true);
   });
 
+  it('calculates the same viewport for a point count above browser argument limits', () => {
+    const endpoints = [project(70, 20), project(-55, 20)];
+    const points = Array.from({ length: 200_000 }, (_, index) => endpoints[index % endpoints.length]);
+
+    expect(viewportFor(points, 480)).toEqual(viewportFor(endpoints, 480));
+  });
+
   it('calculates cumulative distance', () => {
     const points = [
       { instant: new Date(0), latitude: 37.5665, longitude: 126.978 },
