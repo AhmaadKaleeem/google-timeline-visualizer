@@ -2,6 +2,7 @@ package dev.mahlernim.timelinevisualizer
 
 import android.animation.ValueAnimator
 import android.Manifest
+import android.app.LocaleManager
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
@@ -15,12 +16,12 @@ import android.provider.Settings
 import android.text.InputType
 import android.util.Log
 import android.view.View
-import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.SeekBar
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.graphics.Insets
@@ -76,7 +77,9 @@ import dev.mahlernim.timelinevisualizer.render.CameraMovement
 import dev.mahlernim.timelinevisualizer.render.LongTripCompression
 import dev.mahlernim.timelinevisualizer.render.VideoQuality
 import dev.mahlernim.timelinevisualizer.ui.CameraSettingsPreferences
+import dev.mahlernim.timelinevisualizer.ui.AppLanguage
 import dev.mahlernim.timelinevisualizer.ui.LocationFilterPreferences
+import dev.mahlernim.timelinevisualizer.ui.SelectionArrayAdapter
 import dev.mahlernim.timelinevisualizer.videos.GeneratedMediaRepository
 import dev.mahlernim.timelinevisualizer.videos.VideoMedia
 import dev.mahlernim.timelinevisualizer.videos.VideoRecord
@@ -242,6 +245,7 @@ class MainActivity : AppCompatActivity() {
         settingsScreen.privacyPolicyButton.setOnClickListener { openPrivacyPolicy() }
         settingsScreen.githubProjectButton.setOnClickListener { openWebPage(PROJECT_URL, R.string.web_page_unavailable) }
         settingsScreen.checkUpdatesButton.setOnClickListener { openUpdates() }
+        settingsScreen.versionText.text = installedVersionLabel()
         playerScreen.playerBackButton.setOnClickListener { showVideos() }
         playerScreen.playerShareButton.setOnClickListener { playerUri?.let(::shareVideo) }
         playerScreen.playerMoreButton.setOnClickListener {
@@ -275,7 +279,7 @@ class MainActivity : AppCompatActivity() {
         val durations = VideoDuration.presets.map {
             resources.getQuantityString(R.plurals.duration_seconds, it, it)
         } + getString(R.string.custom_duration)
-        editor.durationDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, durations))
+        editor.durationDropdown.setAdapter(SelectionArrayAdapter(this, durations))
         applyDuration(VideoDuration.DEFAULT_SECONDS)
         editor.timelineView.renderText = currentRenderText()
         editor.durationDropdown.setOnItemClickListener { _, _, position, _ ->
@@ -288,6 +292,7 @@ class MainActivity : AppCompatActivity() {
         makeDropdownOpenReliably(editor.durationDropdown)
         configureAdvancedSettings()
         configureLocationFiltering()
+        configureLanguageSelection()
         configureCameraPreparation()
         configureMonthDropdowns()
         configureExactDates()
@@ -425,6 +430,11 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         if (currentScreen == Screen.PLAYER) initializeVideoPlayer()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::settingsScreen.isInitialized) updateLanguageSelectionLabel()
     }
 
     override fun onStop() {
@@ -602,8 +612,8 @@ class MainActivity : AppCompatActivity() {
     private fun configureYears(loaded: Timeline, initialJourney: Journey, ignoredCount: Int) {
         val years = loaded.years
         val labels = years.map { NumberFormat.getIntegerInstance().apply { isGroupingUsed = false }.format(it) }
-        editor.startYearDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels))
-        editor.endYearDropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels))
+        editor.startYearDropdown.setAdapter(SelectionArrayAdapter(this, labels))
+        editor.endYearDropdown.setAdapter(SelectionArrayAdapter(this, labels))
         makeDropdownOpenReliably(editor.startYearDropdown)
         makeDropdownOpenReliably(editor.endYearDropdown)
         editor.startYearDropdown.setOnItemClickListener { _, _, position, _ ->
@@ -718,9 +728,8 @@ class MainActivity : AppCompatActivity() {
         selected.points.size >= 2 && selected.totalDistanceKm > 0
 
     private fun configureMonthDropdowns() {
-        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, monthNames)
-        editor.startMonthDropdown.setAdapter(adapter)
-        editor.endMonthDropdown.setAdapter(adapter)
+        editor.startMonthDropdown.setAdapter(SelectionArrayAdapter(this, monthNames))
+        editor.endMonthDropdown.setAdapter(SelectionArrayAdapter(this, monthNames))
         editor.startMonthDropdown.setText(monthNames.first(), false)
         editor.endMonthDropdown.setText(monthNames.last(), false)
         makeDropdownOpenReliably(editor.startMonthDropdown)
@@ -914,7 +923,7 @@ class MainActivity : AppCompatActivity() {
             settingsScreen.longTripDropdown to compressionLabels,
             settingsScreen.videoQualityDropdown to qualityLabels,
         ).forEach { (dropdown, labels) ->
-            dropdown.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels))
+            dropdown.setAdapter(SelectionArrayAdapter(this, labels))
             makeDropdownOpenReliably(dropdown)
         }
 
@@ -941,7 +950,7 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.location_filter_off),
         )
         settingsScreen.locationFilterDropdown.setAdapter(
-            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels),
+            SelectionArrayAdapter(this, labels),
         )
         makeDropdownOpenReliably(settingsScreen.locationFilterDropdown)
         settingsScreen.locationFilterDropdown.setOnItemClickListener { _, _, position, _ ->
@@ -952,6 +961,38 @@ class MainActivity : AppCompatActivity() {
         }
         locationFilterMode = locationFilterPreferences.load()
         updateLocationFilterLabel()
+    }
+
+    private fun configureLanguageSelection() {
+        val labels = listOf(
+            getString(R.string.language_system_default),
+            getString(R.string.language_name_en),
+            getString(R.string.language_name_ko),
+            getString(R.string.language_name_ja),
+            getString(R.string.language_name_zh_cn),
+            getString(R.string.language_name_zh_tw),
+            getString(R.string.language_name_es),
+            getString(R.string.language_name_fr),
+            getString(R.string.language_name_de),
+            getString(R.string.language_name_pt_br),
+        )
+        val dropdown = settingsScreen.languageDropdown
+        dropdown.setAdapter(SelectionArrayAdapter(this, labels))
+        makeDropdownOpenReliably(dropdown)
+        updateLanguageSelectionLabel()
+        dropdown.post(::updateLanguageSelectionLabel)
+        dropdown.setOnItemClickListener { _, _, position, _ ->
+            val locales = AppLanguage.localesForSelection(position)
+            if (AppCompatDelegate.getApplicationLocales() != locales) {
+                AppCompatDelegate.setApplicationLocales(locales)
+            }
+        }
+    }
+
+    private fun updateLanguageSelectionLabel() {
+        val dropdown = settingsScreen.languageDropdown
+        val selected = AppLanguage.selectionIndex(currentApplicationLanguageTags())
+        dropdown.setText(dropdown.adapter.getItem(selected).toString(), false)
     }
 
     private fun configureCameraPreparation() {
@@ -1805,6 +1846,16 @@ class MainActivity : AppCompatActivity() {
     internal fun selectedDurationSeconds(): Int = routeDurationSeconds
 
     internal fun pendingExportDurationSeconds(): Int? = pendingExport?.durationSeconds
+
+    internal fun installedVersionLabel(): String =
+        getString(R.string.app_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE)
+
+    private fun currentApplicationLanguageTags(): String =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getSystemService(LocaleManager::class.java).applicationLocales.toLanguageTags()
+        } else {
+            AppCompatDelegate.getApplicationLocales().toLanguageTags()
+        }
 
     private fun makeDropdownOpenReliably(dropdown: AutoCompleteTextView) {
         dropdown.threshold = 0

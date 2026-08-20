@@ -255,6 +255,8 @@ class Mp4Exporter(
         }
     }
 
+    // Flexible YUV does not identify the planar or semi-planar byte layout required by this converter.
+    @Suppress("DEPRECATION")
     private fun argbToYuv420(pixels: IntArray, output: ByteArray, width: Int, height: Int, colorFormat: Int) {
         val frameSize = width * height
         var yIndex = 0

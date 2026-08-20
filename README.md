@@ -133,9 +133,9 @@ navigation keeps **My videos**, **Create video**, and **Settings** easy to reach
 **Settings** controls defaults for every new video. Steady camera and Balanced
 long-trip compression are the defaults. Fixed camera keeps one zoom level, while
 Dynamic camera follows local movement more actively. Long-trip compression changes
-only animation timing and never route geometry. Video quality offers the original
-480p output plus 720p and 1080p options. Restore defaults returns all video settings
-to the recommended values.
+only animation timing and never route geometry. Video format offers square 480p,
+720p, and 1080p output plus portrait 1080 × 1920 and landscape 1920 × 1080 presets.
+Restore defaults returns all video settings to the recommended values.
 
 Timeline processing uses Conservative GPS outlier filtering by default. It ignores
 only isolated, implausible out-and-back coordinates, reports the number ignored,
@@ -143,7 +143,8 @@ and keeps the original JSON file unchanged. Set the filter to Off to use every
 location from the selected file.
 
 The app supports English, Korean, Japanese, Simplified Chinese, Traditional Chinese,
-Spanish, French, German, and Brazilian Portuguese.
+Spanish, French, German, and Brazilian Portuguese. Choose any supported language in
+Settings or keep System default. Settings also shows the installed version and build code.
 
 Long flights and other sparse routes are interpolated along a great-circle path,
 so the camera follows the trip smoothly instead of jumping to the destination.
