@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.1
+
+- Prevent repeated or backtracking routes when independent semantic and path histories cover the same time.
+- Treat activity and visit segments as authoritative while retaining standalone path points outside their coverage.
+- Preserve path detail stored inside the same semantic segment and keep path-only exports unchanged.
+- Apply matching reconciliation behavior to Android, the web app, and the Python renderer.
+- Keep processing local without changing the source Timeline file.
+- Set Android version code 20 and version name 2.2.1.
+
 ## 2.2.0
 
 - Add fixed portrait 1080×1920 and landscape 1920×1080 video formats.

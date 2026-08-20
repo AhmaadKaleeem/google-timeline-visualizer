@@ -351,7 +351,9 @@ def extract_timeline_points(data, year):
     else:
         raise ValueError('Timeline JSON must start with an object or array')
 
-    points = []
+    canonical_points = []
+    standalone_path_points = []
+    semantic_intervals = []
 
     def parse_timestamp(time_value):
         if isinstance(time_value, datetime):
@@ -388,15 +390,12 @@ def extract_timeline_points(data, year):
             return None
         return timestamp
 
-    def add_point(time_value, coordinate_value):
-        coordinate = parse_coordinate(coordinate_value)
-        if coordinate is None:
-            return
-        timestamp = parse_timestamp(time_value)
-        if timestamp is None:
-            return
+    def add_point(output, timestamp, coordinate):
+        if timestamp is None or coordinate is None:
+            return False
         if timestamp.year == year:
-            points.append({'dt': timestamp, 'lat': coordinate[0], 'lon': coordinate[1]})
+            output.append({'dt': timestamp, 'lat': coordinate[0], 'lon': coordinate[1]})
+        return True
 
     for seg in segments:
         if not isinstance(seg, dict):
@@ -404,24 +403,76 @@ def extract_timeline_points(data, year):
         start_time = seg.get('startTime')
         end_time = seg.get('endTime')
 
+        activity = seg.get('activity')
+        visit = seg.get('visit')
+        candidate = visit.get('topCandidate') if isinstance(visit, dict) else None
+        activity_start = activity.get('start') if isinstance(activity, dict) else None
+        activity_end = activity.get('end') if isinstance(activity, dict) else None
+        visit_location = candidate.get('placeLocation') if isinstance(candidate, dict) else None
+        activity_start_coordinate = parse_coordinate(activity_start)
+        activity_end_coordinate = parse_coordinate(activity_end)
+        visit_coordinate = parse_coordinate(visit_location)
+        has_usable_semantic_record = any(
+            coordinate is not None
+            for coordinate in (activity_start_coordinate, activity_end_coordinate, visit_coordinate)
+        )
+        path_output = canonical_points if has_usable_semantic_record else standalone_path_points
+
         for path_point in seg.get('timelinePath', []):
             if isinstance(path_point, dict):
-                add_point(path_timestamp(path_point, start_time, end_time), path_point.get('point'))
+                add_point(
+                    path_output,
+                    path_timestamp(path_point, start_time, end_time),
+                    parse_coordinate(path_point.get('point')),
+                )
 
-        activity = seg.get('activity')
+        start = parse_timestamp(start_time) if has_usable_semantic_record else None
+        end = parse_timestamp(end_time) if has_usable_semantic_record else None
         if isinstance(activity, dict):
-            add_point(start_time, activity.get('start'))
-            add_point(end_time, activity.get('end'))
+            add_point(canonical_points, start, activity_start_coordinate)
+            add_point(canonical_points, end, activity_end_coordinate)
 
-        visit = seg.get('visit')
-        if isinstance(visit, dict):
-            candidate = visit.get('topCandidate')
-            if isinstance(candidate, dict):
-                add_point(start_time, candidate.get('placeLocation'))
+        if isinstance(candidate, dict):
+            add_point(canonical_points, start, visit_coordinate)
+
+        if has_usable_semantic_record:
+            if (
+                start is not None
+                and end is not None
+                and start.utcoffset() is not None
+                and end.utcoffset() is not None
+                and end >= start
+            ):
+                semantic_intervals.append((start, end))
+
+    semantic_intervals.sort(key=lambda interval: interval[0])
+    merged_intervals = []
+    for start, end in semantic_intervals:
+        if not merged_intervals or start > merged_intervals[-1][1]:
+            merged_intervals.append([start, end])
+        elif end > merged_intervals[-1][1]:
+            merged_intervals[-1][1] = end
+
+    # Some direct-array exports append a second path-only history for periods already
+    # represented by activities and visits. Same-segment path detail stays canonical.
+    interval_index = 0
+    for point in sorted(standalone_path_points, key=lambda item: item['dt']):
+        timestamp = point['dt']
+        if timestamp.utcoffset() is None:
+            canonical_points.append(point)
+            continue
+        while interval_index < len(merged_intervals) and merged_intervals[interval_index][1] < timestamp:
+            interval_index += 1
+        covered = (
+            interval_index < len(merged_intervals)
+            and merged_intervals[interval_index][0] <= timestamp <= merged_intervals[interval_index][1]
+        )
+        if not covered:
+            canonical_points.append(point)
 
     unique = {
         (point['dt'], point['lat'], point['lon']): point
-        for point in points
+        for point in canonical_points
     }
     return sorted(unique.values(), key=lambda point: point['dt'])
 

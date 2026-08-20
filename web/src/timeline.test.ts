@@ -42,6 +42,51 @@ describe('parseTimelineJson', () => {
     expect(parseTimelineJson({ semanticSegments: directExport })).toHaveLength(3);
   });
 
+  it('suppresses standalone path points covered by semantic segments', () => {
+    const points = parseTimelineJson([
+      {
+        startTime: '2026-05-11T08:00:00Z',
+        endTime: '2026-05-11T22:00:00Z',
+        activity: { start: '10,10', end: '20,20' },
+      },
+      {
+        startTime: '2026-05-12T08:00:00Z',
+        endTime: '2026-05-12T22:00:00Z',
+        activity: { start: '20,20', end: '10,10' },
+      },
+      {
+        startTime: '2026-05-11T08:00:00Z',
+        endTime: '2026-05-12T23:00:00Z',
+        timelinePath: [
+          { point: '20,20', time: '2026-05-11T13:00:00Z' },
+          { point: '10,10', time: '2026-05-11T17:00:00Z' },
+          { point: '10,10', time: '2026-05-12T13:00:00Z' },
+          { point: '20,20', time: '2026-05-12T17:00:00Z' },
+          { point: '30,30', time: '2026-05-12T22:30:00Z' },
+        ],
+      },
+    ]);
+
+    expect(points.map((point) => [point.instant.toISOString(), point.latitude])).toEqual([
+      ['2026-05-11T08:00:00.000Z', 10],
+      ['2026-05-11T22:00:00.000Z', 20],
+      ['2026-05-12T08:00:00.000Z', 20],
+      ['2026-05-12T22:00:00.000Z', 10],
+      ['2026-05-12T22:30:00.000Z', 30],
+    ]);
+  });
+
+  it('keeps path detail inside the same semantic segment', () => {
+    const points = parseTimelineJson([{
+      startTime: '2026-01-01T00:00:00Z',
+      endTime: '2026-01-01T02:00:00Z',
+      activity: { start: '10,10', end: '20,20' },
+      timelinePath: [{ point: '15,15', time: '2026-01-01T01:00:00Z' }],
+    }]);
+
+    expect(points.map((point) => point.latitude)).toEqual([10, 15, 20]);
+  });
+
   it('parses string and numeric offsets from a segment start', () => {
     const points = parseTimelineJson([{
       startTime: '2026-01-01T00:00:00Z',

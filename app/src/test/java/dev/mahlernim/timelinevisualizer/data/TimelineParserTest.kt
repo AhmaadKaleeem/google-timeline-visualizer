@@ -65,6 +65,69 @@ class TimelineParserTest {
     }
 
     @Test
+    fun suppressesStandalonePathPointsCoveredBySemanticSegments() {
+        val timeline = parse(
+            """
+            [
+              {
+                "startTime": "2026-05-11T08:00:00Z",
+                "endTime": "2026-05-11T22:00:00Z",
+                "activity": {"start": "10,10", "end": "20,20"}
+              },
+              {
+                "startTime": "2026-05-12T08:00:00Z",
+                "endTime": "2026-05-12T22:00:00Z",
+                "activity": {"start": "20,20", "end": "10,10"}
+              },
+              {
+                "startTime": "2026-05-11T08:00:00Z",
+                "endTime": "2026-05-12T23:00:00Z",
+                "timelinePath": [
+                  {"point": "20,20", "time": "2026-05-11T13:00:00Z"},
+                  {"point": "10,10", "time": "2026-05-11T17:00:00Z"},
+                  {"point": "10,10", "time": "2026-05-12T13:00:00Z"},
+                  {"point": "20,20", "time": "2026-05-12T17:00:00Z"},
+                  {"point": "30,30", "time": "2026-05-12T22:30:00Z"}
+                ]
+              }
+            ]
+            """.trimIndent(),
+        )
+
+        assertEquals(
+            listOf(
+                Triple("2026-05-11T08:00:00Z", 10.0, 10.0),
+                Triple("2026-05-11T22:00:00Z", 20.0, 20.0),
+                Triple("2026-05-12T08:00:00Z", 20.0, 20.0),
+                Triple("2026-05-12T22:00:00Z", 10.0, 10.0),
+                Triple("2026-05-12T22:30:00Z", 30.0, 30.0),
+            ),
+            timeline.points.map { Triple(it.instant.toString(), it.latitude, it.longitude) },
+        )
+    }
+
+    @Test
+    fun keepsPathDetailInsideTheSameSemanticSegment() {
+        val timeline = parse(
+            """
+            [{
+              "startTime": "2026-01-01T00:00:00Z",
+              "endTime": "2026-01-01T02:00:00Z",
+              "activity": {"start": "10,10", "end": "20,20"},
+              "timelinePath": [
+                {"point": "15,15", "time": "2026-01-01T01:00:00Z"}
+              ]
+            }]
+            """.trimIndent(),
+        )
+
+        assertEquals(
+            listOf(10.0, 15.0, 20.0),
+            timeline.points.map { it.latitude },
+        )
+    }
+
+    @Test
     fun acceptsE7CoordinatesAndRemovesDuplicates() {
         val timeline = parse(
             """
@@ -234,6 +297,40 @@ class TimelineParserTest {
         } finally {
             source.delete()
         }
+    }
+
+    @Test
+    fun reconcilesThousandsOfOverlappingSemanticAndPathSegments() {
+        val segmentCount = 3_000
+        val base = Instant.parse("2026-01-01T00:00:00Z")
+        val json = buildString {
+            append('[')
+            repeat(segmentCount) { index ->
+                if (index > 0) append(',')
+                val start = base.plusSeconds(index * 120L)
+                val end = start.plusSeconds(60)
+                append(
+                    "{\"startTime\":\"$start\",\"endTime\":\"$end\"," +
+                        "\"activity\":{\"start\":\"10,10\",\"end\":\"20,20\"}}",
+                )
+            }
+            repeat(segmentCount) { index ->
+                append(',')
+                val start = base.plusSeconds(index * 120L)
+                val end = start.plusSeconds(60)
+                val middle = start.plusSeconds(30)
+                append(
+                    "{\"startTime\":\"$start\",\"endTime\":\"$end\"," +
+                        "\"timelinePath\":[{\"point\":\"30,30\",\"time\":\"$middle\"}]}",
+                )
+            }
+            append(']')
+        }
+
+        val timeline = parse(json)
+
+        assertEquals(segmentCount * 2, timeline.points.size)
+        assertTrue(timeline.points.none { it.latitude == 30.0 })
     }
 
     private fun parse(json: String) = parser.parse(ByteArrayInputStream(json.toByteArray()))
