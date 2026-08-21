@@ -26,6 +26,87 @@ function wrapNear(value: number, reference: number): number {
   return value - Math.floor(value - reference + 0.5);
 }
 
+const POLAR_CORE_LATITUDE = 70;
+const POLAR_CORRIDOR_LATITUDE = 50;
+
+function greatCircleReferenceX(start: GeoPoint, end: GeoPoint, fraction: number): number {
+  const toVector = (point: GeoPoint): [number, number, number] => {
+    const latitude = (point.latitude * Math.PI) / 180;
+    const longitude = (point.longitude * Math.PI) / 180;
+    const latitudeRadius = Math.cos(latitude);
+    return [
+      latitudeRadius * Math.cos(longitude),
+      latitudeRadius * Math.sin(longitude),
+      Math.sin(latitude),
+    ];
+  };
+  const from = toVector(start);
+  const to = toVector(end);
+  const dot = Math.max(-1, Math.min(1, from[0] * to[0] + from[1] * to[1] + from[2] * to[2]));
+  const angle = Math.acos(dot);
+  const sinAngle = Math.sin(angle);
+  if (sinAngle < 1e-9) {
+    return project(
+      start.latitude + (end.latitude - start.latitude) * fraction,
+      start.longitude + (end.longitude - start.longitude) * fraction,
+    ).x;
+  }
+  const fromWeight = Math.sin((1 - fraction) * angle) / sinAngle;
+  const toWeight = Math.sin(fraction * angle) / sinAngle;
+  const x = from[0] * fromWeight + to[0] * toWeight;
+  const y = from[1] * fromWeight + to[1] * toWeight;
+  return (Math.atan2(y, x) / Math.PI + 1) / 2;
+}
+
+/**
+ * Keeps polar flight corridors on the world-copy branch selected by their
+ * stable endpoints. Longitude changes rapidly near a pole, so greedily
+ * unwrapping every polar point can invent a complete extra turn around the map.
+ */
+export function unwrapJourneyPoints(points: GeoPoint[]): WorldPoint[] {
+  const projected = points.map((point) => project(point.latitude, point.longitude));
+  const output = unwrapWorldPoints(projected);
+  let coreIndex = 1;
+  while (coreIndex < points.length - 1) {
+    if (Math.abs(points[coreIndex].latitude) < POLAR_CORE_LATITUDE) {
+      coreIndex += 1;
+      continue;
+    }
+
+    let corridorStart = coreIndex;
+    while (
+      corridorStart > 1
+      && Math.abs(points[corridorStart - 1].latitude) >= POLAR_CORRIDOR_LATITUDE
+    ) corridorStart -= 1;
+    let corridorEnd = coreIndex;
+    while (
+      corridorEnd < points.length - 2
+      && Math.abs(points[corridorEnd + 1].latitude) >= POLAR_CORRIDOR_LATITUDE
+    ) corridorEnd += 1;
+
+    const startAnchor = corridorStart - 1;
+    const endAnchor = corridorEnd + 1;
+    const startX = output[startAnchor].x;
+    const intendedEndX = wrapNear(projected[endAnchor].x, startX);
+    const branchCorrection = intendedEndX - output[endAnchor].x;
+    if (Math.abs(branchCorrection) >= 0.5) {
+      for (let index = corridorStart; index < endAnchor; index += 1) {
+        const fraction = (index - startAnchor) / (endAnchor - startAnchor);
+        const expectedX = startX + (intendedEndX - startX) * fraction;
+        output[index].x = wrapNear(
+          greatCircleReferenceX(points[startAnchor], points[endAnchor], fraction),
+          expectedX,
+        );
+      }
+      for (let index = endAnchor; index < output.length; index += 1) {
+        output[index].x += branchCorrection;
+      }
+    }
+    coreIndex = corridorEnd + 1;
+  }
+  return output;
+}
+
 export function overviewRouteSegments(points: WorldPoint[]): WorldPoint[][] {
   if (points.length === 0) return [];
   const referenceX = points.at(-1)?.x ?? 0.5;

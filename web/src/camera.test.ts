@@ -7,7 +7,7 @@ import {
   overviewViewport,
   worldPositionAtProgress,
 } from './camera';
-import { cumulativeDistances, project, unwrapWorldPoints } from './geo';
+import { cumulativeDistances, project, unwrapJourneyPoints, unwrapWorldPoints } from './geo';
 import { requiredTiles } from './renderer';
 import type { CameraMovement, GeoPoint } from './types';
 
@@ -19,7 +19,7 @@ function journey(points: Array<[number, number]>) {
   }));
   const cumulativeDistanceKm = cumulativeDistances(geoPoints);
   return {
-    worldPoints: unwrapWorldPoints(geoPoints.map((point) => project(point.latitude, point.longitude))),
+    worldPoints: unwrapJourneyPoints(geoPoints),
     cumulativeDistanceKm,
     totalDistanceKm: cumulativeDistanceKm.at(-1) ?? 0,
   };
@@ -79,6 +79,27 @@ describe('camera track', () => {
       expect(tile.x).toBeGreaterThanOrEqual(0);
       expect(tile.x).toBeLessThan(count);
     });
+  });
+
+  it('moves back west on the return leg of an Arctic round trip', () => {
+    const arcticRoundTrip = journey([
+      [37, 127],
+      [70, 170],
+      [82, -170],
+      [38, -122],
+      [70, -60],
+      [82, 20],
+      [70, 100],
+      [37, 127],
+    ]);
+    const track = buildCameraTrack(arcticRoundTrip, 480, 'dynamic');
+    const turnProgress = arcticRoundTrip.cumulativeDistanceKm[3] / arcticRoundTrip.totalDistanceKm;
+    const [startX] = center(cameraViewportAt(track, 0));
+    const [turnX] = center(cameraViewportAt(track, turnProgress));
+    const [endX] = center(cameraViewportAt(track, 1));
+
+    expect(turnX).toBeGreaterThan(startX);
+    expect(endX).toBeLessThan(turnX);
   });
 
   it('smooths changing spans and stabilizes integer tile zoom', () => {
