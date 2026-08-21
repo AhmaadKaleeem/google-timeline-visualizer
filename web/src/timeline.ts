@@ -402,8 +402,14 @@ function pointMonthKey(point: GeoPoint): string {
   return pointDateKey(point).slice(0, 7);
 }
 
-export function availableMonths(points: GeoPoint[]): MonthOption[] {
-  const formatter = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' });
+/**
+ * `locale` is a plain string rather than a LocaleTag so this module stays independent of the
+ * i18n layer. It must be the app locale, never undefined: the labels it produces are shown next
+ * to translated UI and are drawn into the exported MP4 through the period label, so following
+ * the browser locale would put two languages in one video.
+ */
+export function availableMonths(points: GeoPoint[], locale: string): MonthOption[] {
+  const formatter = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' });
   const keys = [...new Set(points.map(pointMonthKey))].sort();
   return keys.map((key) => {
     const [year, month] = key.split('-').map(Number);
