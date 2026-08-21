@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.7
+
+- Prepare every map tile used by every video frame and the final overview before encoding begins.
+- Load missing map tiles with four bounded workers and retry transient failures once.
+- Stop with a localized connection message instead of silently creating a video with missing map areas.
+- Use unique atomic cache writes and preserve export cancellation during tile preparation.
+- Set Android version code 26 and version name 2.2.7.
+
 ## 2.2.6
 
 - Add a Done action to dismiss the persistent Video ready tray.
