@@ -242,12 +242,15 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNavigation.setOnItemSelectedListener { item ->
             if (syncingBottomNavigation) return@setOnItemSelectedListener true
             when (item.itemId) {
-                R.id.navigationVideos -> showVideos()
+                R.id.navigationVideos -> showVideos(acknowledgeCompletion = true)
                 R.id.navigationCreate -> showNewVideo(loadRemembered = true)
                 R.id.navigationSettings -> showSettings()
                 else -> return@setOnItemSelectedListener false
             }
             true
+        }
+        binding.bottomNavigation.setOnItemReselectedListener { item ->
+            if (item.itemId == R.id.navigationVideos) acknowledgeCompletedExport()
         }
         binding.exportTrayCancelButton.setOnClickListener { VideoExportService.cancel(applicationContext) }
         binding.exportTrayRetryButton.setOnClickListener { retryVideoExport() }
@@ -282,14 +285,14 @@ class MainActivity : AppCompatActivity() {
         settingsScreen.githubProjectButton.setOnClickListener { openWebPage(PROJECT_URL, R.string.web_page_unavailable) }
         settingsScreen.checkUpdatesButton.setOnClickListener { openUpdates() }
         settingsScreen.versionText.text = installedVersionLabel()
-        playerScreen.playerBackButton.setOnClickListener { showVideos() }
+        playerScreen.playerBackButton.setOnClickListener { showVideos(acknowledgeCompletion = true) }
         playerScreen.playerShareButton.setOnClickListener { playerUri?.let(::shareVideo) }
         playerScreen.playerMoreButton.setOnClickListener {
             playerUri?.let { uri -> videoStore.list().firstOrNull { it.uri == uri.toString() }?.let(::showVideoActions) }
         }
         playerScreen.playerExternalButton.setOnClickListener { playerUri?.let(::openExternalVideoPlayer) }
         onBackPressedDispatcher.addCallback(this) {
-            if (currentScreen == Screen.VIDEOS) finish() else showVideos()
+            if (currentScreen == Screen.VIDEOS) finish() else showVideos(acknowledgeCompletion = true)
         }
         editor.timelineSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -344,7 +347,7 @@ class MainActivity : AppCompatActivity() {
         playerPlayWhenReady = savedInstanceState?.getBoolean(STATE_PLAYER_PLAYING) ?: true
         val incoming = intent?.data
         if (intent?.action == ACTION_WATCH_VIDEO && incoming != null) {
-            showVideoPlayer(incoming, resetPosition = savedInstanceState == null)
+            if (savedInstanceState == null) watchVideo(incoming) else showVideoPlayer(incoming, resetPosition = false)
         } else if (incoming != null) {
             showNewVideo(loadRemembered = false)
             requestTimelineImport(incoming)
@@ -382,14 +385,15 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         intent.data?.let { uri ->
-            if (intent.action == ACTION_WATCH_VIDEO) showVideoPlayer(uri) else {
+            if (intent.action == ACTION_WATCH_VIDEO) watchVideo(uri) else {
                 showNewVideo(loadRemembered = false)
                 requestTimelineImport(uri)
             }
         }
     }
 
-    private fun showVideos() {
+    private fun showVideos(acknowledgeCompletion: Boolean = false) {
+        if (acknowledgeCompletion) acknowledgeCompletedExport()
         releaseVideoPlayer()
         currentScreen = Screen.VIDEOS
         home.root.visibility = View.VISIBLE
@@ -2047,6 +2051,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun watchVideo(uri: Uri) {
         showVideoPlayer(uri)
+        acknowledgeCompletedExport(uri)
     }
 
     private fun openExternalVideoPlayer(uri: Uri) {
@@ -2066,6 +2071,17 @@ class MainActivity : AppCompatActivity() {
             clipData = ClipData.newRawUri(getString(R.string.timeline_video), uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }, getString(R.string.share_travel_video)))
+        acknowledgeCompletedExport(uri)
+    }
+
+    private fun acknowledgeCompletedExport(uri: Uri? = null) {
+        val snapshot = VideoExportCoordinator.state.value
+        if (
+            snapshot.status == VideoExportStatus.COMPLETE &&
+            (uri == null || snapshot.outputUri == uri.toString())
+        ) {
+            VideoExportCoordinator.clear(applicationContext)
+        }
     }
 
     private fun chooseVideoCopyDestination(source: Uri) {
