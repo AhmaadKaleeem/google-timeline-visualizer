@@ -18,8 +18,11 @@ def progress_at_distance(distance_at, target):
     return (low + high) / 2
 
 
-def test_cli_defaults_match_android():
-    args = build_argument_parser().parse_args(['--input', 'Timeline.json'])
+def test_cli_defaults_match_android(tmp_path):
+    timeline = tmp_path / 'Timeline.json'
+    timeline.write_text('[]', encoding='utf-8')
+    args = build_argument_parser().parse_args(['--input', str(timeline)])
+    assert args.input == timeline
     assert args.camera_movement == 'steady'
     assert args.long_trip_compression == 'balanced'
 

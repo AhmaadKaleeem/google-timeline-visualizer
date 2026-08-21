@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.2.10
+
+- Move settings, video-export state, and the creations list behind lifecycle-aware ViewModels.
+- Replace the creations thumbnail generation counter with structured coroutine cancellation and retain the stable row identity guard.
+- Preserve the v2.2.9 preprocessed Timeline cache and v2.2.8 completed-export acknowledgment behavior.
+- Make the desktop CLI reject missing input files and unavailable FFmpeg before parsing or frame preparation.
+- Raise typed Timeline parsing and no-data errors instead of terminating from reusable parsing code.
+- Document the intentionally process-lifetime desktop tile cache and add focused failure-path tests.
+- Set Android version code 29 and version name 2.2.10.
+
 ## 2.2.9
 
 - Save normalized semantic and raw-signal points in the app-private cache after a successful Timeline import.

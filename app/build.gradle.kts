@@ -10,8 +10,8 @@ android {
         applicationId = "dev.mahlernim.timelinevisualizer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 28
-        versionName = "2.2.9"
+        versionCode = 29
+        versionName = "2.2.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -73,6 +73,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.12.4")
     implementation("androidx.core:core-ktx:1.18.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.10.0")
     implementation("com.google.android.material:material:1.13.0")
     implementation("com.google.code.gson:gson:2.13.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
