@@ -5,11 +5,15 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import dev.mahlernim.timelinevisualizer.render.TileId
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 class TileRepository(context: Context) {
     private val cacheDirectory = File(context.cacheDir, "carto-tiles").apply { mkdirs() }
@@ -29,25 +33,34 @@ class TileRepository(context: Context) {
         cached(id)?.let { return@withContext it }
         val key = id.key()
         val target = File(cacheDirectory, "$key.png")
-        val temp = File(cacheDirectory, "$key.tmp")
-        val connection = URL("https://a.basemaps.cartocdn.com/light_all/${id.zoom}/${id.x}/${id.y}.png")
-            .openConnection() as HttpURLConnection
+        val temp = File.createTempFile("$key-", ".tmp", cacheDirectory)
+        var connection: HttpURLConnection? = null
         try {
+            connection = URL("https://a.basemaps.cartocdn.com/light_all/${id.zoom}/${id.x}/${id.y}.png")
+                .openConnection() as HttpURLConnection
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000
             connection.setRequestProperty("User-Agent", "TimelineVisualizer-Android/1.0")
             if (connection.responseCode !in 200..299) return@withContext null
             connection.inputStream.use { input -> temp.outputStream().use(input::copyTo) }
-            if (!temp.renameTo(target)) {
-                temp.copyTo(target, overwrite = true)
-                temp.delete()
+            try {
+                Files.move(
+                    temp.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
             BitmapFactory.decodeFile(target.absolutePath)?.also { memory.put(key, it) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
-            temp.delete()
             null
         } finally {
-            connection.disconnect()
+            temp.delete()
+            connection?.disconnect()
         }
     }
 

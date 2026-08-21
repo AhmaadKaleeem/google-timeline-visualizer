@@ -29,6 +29,7 @@
     <string name="remembered_timeline_unavailable">이전에 사용한 타임라인 파일을 더 이상 열 수 없습니다.</string>
     <string name="choose_timeline_again">Timeline.json 파일을 다시 선택해 주세요.</string>
     <string name="video_export_failed">영상을 만들지 못했습니다</string>
+    <string name="map_tiles_unavailable">지도를 완전히 불러오지 못했습니다. 연결을 확인한 후 다시 시도해 주세요.</string>
     <string name="location_settings_unavailable">이 휴대전화에서 위치 설정을 열 수 없습니다</string>
     <string name="traveler">여행자</string>
     <string name="tagline">타임라인 파일을 움직이는 여행 영상으로 만드세요.</string>

@@ -12,6 +12,7 @@ import dev.mahlernim.timelinevisualizer.data.TileRepository
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import dev.mahlernim.timelinevisualizer.render.CameraSettings
+import dev.mahlernim.timelinevisualizer.render.TileId
 import dev.mahlernim.timelinevisualizer.render.TimelineFrame
 import dev.mahlernim.timelinevisualizer.render.TimelinePainter
 import dev.mahlernim.timelinevisualizer.render.RenderText
@@ -20,8 +21,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
 import kotlin.coroutines.coroutineContext
-import kotlin.math.ceil
-import kotlin.math.max
 
 enum class ExportPhase { PREPARING_MAP, CREATING_VIDEO, FINISHING_VIDEO, COMPLETE }
 
@@ -57,49 +56,39 @@ class Mp4Exporter(
         val overviewWidth = overviewWidth(videoFormat)
         val overviewHeight = overviewHeight(videoFormat)
         val painter = TimelinePainter()
+        val journeyFrameCount = durationSeconds * fps
+        val outroFrameCount = (TimelineAnimation.OUTRO_SECONDS * fps).toInt()
+        val frameCount = journeyFrameCount + outroFrameCount
 
-        val sampleCount = max(durationSeconds * 2, ceil(journey.totalDistanceKm / 250.0).toInt())
-            .coerceIn(20, durationSeconds * 8)
-        val requiredTiles = buildSet {
-            for (sample in 0..sampleCount) {
-                val progress = sample.toFloat() / sampleCount
-                addAll(
-                    painter.requiredTiles(painter.viewport(journey, progress, width, height, cameraSettings))
-                        .map { it.id },
-                )
-            }
-            for (sample in 0..OUTRO_TILE_SAMPLES) {
-                val outroProgress = sample.toFloat() / OUTRO_TILE_SAMPLES
-                val frame = TimelineFrame(1f, outroProgress)
-                addAll(
-                    painter.requiredTiles(painter.viewport(journey, frame, width, height, cameraSettings))
-                        .map { it.id },
-                )
-            }
-            addAll(
-                painter.requiredTiles(
-                    painter.viewport(
-                        journey,
-                        TimelineFrame(1f, 1f),
-                        overviewWidth,
-                        overviewHeight,
-                        cameraSettings,
-                    ),
-                ).map { it.id },
-            )
-        }
+        val requiredTiles = requiredTilesForExport(
+            painter,
+            journey,
+            width,
+            height,
+            journeyFrameCount,
+            outroFrameCount,
+            fps,
+            overviewWidth,
+            overviewHeight,
+            cameraSettings,
+        )
         onProgress(ExportProgress(0f, ExportPhase.PREPARING_MAP, 0, requiredTiles.size))
-        requiredTiles.forEachIndexed { index, tile ->
-            coroutineContext.ensureActive()
-            tileRepository.load(tile)
+        MapTilePreparer(
+            isReady = { tileRepository.cached(it) != null },
+            load = { tileRepository.load(it) },
+        ).prepare(requiredTiles) { completed, total ->
             onProgress(
                 ExportProgress(
-                    (index + 1f) / requiredTiles.size.coerceAtLeast(1) * PREPARING_PROGRESS_WEIGHT,
+                    completed.toFloat() / total.coerceAtLeast(1) * PREPARING_PROGRESS_WEIGHT,
                     ExportPhase.PREPARING_MAP,
-                    index + 1,
-                    requiredTiles.size,
+                    completed,
+                    total,
                 ),
             )
+        }
+        val preparedTile = { tile: TileId ->
+            tileRepository.cached(tile)
+                ?: throw MapTilePreparationException(listOf(tile), requiredTiles.size)
         }
 
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
@@ -150,22 +139,9 @@ class Mp4Exporter(
         try {
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             codec.start()
-            val journeyFrameCount = durationSeconds * fps
-            val outroFrameCount = (TimelineAnimation.OUTRO_SECONDS * fps).toInt()
-            val frameCount = journeyFrameCount + outroFrameCount
             for (frame in 0 until frameCount) {
                 coroutineContext.ensureActive()
-                val animationFrame = if (frame < journeyFrameCount) {
-                    val progress = if (journeyFrameCount == 1) 1f else frame.toFloat() / (journeyFrameCount - 1)
-                    TimelineFrame(progress, 0f)
-                } else {
-                    val outroFrame = frame - journeyFrameCount
-                    val outroElapsed = outroFrame.toFloat() / fps
-                    TimelineFrame(
-                        1f,
-                        (outroElapsed / TimelineAnimation.OUTRO_TRANSITION_SECONDS).coerceIn(0f, 1f),
-                    )
-                }
+                val animationFrame = animationFrame(frame, journeyFrameCount, fps)
                 var inputIndex: Int
                 do {
                     inputIndex = codec.dequeueInputBuffer(10_000)
@@ -183,7 +159,7 @@ class Mp4Exporter(
                     title,
                     renderText,
                     cameraSettings,
-                    tiles = tileRepository::cached,
+                    tiles = preparedTile,
                 )
                 bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
                 argbToYuv420(pixels, yuv, width, height, encoder.colorFormat)
@@ -241,7 +217,7 @@ class Mp4Exporter(
                 title,
                 renderText,
                 cameraSettings,
-                tiles = tileRepository::cached,
+                tiles = preparedTile,
             )
             onProgress(ExportProgress(1f, ExportPhase.COMPLETE, 1, 1))
             overview
@@ -287,7 +263,6 @@ class Mp4Exporter(
     }
 
     companion object {
-        private const val OUTRO_TILE_SAMPLES = 12
         const val OVERVIEW_MAX_EDGE = 1080
         private const val PREPARING_PROGRESS_WEIGHT = 0.10f
         private const val JOURNEY_PROGRESS_WEIGHT = 0.80f
@@ -305,6 +280,56 @@ class Mp4Exporter(
                 OVERVIEW_MAX_EDGE
             } else {
                 (OVERVIEW_MAX_EDGE / format.aspectRatio).toInt().coerceAtLeast(1).toEven()
+            }
+
+        internal fun requiredTilesForExport(
+            painter: TimelinePainter,
+            journey: Journey,
+            width: Int,
+            height: Int,
+            journeyFrameCount: Int,
+            outroFrameCount: Int,
+            fps: Int,
+            overviewWidth: Int,
+            overviewHeight: Int,
+            cameraSettings: CameraSettings,
+        ) = buildSet {
+            for (frame in 0 until journeyFrameCount + outroFrameCount) {
+                addAll(
+                    painter.requiredTiles(
+                        painter.viewport(
+                            journey,
+                            animationFrame(frame, journeyFrameCount, fps),
+                            width,
+                            height,
+                            cameraSettings,
+                        ),
+                    ).map { it.id },
+                )
+            }
+            addAll(
+                painter.requiredTiles(
+                    painter.viewport(
+                        journey,
+                        TimelineFrame(1f, 1f),
+                        overviewWidth,
+                        overviewHeight,
+                        cameraSettings,
+                    ),
+                ).map { it.id },
+            )
+        }
+
+        internal fun animationFrame(frame: Int, journeyFrameCount: Int, fps: Int): TimelineFrame =
+            if (frame < journeyFrameCount) {
+                val progress = if (journeyFrameCount == 1) 1f else frame.toFloat() / (journeyFrameCount - 1)
+                TimelineFrame(progress, 0f)
+            } else {
+                val outroElapsed = (frame - journeyFrameCount).toFloat() / fps
+                TimelineFrame(
+                    1f,
+                    (outroElapsed / TimelineAnimation.OUTRO_TRANSITION_SECONDS).coerceIn(0f, 1f),
+                )
             }
 
         private fun Int.toEven(): Int = if (this % 2 == 0) this else this + 1

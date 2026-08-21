@@ -30,6 +30,7 @@
     <string name="remembered_timeline_unavailable">Der bisher verwendete Timeline ist nicht mehr verfügbar.</string>
     <string name="choose_timeline_again">Wählen Sie erneut die Datei Timeline.json.</string>
     <string name="video_export_failed">Video konnte nicht erstellt werden</string>
+    <string name="map_tiles_unavailable">Die Karte konnte nicht vollständig geladen werden. Prüfe deine Verbindung und versuche es erneut.</string>
     <string name="location_settings_unavailable">Standorteinstellungen sind auf diesem Telefon nicht verfügbar</string>
     <string name="traveler">Reisender</string>
     <string name="tagline">Verwandeln Sie Ihre Timeline-Datei in ein animiertes Reisevideo.</string>

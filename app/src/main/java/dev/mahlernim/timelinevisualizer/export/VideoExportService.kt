@@ -177,6 +177,7 @@ class VideoExportService : Service() {
 
     private fun failureMessage(error: Throwable): String = when (error) {
         is UnsupportedVideoFormatException -> error.reason.describe(this, error.format)
+        is MapTilePreparationException -> getString(R.string.map_tiles_unavailable)
         else -> getString(R.string.video_export_failed)
     }
 
