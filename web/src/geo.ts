@@ -109,7 +109,15 @@ export function unwrapJourneyPoints(points: GeoPoint[]): WorldPoint[] {
 
 export function overviewRouteSegments(points: WorldPoint[]): WorldPoint[][] {
   if (points.length === 0) return [];
-  const referenceX = points.at(-1)?.x ?? 0.5;
+  const { minX, maxX } = worldBounds(points);
+  // A route that already fits inside a single world copy needs no split, so the wrap
+  // window is centred on it and every point stays where unwrapJourneyPoints put it.
+  // Anchoring the window on the last point instead would push a route such as
+  // Seoul to Paris to New York across the window edge and report a full world width
+  // to overviewViewport, which a non-square canvas can no longer fit. Routes that do
+  // span more than one copy still collapse around the final camera position, so
+  // blendViewport unwraps the ending viewport onto the same copy as the stroke.
+  const referenceX = maxX - minX < 1 ? (minX + maxX) / 2 : (points.at(-1)?.x ?? 0.5);
   const lowerEdge = referenceX - 0.5;
   const upperEdge = referenceX + 0.5;
   const wrapped = points.map((point) => ({ x: wrapNear(point.x, referenceX), y: point.y }));
@@ -155,6 +163,7 @@ export function worldBounds(points: WorldPoint[]): {
   return { minX, maxX, minY, maxY };
 }
 
+/** Square fit-to-bounds helper. Not aspect aware; the render path uses overviewViewport. */
 export function viewportFor(points: WorldPoint[], size: number): Viewport {
   const {
     minX: minPointX,

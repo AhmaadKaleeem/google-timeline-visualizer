@@ -1,5 +1,6 @@
 import { easeInOutCubic, easeOutCubic } from './animation';
 import {
+  aspectOf,
   blendViewport,
   buildCameraTrack,
   cameraViewportAt,
@@ -11,17 +12,29 @@ import type {
   CameraMovement,
   GeoPoint,
   PreparedJourney,
+  RenderSize,
   TimelineFrame,
   Viewport,
   WorldPoint,
 } from './types';
+import { overlayCard, overlayScale } from './overlay';
 
 const TILE_TEMPLATE = 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
 
-function worldToCanvas(point: WorldPoint, viewport: Viewport, size: number): [number, number] {
+// Route and marker sizes are authored on the same 720 design grid as the overlay,
+// so a single scale keeps every stroke proportional at any output size.
+const TRAIL_WIDTH = 7.5;           // 5 px at 480
+const RECENT_TRAIL_WIDTH = 12;     // 8 px at 480
+const OVERVIEW_TRAIL_WIDTH = 5.25; // 3.5 px at 480
+const HEAD_RADIUS = 15;            // 10 px at 480
+const HEAD_RING_RADIUS = 24;       // 16 px at 480
+const HEAD_RING_WIDTH = 7.5;       // 5 px at 480
+const HEAD_SHADOW_BLUR = 15;       // 10 px at 480
+
+function worldToCanvas(point: WorldPoint, viewport: Viewport, size: RenderSize): [number, number] {
   return [
-    ((point.x - viewport.minX) / (viewport.maxX - viewport.minX)) * size,
-    ((point.y - viewport.minY) / (viewport.maxY - viewport.minY)) * size,
+    ((point.x - viewport.minX) / (viewport.maxX - viewport.minX)) * size.width,
+    ((point.y - viewport.minY) / (viewport.maxY - viewport.minY)) * size.height,
   ];
 }
 
@@ -88,8 +101,9 @@ function drawMapBackground(
 ): void {
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas rendering is unavailable.');
+  const size: RenderSize = { width: canvas.width, height: canvas.height };
   context.fillStyle = '#f2edf0';
-  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillRect(0, 0, size.width, size.height);
 
   const tileCount = 2 ** viewport.zoom;
   const minTileX = Math.floor(viewport.minX * tileCount);
@@ -104,9 +118,9 @@ function drawMapBackground(
       if (!image) continue;
       const worldX = tileX / tileCount;
       const worldY = tileY / tileCount;
-      const [left, top] = worldToCanvas({ x: worldX, y: worldY }, viewport, canvas.width);
-      const width = (1 / tileCount / (viewport.maxX - viewport.minX)) * canvas.width;
-      const height = (1 / tileCount / (viewport.maxY - viewport.minY)) * canvas.height;
+      const [left, top] = worldToCanvas({ x: worldX, y: worldY }, viewport, size);
+      const width = (1 / tileCount / (viewport.maxX - viewport.minX)) * size.width;
+      const height = (1 / tileCount / (viewport.maxY - viewport.minY)) * size.height;
       context.drawImage(image, left, top, width, height);
     }
   }
@@ -143,7 +157,7 @@ async function loadRequiredTiles(
 
 export async function prepareJourney(
   points: GeoPoint[],
-  size = 480,
+  size: RenderSize = { width: 480, height: 480 },
   cameraMovement: CameraMovement = 'steady',
   durationSeconds = 30,
   signal?: AbortSignal,
@@ -183,6 +197,7 @@ export async function prepareJourney(
   return {
     ...journey,
     overviewRouteSegments: overviewSegments,
+    size,
     cameraTrack,
     overviewViewport: endingOverview,
     tiles,
@@ -199,7 +214,7 @@ function strokeRoute(
   points: WorldPoint[],
   head: WorldPoint,
   viewport: Viewport,
-  size: number,
+  size: RenderSize,
 ): void {
   if (points.length === 0) return;
   context.beginPath();
@@ -213,6 +228,43 @@ function strokeRoute(
   context.stroke();
 }
 
+/**
+ * The preview canvas is the display's pixel size capped at the format size, so it is
+ * proportionally smaller than the prepared size instead of equal to it. An integer backing
+ * store cannot hit the format ratio exactly; the widest drift over every reachable device
+ * width is 0.20 percent and the analytic bound is 0.33 percent, while the closest pair of
+ * format ratios, 1 and 0.5625, is 44 percent apart.
+ */
+export const ASPECT_EPSILON = 0.01;
+
+/**
+ * The preview never draws a short edge below this many device pixels: below it the integer
+ * backing store drifts too far from the format ratio to stay inside ASPECT_EPSILON.
+ */
+export const MIN_PREVIEW_SHORT_EDGE = 240;
+
+/**
+ * The backing store for the animated preview: the display's real pixel size, capped at the
+ * format size so the preview is never sharper than the video it previews, and floored so the
+ * short edge keeps at least MIN_PREVIEW_SHORT_EDGE device pixels. A width that cannot be
+ * measured and a device pixel ratio that is not a positive finite number both degrade to the
+ * exact format size, which is always correct and only ever costs pixels.
+ */
+export function previewCanvasSize(
+  format: RenderSize,
+  cssWidth: number,
+  devicePixelRatio: number,
+): RenderSize {
+  const ratio = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+  const deviceWidth = Number.isFinite(cssWidth) && cssWidth > 0 ? cssWidth * ratio : format.width;
+  const minimumScale = Math.min(1, MIN_PREVIEW_SHORT_EDGE / Math.min(format.width, format.height));
+  const scale = Math.min(1, Math.max(minimumScale, deviceWidth / format.width));
+  return {
+    width: Math.round(format.width * scale),
+    height: Math.round(format.height * scale),
+  };
+}
+
 export function drawFrame(
   canvas: HTMLCanvasElement,
   journey: PreparedJourney,
@@ -222,12 +274,29 @@ export function drawFrame(
 ): void {
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas rendering is unavailable.');
-  const size = canvas.width;
-  context.clearRect(0, 0, size, size);
+  const size: RenderSize = { width: canvas.width, height: canvas.height };
+  // The preview draws the prepared journey on a proportionally smaller canvas, which is the
+  // same picture under a uniform scale, so only the ratio has to match. Absolute size is no
+  // longer checked here: the export path is held to the format size by createJourneyMp4.
+  const preparedAspect = aspectOf(journey.size);
+  if (Math.abs(aspectOf(size) - preparedAspect) > preparedAspect * ASPECT_EPSILON) {
+    throw new Error('The prepared journey does not match the canvas aspect ratio.');
+  }
+  const scale = overlayScale(size);
+  context.clearRect(0, 0, size.width, size.height);
   const journeyViewport = cameraViewportAt(journey.cameraTrack, frame.journeyProgress);
+  // The prepared size, never the canvas size: blendViewport derives the integer tile zoom from
+  // the width it is given, and prepareJourney downloaded the outro tiles at the prepared zoom.
+  // A smaller preview canvas would ask journey.tiles for keys that were never fetched, and the
+  // whole map would fall back to the empty background for the length of the outro.
   const viewport = frame.outroProgress <= 0
     ? journeyViewport
-    : blendViewport(journeyViewport, journey.overviewViewport, easeOutCubic(frame.outroProgress), size);
+    : blendViewport(
+      journeyViewport,
+      journey.overviewViewport,
+      easeOutCubic(frame.outroProgress),
+      journey.size,
+    );
   drawMapBackground(canvas, viewport, journey.tiles);
 
   const current = pointAtProgress(journey, frame.journeyProgress);
@@ -238,7 +307,7 @@ export function drawFrame(
   context.globalAlpha = activeAlpha;
   const traveled = journey.worldPoints.slice(0, current.completedIndex + 1);
   context.strokeStyle = 'rgba(233, 0, 100, 0.34)';
-  context.lineWidth = 5;
+  context.lineWidth = TRAIL_WIDTH * scale;
   strokeRoute(context, traveled, current.point, viewport, size);
 
   const currentDistance = journey.totalDistanceKm * Math.max(0, Math.min(1, frame.journeyProgress));
@@ -248,7 +317,7 @@ export function drawFrame(
     journey.cumulativeDistanceKm.findIndex((distance) => distance >= recentStartDistance),
   );
   context.strokeStyle = '#e90064';
-  context.lineWidth = 8;
+  context.lineWidth = RECENT_TRAIL_WIDTH * scale;
   strokeRoute(
     context,
     journey.worldPoints.slice(recentStartIndex, current.completedIndex + 1),
@@ -259,16 +328,16 @@ export function drawFrame(
   const [headX, headY] = worldToCanvas(current.point, viewport, size);
 
   context.shadowColor = 'rgba(36, 25, 29, 0.35)';
-  context.shadowBlur = 10;
+  context.shadowBlur = HEAD_SHADOW_BLUR * scale;
   context.fillStyle = '#24191d';
   context.beginPath();
-  context.arc(headX, headY, 10, 0, Math.PI * 2);
+  context.arc(headX, headY, HEAD_RADIUS * scale, 0, Math.PI * 2);
   context.fill();
   context.shadowBlur = 0;
   context.strokeStyle = '#e90064';
-  context.lineWidth = 5;
+  context.lineWidth = HEAD_RING_WIDTH * scale;
   context.beginPath();
-  context.arc(headX, headY, 16, 0, Math.PI * 2);
+  context.arc(headX, headY, HEAD_RING_RADIUS * scale, 0, Math.PI * 2);
   context.stroke();
   context.restore();
 
@@ -276,7 +345,7 @@ export function drawFrame(
     context.save();
     context.globalAlpha = (190 / 255) * easeInOutCubic(frame.outroProgress);
     context.strokeStyle = '#e90064';
-    context.lineWidth = 3.5;
+    context.lineWidth = OVERVIEW_TRAIL_WIDTH * scale;
     for (const segment of journey.overviewRouteSegments) {
       strokeRoute(
         context,
@@ -289,21 +358,25 @@ export function drawFrame(
     context.restore();
   }
 
-  const scale = size / 720;
+  const card = overlayCard(size);
   context.fillStyle = 'rgba(255, 248, 250, 0.86)';
   context.beginPath();
-  context.roundRect(34 * scale, 28 * scale, size - 68 * scale, 104 * scale, 24 * scale);
+  context.roundRect(card.left, card.top, card.width, card.bottom - card.top, 24 * scale);
   context.fill();
   context.textAlign = 'center';
   context.fillStyle = '#24191d';
   context.font = `700 ${34 * scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
-  context.fillText(title || 'My Journey', size / 2, 72 * scale, size - 104 * scale);
+  context.fillText(title || 'My Journey', card.centerX, 72 * scale, card.width - 36 * scale);
   context.fillStyle = '#5c4b52';
   context.font = `${20 * scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
-  context.fillText(periodLabel, size / 2, 108 * scale);
+  context.fillText(periodLabel, card.centerX, 108 * scale);
 
   context.textAlign = 'right';
   context.fillStyle = 'rgba(36, 25, 29, 0.78)';
   context.font = `${13 * scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
-  context.fillText('© OpenStreetMap contributors  © CARTO', size - 12 * scale, size - 12 * scale);
+  context.fillText(
+    '© OpenStreetMap contributors  © CARTO',
+    size.width - 12 * scale,
+    size.height - 12 * scale,
+  );
 }

@@ -16,6 +16,11 @@ export interface WorldPoint {
   y: number;
 }
 
+export interface RenderSize {
+  width: number;
+  height: number;
+}
+
 export interface Viewport {
   minX: number;
   maxX: number;
@@ -49,6 +54,8 @@ export interface PreparedJourney {
   overviewRouteSegments: WorldPoint[][];
   cumulativeDistanceKm: number[];
   totalDistanceKm: number;
+  /** The format size this journey was prepared for: its tile zooms and aspect ratio follow it. */
+  size: RenderSize;
   cameraTrack: CameraTrack;
   overviewViewport: Viewport;
   tiles: Map<string, HTMLImageElement>;

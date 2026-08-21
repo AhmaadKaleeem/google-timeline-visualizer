@@ -1,5 +1,6 @@
-import type { CameraFrame, CameraMovement, CameraTrack, Viewport, WorldPoint } from './types';
+import type { CameraFrame, CameraMovement, CameraTrack, RenderSize, Viewport, WorldPoint } from './types';
 import { worldBounds } from './geo';
+import { OVERLAY_BOTTOM, overlayScale } from './overlay';
 
 interface CameraMovementProfile {
   contextFraction: number;
@@ -79,7 +80,6 @@ const MAX_OVERVIEW_VIEWPORT_SPAN = 1.25;
 const MIN_OVERVIEW_VIEWPORT_SPAN = 0.00045;
 const OVERVIEW_PADDING = 1.22;
 const OVERVIEW_SIDE_INSET = 34;
-const OVERVIEW_HEADER_BOTTOM = 132;
 const OVERVIEW_HEADER_GAP = 20;
 const OVERVIEW_BOTTOM_INSET = 34;
 const TRANSFER_PADDING = 2.8;
@@ -201,8 +201,17 @@ function clampCenterY(centerY: number, spanY: number): number {
   return half >= 0.5 ? 0.5 : clamp(centerY, half, 1 - half);
 }
 
-function tileZoom(size: number, aspect: number, spanY: number): number {
-  return clamp(Math.floor(Math.log2(Math.max(1, size) / (256 * spanY * aspect))), MIN_TILE_ZOOM, MAX_TILE_ZOOM);
+export function aspectOf(size: RenderSize): number {
+  return size.width / Math.max(1, size.height);
+}
+
+function tileZoom(size: RenderSize, spanY: number): number {
+  const aspect = aspectOf(size);
+  return clamp(
+    Math.floor(Math.log2(Math.max(1, size.width) / (256 * spanY * aspect))),
+    MIN_TILE_ZOOM,
+    MAX_TILE_ZOOM,
+  );
 }
 
 export interface OverviewSafeArea {
@@ -212,17 +221,17 @@ export interface OverviewSafeArea {
   bottom: number;
 }
 
-export function overviewSafeArea(size: number): OverviewSafeArea {
-  const scale = size / 720;
+export function overviewSafeArea(size: RenderSize): OverviewSafeArea {
+  const scale = overlayScale(size);
   return {
     left: OVERVIEW_SIDE_INSET * scale,
-    top: (OVERVIEW_HEADER_BOTTOM + OVERVIEW_HEADER_GAP) * scale,
-    right: size - OVERVIEW_SIDE_INSET * scale,
-    bottom: size - OVERVIEW_BOTTOM_INSET * scale,
+    top: (OVERLAY_BOTTOM + OVERVIEW_HEADER_GAP) * scale,
+    right: size.width - OVERVIEW_SIDE_INSET * scale,
+    bottom: size.height - OVERVIEW_BOTTOM_INSET * scale,
   };
 }
 
-export function overviewViewport(journey: CameraJourney, size: number): Viewport {
+export function overviewViewport(journey: CameraJourney, size: RenderSize): Viewport {
   const { minX, maxX, minY, maxY } = worldBounds(journey.worldPoints);
   const contentCenterX = (minX + maxX) / 2;
   const contentCenterY = (minY + maxY) / 2;
@@ -232,9 +241,9 @@ export function overviewViewport(journey: CameraJourney, size: number): Viewport
   const safeWidth = Math.max(1, safe.right - safe.left);
   const safeHeight = Math.max(1, safe.bottom - safe.top);
   const worldPerPixel = Math.max(contentSpanX / safeWidth, contentSpanY / safeHeight) * OVERVIEW_PADDING;
-  const spanX = Math.max(worldPerPixel * size, MIN_OVERVIEW_VIEWPORT_SPAN);
+  const spanX = Math.max(worldPerPixel * size.width, MIN_OVERVIEW_VIEWPORT_SPAN);
   const spanY = clamp(
-    worldPerPixel * size,
+    worldPerPixel * size.height,
     MIN_OVERVIEW_VIEWPORT_SPAN,
     MAX_OVERVIEW_VIEWPORT_SPAN,
   );
@@ -246,7 +255,11 @@ export function overviewViewport(journey: CameraJourney, size: number): Viewport
     maxX: viewportMinX + spanX,
     minY: viewportMinY,
     maxY: viewportMinY + spanY,
-    zoom: clamp(Math.floor(Math.log2(Math.max(1, size) / (256 * spanX))), MIN_TILE_ZOOM, MAX_TILE_ZOOM),
+    zoom: clamp(
+      Math.floor(Math.log2(Math.max(1, size.width) / (256 * spanX))),
+      MIN_TILE_ZOOM,
+      MAX_TILE_ZOOM,
+    ),
   };
 }
 
@@ -254,9 +267,10 @@ export function blendViewport(
   from: Viewport,
   to: Viewport,
   fraction: number,
-  size: number,
+  size: RenderSize,
 ): Viewport {
   const amount = clamp(fraction, 0, 1);
+  const aspect = aspectOf(size);
   const fromCenterX = (from.minX + from.maxX) / 2;
   const toCenterX = unwrapNear((to.minX + to.maxX) / 2, fromCenterX);
   const centerX = fromCenterX + (toCenterX - fromCenterX) * amount;
@@ -269,13 +283,18 @@ export function blendViewport(
     MIN_OVERVIEW_VIEWPORT_SPAN,
     MAX_OVERVIEW_VIEWPORT_SPAN,
   );
+  const spanX = spanY * aspect;
   const adjustedCenterY = clampCenterY(centerY, spanY);
   return {
-    minX: centerX - spanY / 2,
-    maxX: centerX + spanY / 2,
+    minX: centerX - spanX / 2,
+    maxX: centerX + spanX / 2,
     minY: adjustedCenterY - spanY / 2,
     maxY: adjustedCenterY + spanY / 2,
-    zoom: clamp(Math.floor(Math.log2(Math.max(1, size) / (256 * spanY))), MIN_TILE_ZOOM, MAX_TILE_ZOOM),
+    zoom: clamp(
+      Math.floor(Math.log2(Math.max(1, size.width) / (256 * spanX))),
+      MIN_TILE_ZOOM,
+      MAX_TILE_ZOOM,
+    ),
   };
 }
 
@@ -289,7 +308,7 @@ function stabilizedTileZoom(previous: number, continuous: number): number {
 function rawViewport(
   journey: CameraJourney,
   progress: number,
-  size: number,
+  size: RenderSize,
   movement: CameraMovementProfile,
   legs: JourneyLeg[],
 ): Viewport {
@@ -328,7 +347,7 @@ function rawViewport(
   }
   const contentSpanX = Math.max(0.00015, maxX - minX);
   const contentSpanY = Math.max(0.00015, maxY - minY);
-  const aspect = 1;
+  const aspect = aspectOf(size);
   const spanY = clamp(
     Math.max(contentSpanY * padding, contentSpanX * padding / aspect),
     movement.minimumViewportSpan,
@@ -340,7 +359,7 @@ function rawViewport(
     maxX: centerX + spanY * aspect / 2,
     minY: adjustedCenterY - spanY / 2,
     maxY: adjustedCenterY + spanY / 2,
-    zoom: tileZoom(size, aspect, spanY),
+    zoom: tileZoom(size, spanY),
   };
 }
 
@@ -358,10 +377,10 @@ function frameToViewport(frame: CameraFrame, aspect: number): Viewport {
 
 export function buildCameraTrack(
   journey: CameraJourney,
-  size: number,
+  size: RenderSize,
   cameraMovement: CameraMovement,
 ): CameraTrack {
-  const aspect = 1;
+  const aspect = aspectOf(size);
   const movement = MOVEMENT_PROFILES[cameraMovement];
   const legs = buildLegs(journey);
   const rawSamples = Array.from({ length: CAMERA_TRACK_SAMPLES + 1 }, (_, sample) => {
@@ -392,7 +411,7 @@ export function buildCameraTrack(
         centerX: rawCenterX,
         centerY: clampCenterY(rawCenterY, rawSpanY),
         spanY: rawSpanY,
-        zoom: tileZoom(size, aspect, rawSpanY),
+        zoom: tileZoom(size, rawSpanY),
       });
       continue;
     }
@@ -412,7 +431,7 @@ export function buildCameraTrack(
     if (sample.marker.y < centerY - deadHalfY) centerY = sample.marker.y + deadHalfY;
     else if (sample.marker.y > centerY + deadHalfY) centerY = sample.marker.y - deadHalfY;
     centerY = clampCenterY(centerY, spanY);
-    const continuousZoom = Math.log2(Math.max(1, size) / (256 * spanX));
+    const continuousZoom = Math.log2(Math.max(1, size.width) / (256 * spanX));
     frames.push({
       centerX,
       centerY,

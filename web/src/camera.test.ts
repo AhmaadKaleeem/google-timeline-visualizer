@@ -7,9 +7,33 @@ import {
   overviewViewport,
   worldPositionAtProgress,
 } from './camera';
-import { cumulativeDistances, project, unwrapJourneyPoints, unwrapWorldPoints } from './geo';
+import {
+  cumulativeDistances,
+  overviewRouteSegments,
+  project,
+  unwrapJourneyPoints,
+  unwrapWorldPoints,
+} from './geo';
 import { requiredTiles } from './renderer';
-import type { CameraMovement, GeoPoint } from './types';
+import type { CameraMovement, GeoPoint, RenderSize } from './types';
+
+const SQUARE_480: RenderSize = { width: 480, height: 480 };
+
+const FORMATS: RenderSize[] = [
+  { width: 480, height: 480 },
+  { width: 720, height: 720 },
+  { width: 1080, height: 1080 },
+  { width: 1080, height: 1920 },
+  { width: 1920, height: 1080 },
+];
+
+function label(size: RenderSize): string {
+  return `${size.width}x${size.height}`;
+}
+
+function ratio(viewport: { minX: number; maxX: number; minY: number; maxY: number }): number {
+  return (viewport.maxX - viewport.minX) / (viewport.maxY - viewport.minY);
+}
 
 function journey(points: Array<[number, number]>) {
   const geoPoints: GeoPoint[] = points.map(([latitude, longitude], index) => ({
@@ -23,6 +47,23 @@ function journey(points: Array<[number, number]>) {
     cumulativeDistanceKm,
     totalDistanceKm: cumulativeDistanceKm.at(-1) ?? 0,
   };
+}
+
+/** Adds intermediate samples so a long leg is measured the way a real timeline records it. */
+function densify(points: Array<[number, number]>, steps: number): Array<[number, number]> {
+  const dense: Array<[number, number]> = [points[0]];
+  for (let index = 1; index < points.length; index += 1) {
+    const [fromLatitude, fromLongitude] = points[index - 1];
+    const [toLatitude, toLongitude] = points[index];
+    for (let step = 1; step <= steps; step += 1) {
+      const fraction = step / steps;
+      dense.push([
+        fromLatitude + (toLatitude - fromLatitude) * fraction,
+        fromLongitude + (toLongitude - fromLongitude) * fraction,
+      ]);
+    }
+  }
+  return dense;
 }
 
 function center(viewport: ReturnType<typeof cameraViewportAt>): [number, number] {
@@ -39,14 +80,14 @@ describe('camera track', () => {
   ]);
 
   it.each<CameraMovement>(['fixed', 'steady', 'dynamic'])('%s follows the journey instead of freezing', (movement) => {
-    const track = buildCameraTrack(koreanJourney, 480, movement);
+    const track = buildCameraTrack(koreanJourney, SQUARE_480, movement);
     const [startX, startY] = center(cameraViewportAt(track, 0));
     const [endX, endY] = center(cameraViewportAt(track, 1));
     expect(Math.hypot(endX - startX, endY - startY)).toBeGreaterThan(0.001);
   });
 
   it('keeps the marker inside the stable central area', () => {
-    const track = buildCameraTrack(koreanJourney, 480, 'dynamic');
+    const track = buildCameraTrack(koreanJourney, SQUARE_480, 'dynamic');
     for (let sample = 0; sample <= 40; sample += 1) {
       const progress = sample / 40;
       const viewport = cameraViewportAt(track, progress);
@@ -61,7 +102,7 @@ describe('camera track', () => {
   });
 
   it('keeps one zoom span in fixed mode while continuing to pan', () => {
-    const track = buildCameraTrack(koreanJourney, 480, 'fixed');
+    const track = buildCameraTrack(koreanJourney, SQUARE_480, 'fixed');
     const spans = [0, 0.2, 0.5, 0.8, 1].map((progress) => {
       const viewport = cameraViewportAt(track, progress);
       return viewport.maxY - viewport.minY;
@@ -71,7 +112,7 @@ describe('camera track', () => {
 
   it('uses the short camera path and wrapped tiles across the date line', () => {
     const dateLineJourney = journey([[10, 179], [10.2, -179]]);
-    const track = buildCameraTrack(dateLineJourney, 480, 'dynamic');
+    const track = buildCameraTrack(dateLineJourney, SQUARE_480, 'dynamic');
     const middle = cameraViewportAt(track, 0.5);
     expect(middle.maxX - middle.minX).toBeLessThan(0.05);
     const count = 2 ** middle.zoom;
@@ -92,7 +133,7 @@ describe('camera track', () => {
       [70, 100],
       [37, 127],
     ]);
-    const track = buildCameraTrack(arcticRoundTrip, 480, 'dynamic');
+    const track = buildCameraTrack(arcticRoundTrip, SQUARE_480, 'dynamic');
     const turnProgress = arcticRoundTrip.cumulativeDistanceKm[3] / arcticRoundTrip.totalDistanceKm;
     const [startX] = center(cameraViewportAt(track, 0));
     const [turnX] = center(cameraViewportAt(track, turnProgress));
@@ -109,7 +150,7 @@ describe('camera track', () => {
       [35.1796, 129.0756],
       [35.1800, 129.0800],
     ]);
-    const track = buildCameraTrack(changingJourney, 480, 'dynamic');
+    const track = buildCameraTrack(changingJourney, SQUARE_480, 'dynamic');
     for (let index = 1; index < track.frames.length; index += 1) {
       const previous = track.frames[index - 1];
       const current = track.frames[index];
@@ -119,13 +160,40 @@ describe('camera track', () => {
     }
   });
 
-  it('fits the complete route below the Android-style video header', () => {
-    const size = 480;
+  it.each(FORMATS)('fits the complete route below the Android-style video header at $width x $height', (size) => {
     const viewport = overviewViewport(koreanJourney, size);
     const safe = overviewSafeArea(size);
     koreanJourney.worldPoints.forEach((point) => {
-      const screenX = (point.x - viewport.minX) / (viewport.maxX - viewport.minX) * size;
-      const screenY = (point.y - viewport.minY) / (viewport.maxY - viewport.minY) * size;
+      const screenX = (point.x - viewport.minX) / (viewport.maxX - viewport.minX) * size.width;
+      const screenY = (point.y - viewport.minY) / (viewport.maxY - viewport.minY) * size.height;
+      expect(screenX).toBeGreaterThanOrEqual(safe.left);
+      expect(screenX).toBeLessThanOrEqual(safe.right);
+      expect(screenY).toBeGreaterThanOrEqual(safe.top);
+      expect(screenY).toBeLessThanOrEqual(safe.bottom);
+    });
+  });
+
+  it.each(FORMATS)('keeps the drawn ending route on screen at $width x $height', (size) => {
+    // renderer.prepareJourney feeds the overview the same segments drawFrame strokes, and
+    // drawFrame ends on blendViewport(..., 1), so the fit has to survive that recomputation.
+    const intercontinental = journey(densify([
+      [37.57, 126.98],
+      [48.86, 2.35],
+      [40.71, -74.01],
+    ], 120));
+    const drawn = overviewRouteSegments(intercontinental.worldPoints).flat();
+    const track = buildCameraTrack(intercontinental, size, 'steady');
+    const ending = blendViewport(
+      cameraViewportAt(track, 1),
+      overviewViewport({ ...intercontinental, worldPoints: drawn }, size),
+      1,
+      size,
+    );
+    const safe = overviewSafeArea(size);
+
+    drawn.forEach((point) => {
+      const screenX = (point.x - ending.minX) / (ending.maxX - ending.minX) * size.width;
+      const screenY = (point.y - ending.minY) / (ending.maxY - ending.minY) * size.height;
       expect(screenX).toBeGreaterThanOrEqual(safe.left);
       expect(screenX).toBeLessThanOrEqual(safe.right);
       expect(screenY).toBeGreaterThanOrEqual(safe.top);
@@ -146,7 +214,7 @@ describe('camera track', () => {
       totalDistanceKm: 0,
     };
 
-    expect(overviewViewport(denseJourney, 480)).toEqual(overviewViewport(endpointJourney, 480));
+    expect(overviewViewport(denseJourney, SQUARE_480)).toEqual(overviewViewport(endpointJourney, SQUARE_480));
   });
 
   it('builds the moving camera above browser argument limits', () => {
@@ -158,21 +226,99 @@ describe('camera track', () => {
       totalDistanceKm: 0,
     };
 
-    const track = buildCameraTrack(denseJourney, 480, 'steady');
+    const track = buildCameraTrack(denseJourney, SQUARE_480, 'steady');
 
     expect(track.frames).toHaveLength(481);
     expect(track.frames.every((frame) => Number.isFinite(frame.spanY))).toBe(true);
   });
 
-  it('blends from the final following view to the full-route ending view', () => {
-    const track = buildCameraTrack(koreanJourney, 480, 'dynamic');
+  it.each(FORMATS)('blends from the final following view to the full-route ending view at $width x $height', (size) => {
+    const track = buildCameraTrack(koreanJourney, size, 'dynamic');
     const following = cameraViewportAt(track, 1);
-    const overview = overviewViewport(koreanJourney, 480);
-    expect(blendViewport(following, overview, 0, 480)).toEqual(following);
-    const ending = blendViewport(following, overview, 1, 480);
+    const overview = overviewViewport(koreanJourney, size);
+    const start = blendViewport(following, overview, 0, size);
+    // Only the rectangle has to be continuous. The tile zoom may legitimately differ because
+    // the camera track applies zoom hysteresis while blendViewport derives zoom from the span,
+    // exactly as Android does. Before the aspect fix the rectangle matched only at aspect 1.
+    expect([start.minX, start.maxX, start.minY, start.maxY])
+      .toEqual([following.minX, following.maxX, following.minY, following.maxY]);
+    const ending = blendViewport(following, overview, 1, size);
     expect(ending.minX).toBeCloseTo(overview.minX, 12);
     expect(ending.maxX).toBeCloseTo(overview.maxX, 12);
     expect(ending.minY).toBeCloseTo(overview.minY, 12);
     expect(ending.maxY).toBeCloseTo(overview.maxY, 12);
+  });
+
+  it.each(FORMATS)('builds a camera track whose aspect matches $width x $height', (size) => {
+    const track = buildCameraTrack(koreanJourney, size, 'dynamic');
+    expect(track.aspect).toBe(size.width / size.height);
+  });
+
+  it.each(FORMATS)('keeps every journey frame at the $width x $height aspect ratio', (size) => {
+    const track = buildCameraTrack(koreanJourney, size, 'dynamic');
+    const aspect = size.width / size.height;
+    [0, 0.25, 0.5, 0.75, 1].forEach((progress) => {
+      expect(ratio(cameraViewportAt(track, progress))).toBeCloseTo(aspect, 10);
+    });
+  });
+
+  it.each(FORMATS)('keeps the ending overview at the $width x $height aspect ratio', (size) => {
+    expect(ratio(overviewViewport(koreanJourney, size))).toBeCloseTo(size.width / size.height, 10);
+  });
+
+  it.each(FORMATS)('preserves the aspect ratio throughout the blend at $width x $height', (size) => {
+    const track = buildCameraTrack(koreanJourney, size, 'dynamic');
+    const following = cameraViewportAt(track, 1);
+    const overview = overviewViewport(koreanJourney, size);
+    const aspect = size.width / size.height;
+    for (let step = 0; step <= 20; step += 1) {
+      const blended = blendViewport(following, overview, step / 20, size);
+      expect(ratio(blended)).toBeCloseTo(aspect, 10);
+    }
+  });
+
+  it('insets the overview safe area from both axes of a portrait canvas', () => {
+    const safe = overviewSafeArea({ width: 1080, height: 1920 });
+    expect(safe.left).toBeCloseTo(51, 10);
+    expect(safe.top).toBeCloseTo(228, 10);
+    expect(safe.right).toBeCloseTo(1029, 10);
+    expect(safe.bottom).toBeCloseTo(1869, 10);
+  });
+
+  it('insets the overview safe area from both axes of a landscape canvas', () => {
+    const safe = overviewSafeArea({ width: 1920, height: 1080 });
+    expect(safe.left).toBeCloseTo(51, 10);
+    expect(safe.top).toBeCloseTo(228, 10);
+    expect(safe.right).toBeCloseTo(1869, 10);
+    expect(safe.bottom).toBeCloseTo(1029, 10);
+  });
+
+  it.each(FORMATS)('scales the overview safe area by the short edge at $width x $height', (size) => {
+    const scale = Math.min(size.width, size.height) / 720;
+    const safe = overviewSafeArea(size);
+    expect(safe.left).toBeCloseTo(34 * scale, 10);
+    expect(safe.top).toBeCloseTo(152 * scale, 10);
+    expect(safe.right).toBeCloseTo(size.width - 34 * scale, 10);
+    expect(safe.bottom).toBeCloseTo(size.height - 34 * scale, 10);
+  });
+
+  it.each(FORMATS)('derives the overview zoom from the width and the X span at $width x $height', (size) => {
+    const viewport = overviewViewport(koreanJourney, size);
+    const spanX = viewport.maxX - viewport.minX;
+    const expected = Math.max(2, Math.min(15, Math.floor(Math.log2(size.width / (256 * spanX)))));
+    expect(viewport.zoom).toBe(expected);
+  });
+
+  it.each(FORMATS)('resolves the tile zoom identically from either axis at $width x $height', (size) => {
+    const aspect = size.width / Math.max(1, size.height);
+    [0.01, 0.05, 0.2, 0.72].forEach((spanY) => {
+      const fromWidth = Math.floor(Math.log2(size.width / (256 * spanY * aspect)));
+      const fromHeight = Math.floor(Math.log2(size.height / (256 * spanY)));
+      expect(fromWidth).toBe(fromHeight);
+    });
+  });
+
+  it('names every format distinctly so parameterized cases stay readable', () => {
+    expect(new Set(FORMATS.map(label)).size).toBe(FORMATS.length);
   });
 });

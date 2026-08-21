@@ -1,7 +1,8 @@
 import './style.css';
 import { frameAtElapsedSeconds, totalDurationSeconds } from './animation';
 import { cumulativeDistances } from './geo';
-import { drawFrame, prepareJourney } from './renderer';
+import { filterLocationOutliers } from './outlier';
+import { drawFrame, prepareJourney, previewCanvasSize } from './renderer';
 import {
   availableMonths,
   localDateKey,
@@ -13,9 +14,25 @@ import {
   selectRange,
   TimelineParseError,
 } from './timeline';
+import type { LocationFilterMode } from './outlier';
 import type { RawSignalPoint, RawSignalProcessingResult } from './timeline';
-import type { CameraMovement, GeoPoint, MonthOption, PreparedJourney } from './types';
-import { canCreateMp4, createJourneyMp4 } from './video';
+import type {
+  CameraMovement,
+  GeoPoint,
+  MonthOption,
+  PreparedJourney,
+  RenderSize,
+  TimelineFrame,
+} from './types';
+import type { VideoFormat, VideoFormatSupport } from './video';
+import {
+  createJourneyMp4,
+  hasVideoEncoder,
+  probeVideoFormats,
+  resolveVideoFormat,
+  VIDEO_FORMATS,
+  videoFormatByKey,
+} from './video';
 
 function element<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -35,6 +52,8 @@ const rawSignalsToggle = element<HTMLInputElement>('raw-signals-toggle');
 const rawSignalsDescription = element<HTMLElement>('raw-signals-description');
 const rawAccuracyField = element<HTMLElement>('raw-accuracy-field');
 const rawAccuracyLimit = element<HTMLInputElement>('raw-accuracy-limit');
+const locationFilterField = element<HTMLElement>('location-filter-field');
+const locationFilterSelect = element<HTMLSelectElement>('location-filter');
 const monthRangeFields = element<HTMLElement>('month-range-fields');
 const exactDateFields = element<HTMLElement>('exact-date-fields');
 const startSelect = element<HTMLSelectElement>('start-month');
@@ -44,6 +63,8 @@ const endDateInput = element<HTMLInputElement>('end-date');
 const titleInput = element<HTMLInputElement>('video-title');
 const durationSelect = element<HTMLSelectElement>('duration');
 const cameraMovementSelect = element<HTMLSelectElement>('camera-movement');
+const formatSelect = element<HTMLSelectElement>('video-format');
+const formatWarning = element<HTMLParagraphElement>('format-warning');
 const selectionSummary = element<HTMLParagraphElement>('selection-summary');
 const mapConsent = element<HTMLInputElement>('map-consent');
 const settingsError = element<HTMLParagraphElement>('settings-error');
@@ -69,6 +90,7 @@ if (import.meta.env.VITE_PREVIEW === 'true') {
 
 let allPoints: GeoPoint[] = [];
 let semanticPoints: GeoPoint[] = [];
+let filteredPoints: GeoPoint[] = [];
 let rawSignalPoints: RawSignalPoint[] = [];
 let rawSignalProcessing: RawSignalProcessingResult | null = null;
 let pendingRawOnlyImport: { data: unknown; sourceName: string } | null = null;
@@ -78,11 +100,19 @@ let selectedSignature = '';
 let resultUrl: string | null = null;
 let resultFile: File | null = null;
 let previewAnimation = 0;
-let encodingSupported = false;
+let hasEncoder = false;
+let formatSupport: VideoFormatSupport | null = null;
 let compatibilityChecked = false;
 let isExporting = false;
 let isPreparing = false;
 let exportController: AbortController | null = null;
+let lastPreviewFrame: TimelineFrame | null = null;
+let previewSizeDirty = false;
+let resizeTimer = 0;
+let pixelRatioQuery: MediaQueryList | null = null;
+
+/** Dragging a desktop window fires resize continuously, and every applied size clears the bitmap. */
+const PREVIEW_RESIZE_DEBOUNCE_MS = 150;
 
 function setError(message: string | null): void {
   errorMessage.textContent = message ?? '';
@@ -110,14 +140,25 @@ function rebuildRawSignalProcessing(): boolean {
   return true;
 }
 
+function currentFilterMode(): LocationFilterMode {
+  return locationFilterSelect.value === 'off' ? 'off' : 'conservative';
+}
+
+function rebuildFilteredPoints(): void {
+  filteredPoints = filterLocationOutliers(semanticPoints, currentFilterMode()).points;
+}
+
+function selectSemanticRange(source: GeoPoint[]): GeoPoint[] {
+  return exactDateToggle.checked
+    ? selectDateRange(source, startDateInput.value, endDateInput.value)
+    : selectRange(source, startSelect.value, endSelect.value);
+}
+
 function currentPoints(): GeoPoint[] {
   if (rawSignalsToggle.checked) {
     return rebuildRawSignalProcessing() ? rawSignalProcessing?.points ?? [] : [];
   }
-  if (exactDateToggle.checked) {
-    return selectDateRange(semanticPoints, startDateInput.value, endDateInput.value);
-  }
-  return selectRange(semanticPoints, startSelect.value, endSelect.value);
+  return selectSemanticRange(filteredPoints);
 }
 
 function formatInputDate(value: string): string {
@@ -137,11 +178,132 @@ function currentPeriodLabel(): string {
   return startSelect.value === endSelect.value ? start : `${start} – ${end}`;
 }
 
+function currentFormat(): VideoFormat {
+  return videoFormatByKey(formatSelect.value) ?? VIDEO_FORMATS[0];
+}
+
+function stopPreview(): void {
+  cancelAnimationFrame(previewAnimation);
+  previewAnimation = 0; // rAF ids are positive, so 0 is a safe idle sentinel
+  previewSizeDirty = false;
+}
+
+/** Assigning canvas.width clears the bitmap, so every caller must stop the preview loop first. */
+function setCanvasSize(size: RenderSize): boolean {
+  if (canvas.width === size.width && canvas.height === size.height) return false;
+  canvas.width = size.width;
+  canvas.height = size.height;
+  return true;
+}
+
+/** The CSS box follows the selected format whatever the backing store holds. */
+function applyPreviewAspect(): void {
+  const format = currentFormat();
+  canvas.style.setProperty('--preview-aspect', String(format.width / format.height));
+}
+
+/**
+ * The canvas is laid out by min(100%, --preview-max-height * --preview-aspect), so its own
+ * border box is the only correct measurement: the card is much wider than a portrait preview.
+ * getBoundingClientRect flushes layout, so the value is final in the same task the card is
+ * shown. A hidden card measures 0, which previewCanvasSize turns into the exact format size.
+ */
+function applyPreviewCanvasSize(): boolean {
+  const format = currentFormat();
+  return setCanvasSize(previewCanvasSize(
+    { width: format.width, height: format.height },
+    canvas.getBoundingClientRect().width,
+    window.devicePixelRatio,
+  ));
+}
+
+/**
+ * Idempotent. Restores the exact format size, which createJourneyMp4 requires and CanvasSource
+ * captures. Called at startup, on a format change, and immediately before every export.
+ */
+function applyVideoFormat(): void {
+  const format = currentFormat();
+  applyPreviewAspect();
+  if (setCanvasSize({ width: format.width, height: format.height })) {
+    progressLabel.textContent = 'Ready';
+    progress.classList.add('hidden');
+    progress.value = 0;
+  }
+}
+
+function onViewportChange(): void {
+  if (isExporting) return;
+  window.clearTimeout(resizeTimer);
+  resizeTimer = window.setTimeout(applyPreviewResize, PREVIEW_RESIZE_DEBOUNCE_MS);
+}
+
+/**
+ * The preview follows the display, so a window resize, a browser zoom or a move to another
+ * screen has to be re-measured. Exports are exempt: createJourneyMp4 awaits the encoder between
+ * drawing a frame and submitting it, and clearing the bitmap in that window would submit a
+ * blank frame, while the encoder cannot change frame size mid sequence anyway.
+ */
+function applyPreviewResize(): void {
+  resizeTimer = 0;
+  if (isExporting || isPreparing) return; // preparing re-measures after its own await
+  if (previewCard.classList.contains('hidden')) return;
+  if (previewAnimation !== 0) {
+    previewSizeDirty = true; // the next tick resizes and redraws in one rAF callback
+    return;
+  }
+  if (!prepared || !lastPreviewFrame) return;
+  if (!applyPreviewCanvasSize()) return;
+  drawFrame(canvas, prepared, lastPreviewFrame, titleInput.value.trim(), currentPeriodLabel());
+}
+
+/** devicePixelRatio changes silently when the window moves to another monitor. */
+function watchPixelRatio(): void {
+  pixelRatioQuery?.removeEventListener('change', onPixelRatioChange);
+  pixelRatioQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+  pixelRatioQuery.addEventListener('change', onPixelRatioChange, { once: true });
+}
+
+function onPixelRatioChange(): void {
+  watchPixelRatio(); // re-arm against the new ratio
+  onViewportChange();
+}
+
+function isFormatSupported(format: VideoFormat): boolean {
+  return formatSupport !== null && resolveVideoFormat(format.key, formatSupport) !== null;
+}
+
+/**
+ * The select is disabled while the map is prepared or a video is encoded, so the reason has
+ * to be visible text rather than a title attribute, which VoiceOver skips on disabled controls.
+ */
+function updateFormatWarning(format: VideoFormat, supported: boolean): void {
+  const locked = isExporting || isPreparing;
+  const unsupported = !locked && formatSupport !== null && !supported;
+  let message: string | null = null;
+  if (isExporting) message = 'Video format cannot change while a video is being created.';
+  else if (isPreparing) message = 'Video format cannot change while the map is being prepared.';
+  else if (unsupported) {
+    message = `This browser cannot create ${format.width}×${format.height} videos. Choose another format.`;
+  }
+  formatWarning.textContent = message ?? '';
+  formatWarning.classList.toggle('hidden', message === null);
+  formatWarning.classList.toggle('error', unsupported);
+  formatSelect.setAttribute('aria-invalid', unsupported ? 'true' : 'false');
+}
+
+// The format is baked into the prepared journey: camera aspect, per-frame tile zoom,
+// the overview safe area and the downloaded tiles all depend on it, so it has to be part
+// of the cache key rather than of a single call path that a later change could drop.
+// Since drawFrame checks only the aspect ratio, this is the sole guarantee that an export
+// receives a journey prepared at the format size. Dropping the format from the key, or adding
+// the preview size to it, would silently encode a video from too low a tile zoom.
 function currentRangeSignature(): string {
-  if (rawSignalsToggle.checked) return `raw:${rawAccuracyLimit.value.trim()}`;
+  const format = `:format:${currentFormat().key}`;
+  if (rawSignalsToggle.checked) return `raw:${rawAccuracyLimit.value.trim()}${format}`;
+  const filter = `:filter:${currentFilterMode()}`;
   return exactDateToggle.checked
-    ? `dates:${startDateInput.value}:${endDateInput.value}`
-    : `months:${startSelect.value}:${endSelect.value}`;
+    ? `dates:${startDateInput.value}:${endDateInput.value}${filter}${format}`
+    : `months:${startSelect.value}:${endSelect.value}${filter}${format}`;
 }
 
 function selectedDistanceKm(points: GeoPoint[]): number {
@@ -150,21 +312,28 @@ function selectedDistanceKm(points: GeoPoint[]): number {
 
 function refreshActionAvailability(points = currentPoints()): void {
   const hasJourney = points.length >= 2 && selectedDistanceKm(points) > 0;
+  const format = currentFormat();
+  const formatSupported = isFormatSupported(format);
+  // Preview never depends on encoder support: an unencodable format is still previewable.
   previewButton.disabled = isExporting || isPreparing || !hasJourney;
-  createButton.disabled = isExporting || isPreparing || !hasJourney || !encodingSupported;
+  createButton.disabled = isExporting || isPreparing || !hasJourney || !formatSupported;
+  formatSelect.disabled = isExporting || isPreparing;
   if (!compatibilityChecked) {
     createButton.title = 'Checking browser video support.';
-  } else if (!encodingSupported) {
+  } else if (!hasEncoder) {
     createButton.title = 'MP4 creation requires Safari 16.4 or newer with H.264 encoding support.';
+  } else if (!formatSupported) {
+    createButton.title = `This browser cannot create ${format.width}×${format.height} videos. Choose another format.`;
   } else if (!hasJourney) {
     createButton.title = 'Select a period containing at least two different locations.';
   } else {
     createButton.removeAttribute('title');
   }
+  updateFormatWarning(format, formatSupported);
 }
 
 function updateSelection(): void {
-  cancelAnimationFrame(previewAnimation);
+  stopPreview();
   setSettingsError(null);
   if (!rawSignalsToggle.checked && exactDateToggle.checked) {
     if (startDateInput.value > endDateInput.value) endDateInput.value = startDateInput.value;
@@ -174,20 +343,28 @@ function updateSelection(): void {
 
   const points = currentPoints();
   const distanceKm = selectedDistanceKm(points);
+  // Raw signals never run through the outlier filter, so nothing is ignored on that path.
+  const outliersIgnored = rawSignalsToggle.checked
+    ? 0
+    : Math.max(0, selectSemanticRange(semanticPoints).length - points.length);
+  const outlierNote = outliersIgnored > 0
+    ? ` · ${outliersIgnored.toLocaleString()} suspicious ${outliersIgnored === 1 ? 'location' : 'locations'} ignored`
+    : '';
   if (points.length === 0) {
-    selectionSummary.textContent = 'No locations in this period';
+    selectionSummary.textContent = `No locations in this period${outlierNote}`;
   } else if (points.length === 1) {
-    selectionSummary.textContent = '1 location point · Choose a wider period';
+    selectionSummary.textContent = `1 location point · Choose a wider period${outlierNote}`;
   } else if (distanceKm <= 0) {
-    selectionSummary.textContent = `${points.length.toLocaleString()} location points · No movement`;
+    selectionSummary.textContent = `${points.length.toLocaleString()} location points · No movement${outlierNote}`;
   } else {
     const estimate = rawSignalsToggle.checked ? 'Estimated ' : 'About ';
     const ignored = rawSignalsToggle.checked && rawSignalProcessing?.rejectedCount
       ? ` · ${rawSignalProcessing.rejectedCount.toLocaleString()} noisy or inaccurate points ignored`
       : '';
-    selectionSummary.textContent = `${points.length.toLocaleString()} location points · ${estimate}${Math.round(distanceKm).toLocaleString()} km${ignored}`;
+    selectionSummary.textContent = `${points.length.toLocaleString()} location points · ${estimate}${Math.round(distanceKm).toLocaleString()} km${ignored}${outlierNote}`;
   }
   prepared = null;
+  lastPreviewFrame = null;
   selectedSignature = '';
   refreshActionAvailability(points);
 }
@@ -195,13 +372,14 @@ function updateSelection(): void {
 async function getPreparedJourney(signal?: AbortSignal): Promise<PreparedJourney> {
   const cameraMovement = cameraMovementSelect.value as CameraMovement;
   const durationSeconds = Number(durationSelect.value);
+  const format = currentFormat();
   const signature = `${currentRangeSignature()}:camera:${cameraMovement}:duration:${durationSeconds}`;
   if (prepared && signature === selectedSignature) return prepared;
   if (signal?.aborted) throw new DOMException('Video creation was cancelled.', 'AbortError');
   progressLabel.textContent = 'Preparing map';
   const nextJourney = await prepareJourney(
     currentPoints(),
-    canvas.width,
+    { width: format.width, height: format.height },
     cameraMovement,
     durationSeconds,
     signal,
@@ -234,6 +412,7 @@ function applyTimeline(data: unknown, sourceName: string, useRawOnly = false): v
   rawSignalPoints = parseRawSignalsJson(data);
   rawSignalProcessing = processRawSignals(rawSignalPoints, Number(rawAccuracyLimit.value));
   semanticPoints = useRawOnly ? [] : parseTimelineJson(data);
+  rebuildFilteredPoints();
   allPoints = useRawOnly ? rawSignalProcessing.points : semanticPoints;
   if (allPoints.length === 0) {
     throw new TimelineParseError('no-usable-locations', 'This Timeline export contains no usable location points.');
@@ -257,6 +436,7 @@ function applyTimeline(data: unknown, sourceName: string, useRawOnly = false): v
   rawSignalsRow.classList.toggle('hidden', useRawOnly || rawSignalPoints.length === 0);
   rawSignalsDescription.classList.toggle('hidden', !useRawOnly);
   rawAccuracyField.classList.toggle('hidden', !useRawOnly);
+  locationFilterField.classList.toggle('hidden', useRawOnly);
   periodControls.classList.toggle('hidden', useRawOnly);
   monthRangeFields.classList.remove('hidden');
   exactDateFields.classList.add('hidden');
@@ -333,6 +513,11 @@ startDateInput.addEventListener('change', updateSelection);
 endDateInput.addEventListener('change', updateSelection);
 durationSelect.addEventListener('change', updateSelection);
 cameraMovementSelect.addEventListener('change', updateSelection);
+formatSelect.addEventListener('change', () => {
+  stopPreview();
+  applyVideoFormat();
+  updateSelection();
+});
 exactDateToggle.addEventListener('change', () => {
   monthRangeFields.classList.toggle('hidden', exactDateToggle.checked);
   exactDateFields.classList.toggle('hidden', !exactDateToggle.checked);
@@ -342,9 +527,14 @@ rawSignalsToggle.addEventListener('change', () => {
   periodControls.classList.toggle('hidden', rawSignalsToggle.checked);
   rawSignalsDescription.classList.toggle('hidden', !rawSignalsToggle.checked);
   rawAccuracyField.classList.toggle('hidden', !rawSignalsToggle.checked);
+  locationFilterField.classList.toggle('hidden', rawSignalsToggle.checked);
   updateSelection();
 });
 rawAccuracyLimit.addEventListener('input', updateSelection);
+locationFilterSelect.addEventListener('change', () => {
+  rebuildFilteredPoints();
+  updateSelection();
+});
 mapConsent.addEventListener('change', () => {
   if (mapConsent.checked) setSettingsError(null);
 });
@@ -380,7 +570,10 @@ rawOnlyDialog.addEventListener('cancel', () => {
 
 previewButton.addEventListener('click', async () => {
   if (!requireMapConsent()) return;
-  cancelAnimationFrame(previewAnimation);
+  stopPreview();
+  // Only the CSS box, not the backing store: the preview size is measured after the await,
+  // so bouncing the canvas back to the format size here would clear the bitmap for nothing.
+  applyPreviewAspect();
   setError(null);
   resultActions.classList.add('hidden');
   resultVideo.classList.add('hidden');
@@ -390,21 +583,26 @@ previewButton.addEventListener('click', async () => {
   refreshActionAvailability();
   try {
     const journey = await getPreparedJourney();
+    // Measured here because the card is laid out, nothing has been drawn yet, and preparing
+    // the map takes long enough that the device may have been rotated in the meantime.
+    applyPreviewCanvasSize();
+    previewSizeDirty = false;
     const started = performance.now();
     const previewJourneyDuration = Math.min(8, Number(durationSelect.value));
     const previewDuration = totalDurationSeconds(previewJourneyDuration);
     const tick = (now: number): void => {
+      if (previewSizeDirty) {
+        // Clearing and redrawing inside one rAF callback is never composited in between.
+        previewSizeDirty = false;
+        applyPreviewCanvasSize();
+      }
       const elapsedSeconds = Math.min(previewDuration, (now - started) / 1000);
       const fraction = elapsedSeconds / previewDuration;
-      drawFrame(
-        canvas,
-        journey,
-        frameAtElapsedSeconds(elapsedSeconds, previewJourneyDuration),
-        titleInput.value.trim(),
-        currentPeriodLabel(),
-      );
+      const animationFrame = frameAtElapsedSeconds(elapsedSeconds, previewJourneyDuration);
+      lastPreviewFrame = animationFrame;
+      drawFrame(canvas, journey, animationFrame, titleInput.value.trim(), currentPeriodLabel());
       progressLabel.textContent = fraction < 1 ? 'Previewing' : 'Preview complete';
-      if (fraction < 1) previewAnimation = requestAnimationFrame(tick);
+      previewAnimation = fraction < 1 ? requestAnimationFrame(tick) : 0;
     };
     previewAnimation = requestAnimationFrame(tick);
   } catch (error) {
@@ -423,7 +621,18 @@ cancelButton.addEventListener('click', () => {
 
 createButton.addEventListener('click', async () => {
   if (!requireMapConsent()) return;
-  cancelAnimationFrame(previewAnimation);
+  const format = formatSupport === null
+    ? null
+    : resolveVideoFormat(formatSelect.value, formatSupport);
+  if (!format) {
+    const unsupported = currentFormat();
+    setError(`This browser cannot create ${unsupported.width}×${unsupported.height} videos. Choose another format.`);
+    return;
+  }
+  // Both before the first await: a queued tick would otherwise draw over the restored size,
+  // and CanvasSource captures whatever size the canvas has when the export starts.
+  stopPreview();
+  applyVideoFormat();
   setError(null);
   resultActions.classList.add('hidden');
   resultVideo.classList.add('hidden');
@@ -444,6 +653,7 @@ createButton.addEventListener('click', async () => {
       durationSeconds: Number(durationSelect.value),
       title: titleInput.value.trim() || 'My Journey',
       periodLabel: currentPeriodLabel(),
+      format,
       signal: exportController.signal,
       onProgress: (fraction) => {
         progress.value = fraction;
@@ -455,6 +665,7 @@ createButton.addEventListener('click', async () => {
     resultFile = new File([blob], 'timeline-journey.mp4', { type: 'video/mp4' });
     downloadLink.href = resultUrl;
     resultVideo.src = resultUrl;
+    resultVideo.style.setProperty('--preview-aspect', String(format.width / format.height));
     resultVideo.classList.remove('hidden');
     resultActions.classList.remove('hidden');
     progressLabel.textContent = `Video ready · ${(blob.size / 1_000_000).toFixed(1)} MB`;
@@ -489,14 +700,29 @@ shareButton.addEventListener('click', async () => {
   }
 });
 
-void canCreateMp4(canvas.width, canvas.height).then((supported) => {
+function applyFormatSupport(support: VideoFormatSupport): void {
   compatibilityChecked = true;
-  encodingSupported = supported;
-  compatibilityStatus.textContent = supported
-    ? 'This browser can create H.264 MP4 video.'
-    : 'Preview only. MP4 creation requires Safari 16.4 or newer with H.264 support.';
+  formatSupport = support;
+  const usable = VIDEO_FORMATS.filter((format) => support.get(format.key) != null).length;
+  if (usable === VIDEO_FORMATS.length) {
+    compatibilityStatus.textContent = 'This browser can create H.264 MP4 video.';
+  } else if (usable > 0) {
+    compatibilityStatus.textContent = 'This browser can create H.264 MP4 video. Some video formats are not available.';
+  } else {
+    compatibilityStatus.textContent = 'Preview only. MP4 creation requires Safari 16.4 or newer with H.264 support.';
+  }
   refreshActionAvailability();
-});
+}
+
+// Safari restores form control values on reload and on bfcache restore without firing
+// change, so the canvas has to be synced to the selected format before anything is drawn.
+applyVideoFormat();
+// Single page, no unmount: the resize listener lives as long as the document, and the pixel
+// ratio query re-arms itself so at most one is ever registered.
+window.addEventListener('resize', onViewportChange);
+watchPixelRatio();
+hasEncoder = hasVideoEncoder();
+void probeVideoFormats().then(applyFormatSupport);
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

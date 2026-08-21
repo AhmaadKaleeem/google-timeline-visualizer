@@ -54,6 +54,14 @@
           <input id="raw-accuracy-limit" type="number" min="0" step="1" inputmode="decimal" value="100" />
           <span class="field-help">Less accurate locations are excluded. Leave blank to include every usable location.</span>
         </label>
+        <label id="location-filter-field">
+          GPS outlier filtering
+          <select id="location-filter">
+            <option value="conservative" selected>Conservative</option>
+            <option value="off">Off</option>
+          </select>
+          <span class="field-help">Conservative filtering ignores only short, impossible round trips. Your Timeline file is never changed.</span>
+        </label>
         <div id="period-controls">
           <label class="checkbox-row">
             <input id="exact-date-toggle" type="checkbox" />
@@ -103,6 +111,18 @@
             <option value="dynamic">Dynamic following</option>
           </select>
         </label>
+        <label>
+          Video format
+          <select id="video-format" aria-describedby="format-warning">
+            <option value="standard" selected>Square · 480p</option>
+            <option value="high">Square · 720p</option>
+            <option value="ultra">Square · 1080p</option>
+            <option value="portrait">Portrait · 1080×1920</option>
+            <option value="landscape">Landscape · 1920×1080</option>
+          </select>
+          <span class="field-help">Larger formats take longer to create and produce larger files.</span>
+        </label>
+        <p id="format-warning" class="status hidden" role="status"></p>
         <p id="selection-summary" class="status"></p>
         <div class="privacy-notice">
           <strong>Before loading the map</strong>
