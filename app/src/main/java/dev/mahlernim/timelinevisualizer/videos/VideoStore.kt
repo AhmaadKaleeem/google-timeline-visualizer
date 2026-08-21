@@ -17,26 +17,33 @@ data class VideoRecord(
     val endMonth: Int? = null,
 )
 
+interface VideoRecordRepository {
+    fun list(): List<VideoRecord>
+    fun upsert(record: VideoRecord)
+    fun remove(uri: String)
+    fun removeAll(uris: Set<String>)
+}
+
 /**
  * Stores video records using the original preference file and JSON schema.
  * The stable names are intentional so existing installs upgrade without migration.
  */
-class VideoStore(private val context: Context) {
+class VideoStore(private val context: Context) : VideoRecordRepository {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
-    fun list(): List<VideoRecord> = decode(preferences.getString(KEY_RECORDS, null))
+    override fun list(): List<VideoRecord> = decode(preferences.getString(KEY_RECORDS, null))
         .sortedByDescending(VideoRecord::createdAtMillis)
 
-    fun upsert(record: VideoRecord) {
+    override fun upsert(record: VideoRecord) {
         save(buildList {
             add(record)
             addAll(list().filterNot { it.uri == record.uri })
         }.sortedByDescending(VideoRecord::createdAtMillis))
     }
 
-    fun remove(uri: String) = save(list().filterNot { it.uri == uri })
+    override fun remove(uri: String) = save(list().filterNot { it.uri == uri })
 
-    fun removeAll(uris: Set<String>) = save(list().filterNot { it.uri in uris })
+    override fun removeAll(uris: Set<String>) = save(list().filterNot { it.uri in uris })
 
     internal fun clear() {
         preferences.edit { remove(KEY_RECORDS) }

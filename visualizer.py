@@ -45,6 +45,22 @@ DEFAULT_TAIL_KM = 500
 THEME_COLOR = '#ff0055' # Pink/Red
 TILE_URL = "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
 
+
+class TimelineCliError(Exception):
+    """Base class for expected command-line failures."""
+
+
+class TimelineParseError(TimelineCliError):
+    """Raised when a Timeline export cannot be decoded."""
+
+
+class NoDataFoundError(TimelineCliError):
+    """Raised when an export contains no usable points for the requested year."""
+
+
+class FfmpegUnavailableError(TimelineCliError):
+    """Raised when Matplotlib cannot find a configured ffmpeg executable."""
+
 # Camera behavior matches the Android renderer defaults and options.
 CAMERA_MOVEMENTS = {
     'fixed': dict(context_fraction=0.10, minimum_context_km=25.0, maximum_context_km=350.0,
@@ -250,7 +266,10 @@ def tile_to_bounds_meters(xtile, ytile, zoom):
     min_y = max_y - tile_size
     return min_x, max_x, min_y, max_y
 
+# Rendering is a single short-lived process, so retaining decoded tiles avoids repeated downloads.
 TILE_CACHE = {}
+
+
 def fetch_tile_img(x, y, z):
     key = (x, y, z)
     if key in TILE_CACHE: return TILE_CACHE[key]
@@ -481,17 +500,15 @@ def parse_timeline(input_path, year):
     try:
         with open(input_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-    except Exception as e:
-        print(f"Error reading JSON: {e}")
-        sys.exit(1)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise TimelineParseError(f"Could not read Timeline JSON: {error}") from error
         
     segments = data if isinstance(data, list) else data.get('semanticSegments', []) if isinstance(data, dict) else []
     print(f"Parsing {len(segments)} segments for year {year}...")
     points = extract_timeline_points(data, year)
 
     if not points:
-        print(f"No data points found for year {year}.")
-        sys.exit(1)
+        raise NoDataFoundError(f"No data points found for year {year}.")
         
     print(f"Found {len(points)} valid points.")
     
@@ -609,9 +626,23 @@ def camera_at(track, progress):
     span = math.exp(math.log(before[2]) + (math.log(after[2]) - math.log(before[2])) * fraction)
     return center_x, center_y, span
 
+def existing_file(value):
+    path = Path(value)
+    if not path.is_file():
+        raise argparse.ArgumentTypeError(f"input file does not exist or is not a file: {value}")
+    return path
+
+
+def ensure_ffmpeg_available():
+    if not animation.writers.is_available('ffmpeg'):
+        raise FfmpegUnavailableError(
+            "ffmpeg is required to create MP4 video. Install ffmpeg or configure Matplotlib's animation.ffmpeg_path.",
+        )
+
+
 def build_argument_parser():
     parser = argparse.ArgumentParser(description="Google Timeline Visualizer")
-    parser.add_argument('--input', '-i', required=True, help="Path to Timeline.json")
+    parser.add_argument('--input', '-i', required=True, type=existing_file, help="Path to Timeline.json")
     parser.add_argument('--year', '-y', type=int, default=datetime.now().year, help="Year to visualize")
     parser.add_argument('--output', '-o', default='travel_history.mp4', help="Output video path")
     parser.add_argument('--title', '-t', default="My Trips", help="Title displayed on video")
@@ -622,13 +653,17 @@ def build_argument_parser():
     return parser
 
 
-def main():
+def main(argv=None):
     parser = build_argument_parser()
 
-    args = parser.parse_args()
-    
-    # Load
-    timestamps, xs, ys, cum_dist, lats, lons = parse_timeline(args.input, args.year)
+    args = parser.parse_args(argv)
+
+    try:
+        ensure_ffmpeg_available()
+        timestamps, xs, ys, cum_dist, lats, lons = parse_timeline(args.input, args.year)
+    except TimelineCliError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
     
     total_km = cum_dist[-1]
     print(f"Total distance: {total_km:.1f} km")
@@ -724,6 +759,7 @@ def main():
     print(f"Saving to {args.output}...")
     ani.save(args.output, writer='ffmpeg', fps=DEFAULT_FPS, dpi=100)
     print("Done!")
+    return 0
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

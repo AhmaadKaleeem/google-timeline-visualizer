@@ -22,6 +22,7 @@ import android.widget.AutoCompleteTextView
 import android.widget.SeekBar
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.addCallback
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
@@ -36,6 +37,8 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -62,12 +65,12 @@ import dev.mahlernim.timelinevisualizer.databinding.ScreenSettingsBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenVideosBinding
 import dev.mahlernim.timelinevisualizer.export.ExportProgress
 import dev.mahlernim.timelinevisualizer.export.ExportPhase
-import dev.mahlernim.timelinevisualizer.export.VideoExportCoordinator
 import dev.mahlernim.timelinevisualizer.export.VideoExportRequest
 import dev.mahlernim.timelinevisualizer.export.VideoExportRequestStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportService
 import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
 import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
+import dev.mahlernim.timelinevisualizer.export.VideoExportViewModel
 import dev.mahlernim.timelinevisualizer.export.EncoderSupport
 import dev.mahlernim.timelinevisualizer.export.VideoEncoderSupport
 import dev.mahlernim.timelinevisualizer.export.describe
@@ -89,9 +92,11 @@ import dev.mahlernim.timelinevisualizer.ui.DistanceUnitPreferences
 import dev.mahlernim.timelinevisualizer.ui.AppLanguage
 import dev.mahlernim.timelinevisualizer.ui.LocationFilterPreferences
 import dev.mahlernim.timelinevisualizer.ui.SelectionArrayAdapter
+import dev.mahlernim.timelinevisualizer.ui.SettingsViewModel
 import dev.mahlernim.timelinevisualizer.videos.GeneratedMediaRepository
 import dev.mahlernim.timelinevisualizer.videos.VideoMedia
 import dev.mahlernim.timelinevisualizer.videos.VideoRecord
+import dev.mahlernim.timelinevisualizer.videos.VideoLibraryViewModel
 import dev.mahlernim.timelinevisualizer.videos.VideoStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -145,14 +150,27 @@ class MainActivity : AppCompatActivity() {
     private val titleHandler = Handler(Looper.getMainLooper())
     private val monthNames by lazy { DateFormatSymbols.getInstance().months.take(12) }
     private val preferences by lazy { getSharedPreferences("display", MODE_PRIVATE) }
-    private val videoStore by lazy { VideoStore(applicationContext) }
     private val videoMedia by lazy { VideoMedia(applicationContext) }
     private val generatedMedia by lazy { GeneratedMediaRepository(applicationContext) }
     private val timelineLoader by lazy { CachedTimelineLoader(applicationContext) }
     private val timelineSourceStore by lazy { TimelineSourceStore(applicationContext) }
-    private val cameraSettingsPreferences by lazy { CameraSettingsPreferences(applicationContext) }
-    private val distanceUnitPreferences by lazy { DistanceUnitPreferences(applicationContext) }
-    private val locationFilterPreferences by lazy { LocationFilterPreferences(applicationContext) }
+    private val settingsViewModel by viewModels<SettingsViewModel> {
+        viewModelFactory {
+            initializer {
+                SettingsViewModel(
+                    CameraSettingsPreferences(applicationContext),
+                    DistanceUnitPreferences(applicationContext),
+                    LocationFilterPreferences(applicationContext),
+                )
+            }
+        }
+    }
+    private val videoExportViewModel by viewModels<VideoExportViewModel> {
+        viewModelFactory { initializer { VideoExportViewModel(applicationContext) } }
+    }
+    private val videoLibraryViewModel by viewModels<VideoLibraryViewModel> {
+        viewModelFactory { initializer { VideoLibraryViewModel(VideoStore(applicationContext)) } }
+    }
     private val videoEncoderProfiles by lazy { VideoEncoderSupport.deviceProfiles() }
     private var cameraSettings = CameraSettings.DEFAULT
     private var distanceUnitPreference = DistanceUnitPreference.AUTOMATIC
@@ -160,7 +178,7 @@ class MainActivity : AppCompatActivity() {
     private var locationFilterMode = LocationFilterMode.CONSERVATIVE
     private var routeDurationSeconds = VideoDuration.DEFAULT_SECONDS
     private val applyTitleChanges = Runnable { commitTitlePreferences() }
-    private var videoRenderGeneration = 0
+    private var videoRenderJob: Job? = null
     private var videosExpanded = false
     private var currentScreen = Screen.VIDEOS
     private var rememberedTimelineLoaded = false
@@ -258,10 +276,10 @@ class MainActivity : AppCompatActivity() {
         binding.exportTrayWatchButton.setOnClickListener { lastVideoUri?.let(::watchVideo) }
         binding.exportTrayShareButton.setOnClickListener { lastVideoUri?.let(::shareVideo) }
         binding.exportTrayDismissButton.setOnClickListener {
-            VideoExportCoordinator.clear(applicationContext)
+            videoExportViewModel.clear()
         }
         editor.doneButton.setOnClickListener {
-            VideoExportCoordinator.clear(applicationContext)
+            videoExportViewModel.clear()
             editor.videoReadyGroup.visibility = View.GONE
             showVideos()
         }
@@ -289,7 +307,9 @@ class MainActivity : AppCompatActivity() {
         playerScreen.playerBackButton.setOnClickListener { showVideos(acknowledgeCompletion = true) }
         playerScreen.playerShareButton.setOnClickListener { playerUri?.let(::shareVideo) }
         playerScreen.playerMoreButton.setOnClickListener {
-            playerUri?.let { uri -> videoStore.list().firstOrNull { it.uri == uri.toString() }?.let(::showVideoActions) }
+            playerUri?.let { uri ->
+                videoLibraryViewModel.records.value.firstOrNull { it.uri == uri.toString() }?.let(::showVideoActions)
+            }
         }
         playerScreen.playerExternalButton.setOnClickListener { playerUri?.let(::openExternalVideoPlayer) }
         onBackPressedDispatcher.addCallback(this) {
@@ -339,7 +359,6 @@ class MainActivity : AppCompatActivity() {
         configureExactDates()
         renderVideos()
         lifecycleScope.launch(Dispatchers.IO) { videoMedia.pruneOverviewCache() }
-        VideoExportCoordinator.restore(applicationContext)
         observeVideoExport()
         VideoExportService.resumeIfNeeded(applicationContext)
 
@@ -362,8 +381,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showDefaultLaunchScreen() {
-        val exportInProgress = VideoExportCoordinator.state.value.status == VideoExportStatus.RUNNING
-        if (videoStore.list().isEmpty() && !exportInProgress) {
+        val exportInProgress = videoExportViewModel.current.status == VideoExportStatus.RUNNING
+        if (videoLibraryViewModel.records.value.isEmpty() && !exportInProgress) {
             showNewVideo(loadRemembered = true)
         } else {
             showVideos()
@@ -463,7 +482,8 @@ class MainActivity : AppCompatActivity() {
         settingsScreen.root.visibility = View.GONE
         playerScreen.root.visibility = View.VISIBLE
         binding.bottomNavigation.visibility = View.GONE
-        playerScreen.playerTitle.text = videoStore.list().firstOrNull { it.uri == uri.toString() }?.title
+        playerScreen.playerTitle.text =
+            videoLibraryViewModel.records.value.firstOrNull { it.uri == uri.toString() }?.title
             ?: getString(R.string.timeline_video)
         playerScreen.playerErrorGroup.visibility = View.GONE
         initializeVideoPlayer()
@@ -1159,11 +1179,13 @@ class MainActivity : AppCompatActivity() {
             updateAdvancedSettings(cameraSettings.copy(videoQuality = VideoQuality.values()[position]))
         }
         settingsScreen.resetAdvancedSettingsButton.setOnClickListener {
-            applyDistanceUnitPreference(DistanceUnitPreference.AUTOMATIC)
-            applyAdvancedSettings(cameraSettingsPreferences.reset())
+            settingsViewModel.resetCameraAndDistance()
+            val state = settingsViewModel.state.value
+            applyDistanceUnitPreference(state.distanceUnit, save = false)
+            applyAdvancedSettings(state.camera)
             Snackbar.make(binding.root, R.string.advanced_defaults_restored, Snackbar.LENGTH_SHORT).show()
         }
-        applyAdvancedSettings(cameraSettingsPreferences.load())
+        applyAdvancedSettings(settingsViewModel.state.value.camera)
     }
 
     private fun configureLocationFiltering() {
@@ -1178,16 +1200,16 @@ class MainActivity : AppCompatActivity() {
         makeDropdownOpenReliably(settingsScreen.locationFilterDropdown)
         settingsScreen.locationFilterDropdown.setOnItemClickListener { _, _, position, _ ->
             locationFilterMode = modes[position]
-            locationFilterPreferences.save(locationFilterMode)
+            settingsViewModel.updateLocationFilter(locationFilterMode)
             updateLocationFilterLabel()
             rebuildRenderTimeline(reselect = true)
         }
-        locationFilterMode = locationFilterPreferences.load()
+        locationFilterMode = settingsViewModel.state.value.locationFilter
         updateLocationFilterLabel()
     }
 
     private fun configureDistanceUnitSelection() {
-        distanceUnitPreference = distanceUnitPreferences.load()
+        distanceUnitPreference = settingsViewModel.state.value.distanceUnit
         val dropdown = settingsScreen.distanceUnitDropdown
         dropdown.setAdapter(SelectionArrayAdapter(this, distanceUnitLabels()))
         makeDropdownOpenReliably(dropdown)
@@ -1199,7 +1221,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun applyDistanceUnitPreference(preference: DistanceUnitPreference, save: Boolean = true) {
         distanceUnitPreference = preference
-        if (save) distanceUnitPreferences.save(preference)
+        if (save) settingsViewModel.updateDistanceUnit(preference)
         updateDistanceUnitLabel()
         editor.timelineView.renderText = currentRenderText()
         journey?.let { editor.periodSummaryText.text = selectedPeriodSummary(it, selectedIgnoredCount) }
@@ -1326,7 +1348,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateAdvancedSettings(settings: CameraSettings) {
-        cameraSettingsPreferences.save(settings)
+        settingsViewModel.updateCamera(settings)
         applyAdvancedSettings(settings)
     }
 
@@ -1495,11 +1517,10 @@ class MainActivity : AppCompatActivity() {
             outputUri = completeRequest.outputUri,
             title = completeRequest.title,
         )
-        VideoExportCoordinator.publish(applicationContext, snapshot)
+        videoExportViewModel.publish(snapshot)
         runCatching { VideoExportService.start(applicationContext) }.onFailure {
             generatedMedia.discard(uri)
-            VideoExportCoordinator.publish(
-                applicationContext,
+            videoExportViewModel.publish(
                 VideoExportSnapshot(
                     status = VideoExportStatus.FAILED,
                     outputUri = uri.toString(),
@@ -1513,7 +1534,7 @@ class MainActivity : AppCompatActivity() {
     private fun observeVideoExport() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                VideoExportCoordinator.state.collect(::renderVideoExport)
+                videoExportViewModel.state.collect(::renderVideoExport)
             }
         }
     }
@@ -1655,7 +1676,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun retryVideoExport(request: VideoExportRequest?) {
         if (request == null) {
-            VideoExportCoordinator.clear(applicationContext)
+            videoExportViewModel.clear()
             showNewVideo(loadRemembered = true)
             Snackbar.make(binding.root, R.string.video_request_unavailable, Snackbar.LENGTH_LONG).show()
             return
@@ -1668,8 +1689,7 @@ class MainActivity : AppCompatActivity() {
             runCatching { generatedMedia.createVideoDestination(retryRequest.title, retryRequest.journey.period) }
                 .onSuccess { uri -> uri?.let { startVideoExport(it, retryRequest) } }
                 .onFailure {
-                    VideoExportCoordinator.publish(
-                        applicationContext,
+                    videoExportViewModel.publish(
                         VideoExportSnapshot(
                             status = VideoExportStatus.FAILED,
                             title = retryRequest.title,
@@ -1723,7 +1743,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun prepareAnotherVideo() {
-        VideoExportCoordinator.clear(applicationContext)
+        videoExportViewModel.clear()
         editor.videoReadyGroup.visibility = View.GONE
         editor.timelineSeek.progress = 0
         showProgress(0f)
@@ -1753,7 +1773,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 result.onSuccess { record ->
-                    videoStore.upsert(record)
+                    videoLibraryViewModel.upsert(record)
                     imported += 1
                 }.onFailure { failed += 1 }
             }
@@ -1772,8 +1792,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderVideos() {
-        val records = videoStore.list()
-        val generation = ++videoRenderGeneration
+        videoLibraryViewModel.refresh()
+        val records = videoLibraryViewModel.records.value
+        videoRenderJob?.cancel()
         home.emptyVideosText.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
         home.showAllVideosButton.visibility = if (records.size > COLLAPSED_CREATION_COUNT) View.VISIBLE else View.GONE
         home.deleteAllVideosButton.visibility = if (records.isEmpty()) View.GONE else View.VISIBLE
@@ -1784,39 +1805,46 @@ class MainActivity : AppCompatActivity() {
         }
         home.videosList.removeAllViews()
         val visibleRecords = if (videosExpanded) records else records.take(COLLAPSED_CREATION_COUNT)
-        visibleRecords.forEach { record ->
-            val item = ItemVideoBinding.inflate(layoutInflater, home.videosList, false)
-            val uri = record.uri.toUri()
-            item.root.tag = record.uri
-            item.videoTitle.text = record.title
-            item.videoDetails.text = videoDetails(record, available = true)
-            item.videoWatchButton.isEnabled = false
-            item.videoShareButton.isEnabled = false
-            item.root.isClickable = false
-            item.videoWatchButton.setOnClickListener { watchVideo(uri) }
-            item.videoShareButton.setOnClickListener { shareVideo(uri) }
-            item.videoMoreButton.setOnClickListener { showVideoActions(record) }
-            item.root.setOnClickListener { watchVideo(uri) }
-            home.videosList.addView(item.root)
+        videoRenderJob = lifecycleScope.launch {
+            visibleRecords.forEach { record ->
+                val item = ItemVideoBinding.inflate(layoutInflater, home.videosList, false)
+                val uri = record.uri.toUri()
+                item.root.tag = record.uri
+                item.videoTitle.text = record.title
+                item.videoDetails.text = videoDetails(record, available = true)
+                item.videoWatchButton.isEnabled = false
+                item.videoShareButton.isEnabled = false
+                item.root.isClickable = false
+                item.videoWatchButton.setOnClickListener { watchVideo(uri) }
+                item.videoShareButton.setOnClickListener { shareVideo(uri) }
+                item.videoMoreButton.setOnClickListener { showVideoActions(record) }
+                item.root.setOnClickListener { watchVideo(uri) }
+                home.videosList.addView(item.root)
 
-            lifecycleScope.launch {
-                val mediaState = withContext(Dispatchers.IO) {
-                    val available = videoMedia.isAvailable(uri)
-                    val thumbnail = if (available) runCatching { videoMedia.createThumbnail(uri) }.getOrNull() else null
-                    available to thumbnail
-                }
-                if (generation != videoRenderGeneration || item.root.tag != record.uri) {
-                    mediaState.second?.recycle()
-                    return@launch
-                }
-                val available = mediaState.first
-                item.videoDetails.text = videoDetails(record, available)
-                item.videoWatchButton.isEnabled = available
-                item.videoShareButton.isEnabled = available
-                item.root.isClickable = available
-                mediaState.second?.let { thumbnail ->
-                    item.videoThumbnail.setPadding(0, 0, 0, 0)
-                    item.videoThumbnail.setImageBitmap(thumbnail)
+                launch {
+                    var thumbnail: android.graphics.Bitmap? = null
+                    var applied = false
+                    try {
+                        val available = withContext(Dispatchers.IO) {
+                            videoMedia.isAvailable(uri).also { mediaAvailable ->
+                                if (mediaAvailable) {
+                                    thumbnail = runCatching { videoMedia.createThumbnail(uri) }.getOrNull()
+                                }
+                            }
+                        }
+                        if (item.root.tag != record.uri) return@launch
+                        item.videoDetails.text = videoDetails(record, available)
+                        item.videoWatchButton.isEnabled = available
+                        item.videoShareButton.isEnabled = available
+                        item.root.isClickable = available
+                        thumbnail?.let { bitmap ->
+                            item.videoThumbnail.setPadding(0, 0, 0, 0)
+                            item.videoThumbnail.setImageBitmap(bitmap)
+                        }
+                        applied = true
+                    } finally {
+                        if (!applied) thumbnail?.recycle()
+                    }
                 }
             }
         }
@@ -1877,14 +1905,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun removeVideo(record: VideoRecord) {
         val uri = record.uri.toUri()
-        videoStore.remove(record.uri)
+        videoLibraryViewModel.remove(record)
         videoMedia.deleteThumbnail(uri)
         renderVideos()
         var restored = false
         Snackbar.make(binding.root, R.string.video_removed, Snackbar.LENGTH_LONG)
             .setAction(R.string.undo) {
                 restored = true
-                videoStore.upsert(record)
+                videoLibraryViewModel.upsert(record)
                 renderVideos()
             }
             .addCallback(object : Snackbar.Callback() {
@@ -1905,7 +1933,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun confirmDeleteAllVideos() {
-        val records = videoStore.list()
+        val records = videoLibraryViewModel.records.value
         if (records.isEmpty()) return
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.delete_all_videos_title)
@@ -1929,7 +1957,7 @@ class MainActivity : AppCompatActivity() {
                     removed
                 }
             }
-            videoStore.removeAll(deleted.mapTo(mutableSetOf(), VideoRecord::uri))
+            videoLibraryViewModel.removeAll(deleted)
             deleted.forEach { record ->
                 releaseUriAccess(record.uri.toUri())
                 if (lastVideoUri?.toString() == record.uri) lastVideoUri = null
@@ -1954,7 +1982,7 @@ class MainActivity : AppCompatActivity() {
             val uri = record.uri.toUri()
             val deleted = withContext(Dispatchers.IO) { videoMedia.delete(uri) }
             if (deleted) {
-                videoStore.remove(record.uri)
+                videoLibraryViewModel.remove(record)
                 videoMedia.deleteThumbnail(uri)
                 videoMedia.deleteOverview(uri)
                 releaseUriAccess(uri)
@@ -2075,18 +2103,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun acknowledgeCompletedExport(uri: Uri? = null) {
-        val snapshot = VideoExportCoordinator.state.value
+        val snapshot = videoExportViewModel.current
         if (
             snapshot.status == VideoExportStatus.COMPLETE &&
             (uri == null || snapshot.outputUri == uri.toString())
         ) {
-            VideoExportCoordinator.clear(applicationContext)
+            videoExportViewModel.clear()
         }
     }
 
     private fun chooseVideoCopyDestination(source: Uri) {
         pendingVideoCopyUri = source
-        val record = videoStore.list().firstOrNull { it.uri == source.toString() }
+        val record = videoLibraryViewModel.records.value.firstOrNull { it.uri == source.toString() }
         copyCompletedVideo.launch(record?.fileName ?: getString(R.string.default_video_filename))
     }
 
@@ -2111,7 +2139,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val title = lastVideoTitle.orEmpty().ifBlank { getString(R.string.default_title) }
-        val periodSuffix = videoStore.list()
+        val periodSuffix = videoLibraryViewModel.records.value
             .firstOrNull { it.uri == videoUri.toString() }
             ?.let(::periodFileSuffix)
         val baseName = listOfNotNull(title, periodSuffix).joinToString("-")
