@@ -609,7 +609,69 @@ class MainActivityTest {
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayWatchButton).visibility)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayShareButton).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayDismissButton).visibility)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.exportTrayProgress).visibility)
+    }
+
+    @Test
+    fun completedExportTrayCanBeDismissedWithoutRemovingSavedVideo() {
+        store.upsert(
+            VideoRecord(
+                uri = "content://example/generated-video",
+                title = "Trip",
+                fileName = "trip.mp4",
+                createdAtMillis = 1L,
+                durationSeconds = 30,
+            ),
+        )
+        val activity = launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(
+                status = VideoExportStatus.COMPLETE,
+                outputUri = "content://example/generated-video",
+                title = "Trip",
+            ),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        activity.findViewById<View>(R.id.exportTrayDismissButton).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(VideoExportStatus.IDLE, VideoExportStateStore(context).load().status)
+        assertEquals(listOf("content://example/generated-video"), store.list().map { it.uri })
+
+        activity.recreate()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(listOf("content://example/generated-video"), store.list().map { it.uri })
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "de-w360dp-h640dp-xxhdpi")
+    fun completedExportTrayActionsFitCompactWidth() {
+        val activity = launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(
+                status = VideoExportStatus.COMPLETE,
+                outputUri = "content://example/generated-video",
+                title = "Trip",
+            ),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+        measureActivity(activity)
+
+        val actions = activity.findViewById<ViewGroup>(R.id.exportTrayActions)
+        assertSingleLineButtons(actions)
+        repeat(actions.childCount) { index ->
+            val child = actions.getChildAt(index)
+            if (child.visibility == View.VISIBLE) {
+                assertTrue("Tray action exceeds compact width", child.right <= actions.width)
+            }
+        }
     }
 
     @Test

@@ -253,6 +253,9 @@ class MainActivity : AppCompatActivity() {
         binding.exportTrayRetryButton.setOnClickListener { retryVideoExport() }
         binding.exportTrayWatchButton.setOnClickListener { lastVideoUri?.let(::watchVideo) }
         binding.exportTrayShareButton.setOnClickListener { lastVideoUri?.let(::shareVideo) }
+        binding.exportTrayDismissButton.setOnClickListener {
+            VideoExportCoordinator.clear(applicationContext)
+        }
         editor.doneButton.setOnClickListener {
             VideoExportCoordinator.clear(applicationContext)
             editor.videoReadyGroup.visibility = View.GONE
@@ -1557,6 +1560,7 @@ class MainActivity : AppCompatActivity() {
         binding.exportTrayCancelButton.visibility = View.VISIBLE
         binding.exportTrayWatchButton.visibility = View.GONE
         binding.exportTrayShareButton.visibility = View.GONE
+        binding.exportTrayDismissButton.visibility = View.GONE
         binding.exportTrayRetryButton.visibility = View.GONE
     }
 
@@ -1567,6 +1571,7 @@ class MainActivity : AppCompatActivity() {
         binding.exportTrayRetryButton.visibility = View.GONE
         binding.exportTrayWatchButton.visibility = if (lastVideoUri != null) View.VISIBLE else View.GONE
         binding.exportTrayShareButton.visibility = if (lastVideoUri != null) View.VISIBLE else View.GONE
+        binding.exportTrayDismissButton.visibility = View.VISIBLE
         binding.exportTrayStatusText.setText(R.string.video_ready)
         if (lastRenderedExportStatus != VideoExportStatus.COMPLETE) {
             announceExportStatus(getString(R.string.video_ready))
@@ -1580,6 +1585,7 @@ class MainActivity : AppCompatActivity() {
         binding.exportTrayCancelButton.visibility = View.GONE
         binding.exportTrayWatchButton.visibility = View.GONE
         binding.exportTrayShareButton.visibility = View.GONE
+        binding.exportTrayDismissButton.visibility = View.GONE
         binding.exportTrayRetryButton.visibility = View.VISIBLE
         binding.exportTrayRetryButton.isEnabled = true
         binding.exportTrayStatusText.text = message ?: getString(R.string.video_export_failed)

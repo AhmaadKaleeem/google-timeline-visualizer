@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.6
+
+- Add a Done action to dismiss the persistent Video ready tray.
+- Clear only the completed export status when the tray is dismissed.
+- Keep the generated video available in My videos after dismissal.
+- Prevent the dismissed completion tray from returning after the app restarts.
+- Set Android version code 25 and version name 2.2.6.
+
 ## 2.2.5
 
 - Add Automatic, Kilometers, and Miles distance-unit choices.
