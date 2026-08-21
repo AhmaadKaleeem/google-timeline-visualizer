@@ -558,7 +558,7 @@ class TimelinePainter {
                 val normalizedX = ((worldX % count) + count) % count
                 for (y in yMin..yMax) add(VisibleTile(TileId(viewport.zoom, normalizedX, y), worldX))
             }
-        }.take(36)
+        }
     }
 
     fun draw(

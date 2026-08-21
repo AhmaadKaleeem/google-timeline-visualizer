@@ -169,6 +169,32 @@ class TimelinePainterTest {
     }
 
     @Test
+    fun highResolutionExportShapesIncludeEveryIntersectingMapTile() {
+        val painter = TimelinePainter()
+        val cases = listOf(
+            "portrait" to tileViewport(width = 1080, height = 1920),
+            "landscape" to tileViewport(width = 1920, height = 1080),
+        )
+
+        cases.forEach { (name, viewport) ->
+            val xMin = kotlin.math.floor(viewport.minX * TILE_COUNT).toInt()
+            val xMax = kotlin.math.floor(viewport.maxX * TILE_COUNT).toInt()
+            val yMin = kotlin.math.floor(viewport.minY * TILE_COUNT).toInt()
+            val yMax = kotlin.math.floor(viewport.maxY * TILE_COUNT).toInt()
+            val expected = buildList {
+                for (worldX in xMin..xMax) {
+                    for (y in yMin..yMax) {
+                        add(VisibleTile(TileId(TILE_ZOOM, worldX, y), worldX))
+                    }
+                }
+            }
+
+            assertTrue("The $name case must exercise more than the old 36-tile limit", expected.size > 36)
+            assertEquals("The $name frame omitted visible map tiles", expected, painter.requiredTiles(viewport))
+        }
+    }
+
+    @Test
     fun indexedCameraBoundsMatchThePreviousRouteScan() {
         val routes = listOf(
             List(2_000) { index ->
@@ -258,6 +284,18 @@ class TimelinePainterTest {
         longitude,
     )
 
+    private fun tileViewport(width: Int, height: Int): Viewport {
+        val minTileX = 10.9
+        val minTileY = 20.9
+        return Viewport(
+            minX = minTileX / TILE_COUNT,
+            maxX = (minTileX + width / 256.0) / TILE_COUNT,
+            minY = minTileY / TILE_COUNT,
+            maxY = (minTileY + height / 256.0) / TILE_COUNT,
+            zoom = TILE_ZOOM,
+        )
+    }
+
     private fun unwrapNear(value: Double, reference: Double): Double {
         var result = value
         while (result - reference > 0.5) result -= 1.0
@@ -284,5 +322,7 @@ class TimelinePainterTest {
 
     companion object {
         private const val SIZE = 360
+        private const val TILE_ZOOM = 7
+        private const val TILE_COUNT = 1 shl TILE_ZOOM
     }
 }
