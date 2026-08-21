@@ -158,7 +158,7 @@ describe('parseTimelineJson', () => {
     const points = parseTimelineJson([directExport[1], directExport[0], duplicate]);
     expect(points).toHaveLength(3);
     expect(points[0].instant.toISOString()).toBe('2025-01-10T00:00:00.000Z');
-    expect(availableMonths(points).map((month) => month.key)).toEqual(['2025-01', '2025-03']);
+    expect(availableMonths(points, 'en').map((month) => month.key)).toEqual(['2025-01', '2025-03']);
     expect(selectRange(points, '2025-03', '2025-03')).toHaveLength(1);
   });
 

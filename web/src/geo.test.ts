@@ -6,6 +6,7 @@ import {
   unwrapJourneyPoints,
   unwrapWorldPoints,
   viewportFor,
+  worldBounds,
 } from './geo';
 
 describe('geography helpers', () => {
@@ -70,6 +71,22 @@ describe('geography helpers', () => {
 
     expect(viewport.maxX - viewport.minX).toBeCloseTo(1.28);
     expect(points.every((point) => point.x >= 1.65 && point.x <= 2.65)).toBe(true);
+  });
+
+  it('keeps a route that fits one world copy in a single unsplit stroke', () => {
+    const route = unwrapJourneyPoints([
+      { instant: new Date(0), latitude: 37.57, longitude: 126.98 },
+      { instant: new Date(1), latitude: 48.86, longitude: 2.35 },
+      { instant: new Date(2), latitude: 40.71, longitude: -74.01 },
+    ]);
+
+    const segments = overviewRouteSegments(route);
+
+    // Anchoring the wrap window on the last point used to cut Seoul off the far side and
+    // report a full world width to the ending viewport, which only a square canvas absorbs.
+    expect(segments).toEqual([route]);
+    const { minX, maxX } = worldBounds(segments.flat());
+    expect(maxX - minX).toBeCloseTo(0.5583, 4);
   });
 
   it('splits overview strokes at the wrapped map edge', () => {

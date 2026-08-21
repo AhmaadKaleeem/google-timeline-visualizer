@@ -20,6 +20,11 @@ Video creation requires the WebCodecs API and H.264 encoding. The primary target
 is Safari 16.4 or newer on iPhone. The app detects browsers without WebCodecs and
 disables video creation while leaving Timeline loading available.
 
+Each video format is probed separately at startup, because the larger formats need
+a higher H.264 level than the 480 by 480 default. A format the browser cannot
+encode stays selectable and previewable, and reports why video creation is
+unavailable instead of being silently replaced by another format.
+
 ## Local development
 
 ```bash
@@ -53,12 +58,15 @@ The current implementation supports the complete private browser path.
    calendar dates so date-line travel is not reordered by the browser timezone.
 3. Choose a month range or exact dates, title, and duration.
 4. Choose Fixed zoom, Steady following, or Dynamic following camera movement.
-5. Require explicit acknowledgement before contacting CARTO for map tiles.
-6. Preview the journey on a 480 by 480 Canvas.
-7. Add the Android-style 1.5-second full-route ending, encode Canvas frames as
+5. Choose a video format: square 480p, 720p, or 1080p, portrait 1080x1920, or
+   landscape 1920x1080. The camera, map tiles, and overlay follow the selected
+   aspect ratio.
+6. Require explicit acknowledgement before contacting CARTO for map tiles.
+7. Preview the journey on a Canvas sized to the selected video format.
+8. Add the Android-style 1.5-second full-route ending, encode Canvas frames as
    H.264, and mux them into an MP4.
-8. Keep the screen awake when supported and allow video creation to be cancelled.
-9. Preview, share, or download the completed MP4.
+9. Keep the screen awake when supported and allow video creation to be cancelled.
+10. Preview, share, or download the completed MP4.
 
 The browser layout, animated preview, encoded sample output, and camera following
 were validated at an iPhone-sized viewport and on a physical iPhone. Longer
