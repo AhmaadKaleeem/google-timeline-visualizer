@@ -9,6 +9,7 @@ import { cumulativeDistances, overviewRouteSegments, unwrapJourneyPoints } from 
 import {
   ASPECT_EPSILON,
   drawFrame,
+  MAP_ATTRIBUTION,
   MIN_PREVIEW_SHORT_EDGE,
   previewCanvasSize,
   requiredTiles,
@@ -157,7 +158,7 @@ function splitFontSize(value: unknown): { size: number; rest: string } {
 
 function render(canvasSize: RenderSize, journey: PreparedJourney, frame: TimelineFrame): RecordedCall[] {
   const { canvas, calls } = recordingCanvas(canvasSize.width, canvasSize.height);
-  drawFrame(canvas, journey, frame, 'Seoul to Busan', 'March 2026');
+  drawFrame(canvas, journey, frame, { title: 'Seoul to Busan', periodLabel: 'March 2026' });
   return calls;
 }
 
@@ -410,18 +411,25 @@ describe('drawFrame aspect ratio guard', () => {
   });
 });
 
-describe('overlay text', () => {
-  it('draws the title, the period label and the map attribution into every frame', () => {
+describe('map attribution', () => {
+  // Burned into the MP4, where it outlives the app locale and cannot be corrected afterwards.
+  // Android translates the same string and it has already regressed: values-pt-rBR dropped
+  // '© CARTO' entirely, and five other locales collapsed the double space. Keeping this
+  // developer-owned is only safe if the constant itself is pinned.
+  it('names both providers', () => {
+    expect(MAP_ATTRIBUTION).toContain('OpenStreetMap');
+    expect(MAP_ATTRIBUTION).toContain('CARTO');
+    expect(MAP_ATTRIBUTION).toBe('© OpenStreetMap contributors  © CARTO');
+  });
+
+  it('is drawn into every frame', () => {
     const { canvas, calls } = recordingCanvas(480, 480);
-    drawFrame(
-      canvas,
-      preparedAt(FORMATS[0]),
-      { journeyProgress: 0.5, outroProgress: 0 },
-      'Seoul to Busan',
-      'March 2026',
-    );
+    drawFrame(canvas, preparedAt(FORMATS[0]), { journeyProgress: 0.5, outroProgress: 0 }, {
+      title: 'Seoul to Busan',
+      periodLabel: 'March 2026',
+    });
     const drawn = calls.filter((call) => call.method === 'fillText').map((call) => call.args[0]);
-    expect(drawn).toContain('© OpenStreetMap contributors  © CARTO');
+    expect(drawn).toContain(MAP_ATTRIBUTION);
     expect(drawn).toContain('Seoul to Busan');
     expect(drawn).toContain('March 2026');
   });

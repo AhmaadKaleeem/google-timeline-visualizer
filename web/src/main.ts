@@ -1,6 +1,16 @@
 import './style.css';
 import { frameAtElapsedSeconds, totalDurationSeconds } from './animation';
+import { AppError } from './errors';
 import { cumulativeDistances } from './geo';
+import {
+  activeLocale,
+  createI18n,
+  formattingLocale,
+  isLanguagePreference,
+  readLanguagePreference,
+  writeLanguagePreference,
+} from './i18n';
+import { applyStrings, syncDocumentLang } from './i18n-dom';
 import { filterLocationOutliers } from './outlier';
 import { drawFrame, prepareJourney, previewCanvasSize } from './renderer';
 import {
@@ -14,8 +24,10 @@ import {
   selectRange,
   TimelineParseError,
 } from './timeline';
+import type { I18n, LanguagePreference, TextKey } from './i18n';
 import type { LocationFilterMode } from './outlier';
-import type { RawSignalPoint, RawSignalProcessingResult } from './timeline';
+import type { OverlayText } from './renderer';
+import type { RawSignalPoint, RawSignalProcessingResult, TimelineParseReason } from './timeline';
 import type {
   CameraMovement,
   GeoPoint,
@@ -44,6 +56,8 @@ const fileInput = element<HTMLInputElement>('timeline-file');
 const sampleButton = element<HTMLButtonElement>('sample-button');
 const fileStatus = element<HTMLParagraphElement>('file-status');
 const compatibilityStatus = element<HTMLParagraphElement>('compatibility-status');
+const languageSelect = element<HTMLSelectElement>('app-language');
+const languageWarning = element<HTMLParagraphElement>('language-warning');
 const settingsCard = element<HTMLElement>('settings-card');
 const exactDateToggle = element<HTMLInputElement>('exact-date-toggle');
 const periodControls = element<HTMLElement>('period-controls');
@@ -88,12 +102,69 @@ if (import.meta.env.VITE_PREVIEW === 'true') {
   element<HTMLElement>('preview-banner').classList.remove('hidden');
 }
 
+function browserLanguages(): readonly string[] {
+  return navigator.languages ?? [navigator.language];
+}
+
+/** Resolves the catalog and the Intl formatting tag together, so the two can never drift. */
+function buildI18n(preference: LanguagePreference): I18n {
+  const tags = browserLanguages();
+  const locale = activeLocale(preference, tags);
+  return createI18n(locale, formattingLocale(preference, tags, locale));
+}
+
+let languagePreference: LanguagePreference = readLanguagePreference();
+let i18n: I18n = buildI18n(languagePreference);
+
+/** Where the loaded points came from. The sample has no filename, so it carries a catalog key. */
+interface TimelineSource {
+  readonly sample: boolean;
+  readonly name: string;
+}
+
+/**
+ * Every message the app shows is kept as the state it was derived from, never as the finished
+ * string, so a language switch can re-render it instead of leaving stale text behind. The
+ * `text` variant carries a message that was never in the catalog, such as the message of an
+ * unrecognised Error.
+ */
+type MessageState =
+  | { readonly kind: 'key'; readonly key: TextKey }
+  | { readonly kind: 'text'; readonly text: string };
+
+type FileStatusState =
+  | { readonly kind: 'key'; readonly key: TextKey }
+  | { readonly kind: 'reading'; readonly name: string }
+  | {
+    readonly kind: 'loaded';
+    readonly source: TimelineSource;
+    readonly count: number;
+    readonly firstMonthKey: string;
+    readonly lastMonthKey: string;
+    readonly rawFallback: boolean;
+    readonly timezoneMissing: boolean;
+  };
+
+type ProgressState =
+  | { readonly kind: 'key'; readonly key: TextKey }
+  | { readonly kind: 'preparing'; readonly completed: number; readonly total: number }
+  | { readonly kind: 'creating'; readonly fraction: number }
+  | { readonly kind: 'ready'; readonly bytes: number };
+
+const PARSE_ERROR_KEYS: Readonly<Record<TimelineParseReason, TextKey>> = {
+  'malformed-json': 'errorMalformedJson',
+  'legacy-format': 'errorLegacyFormat',
+  'raw-signals-only': 'errorRawSignalsOnly',
+  'unsupported-format': 'errorUnsupportedFormat',
+  'no-usable-locations': 'errorNoUsableLocations',
+};
+
 let allPoints: GeoPoint[] = [];
 let semanticPoints: GeoPoint[] = [];
 let filteredPoints: GeoPoint[] = [];
 let rawSignalPoints: RawSignalPoint[] = [];
 let rawSignalProcessing: RawSignalProcessingResult | null = null;
-let pendingRawOnlyImport: { data: unknown; sourceName: string } | null = null;
+let pendingRawOnlyImport: { data: unknown; source: TimelineSource } | null = null;
 let months: MonthOption[] = [];
 let prepared: PreparedJourney | null = null;
 let selectedSignature = '';
@@ -110,18 +181,122 @@ let lastPreviewFrame: TimelineFrame | null = null;
 let previewSizeDirty = false;
 let resizeTimer = 0;
 let pixelRatioQuery: MediaQueryList | null = null;
+let errorState: MessageState | null = null;
+let settingsErrorKey: TextKey | null = null;
+let compatibilityKey: TextKey = 'compatibilityChecking';
+let fileStatusState: FileStatusState = { kind: 'key', key: 'fileStatusEmpty' };
+let progressState: ProgressState = { kind: 'key', key: 'progressReady' };
 
 /** Dragging a desktop window fires resize continuously, and every applied size clears the bitmap. */
 const PREVIEW_RESIZE_DEBOUNCE_MS = 150;
 
-function setError(message: string | null): void {
-  errorMessage.textContent = message ?? '';
-  errorMessage.classList.toggle('hidden', !message);
+function messageText(state: MessageState): string {
+  return state.kind === 'key' ? i18n.t(state.key) : state.text;
 }
 
-function setSettingsError(message: string | null): void {
-  settingsError.textContent = message ?? '';
-  settingsError.classList.toggle('hidden', !message);
+/**
+ * Errors that carry a catalog code are translated; a TimelineParseError is mapped by its
+ * reason so timeline.ts can keep its English developer message; anything else falls back to
+ * the Error message, which is what the app showed before the catalog existed.
+ */
+function describeError(error: unknown, fallback: TextKey): MessageState {
+  if (error instanceof TimelineParseError) return { kind: 'key', key: PARSE_ERROR_KEYS[error.reason] };
+  if (error instanceof AppError) return { kind: 'key', key: error.code };
+  if (error instanceof Error) return { kind: 'text', text: error.message };
+  return { kind: 'key', key: fallback };
+}
+
+function renderErrorMessage(): void {
+  errorMessage.textContent = errorState === null ? '' : messageText(errorState);
+  errorMessage.classList.toggle('hidden', errorState === null);
+}
+
+function setError(state: MessageState | null): void {
+  errorState = state;
+  renderErrorMessage();
+}
+
+function renderSettingsError(): void {
+  settingsError.textContent = settingsErrorKey === null ? '' : i18n.t(settingsErrorKey);
+  settingsError.classList.toggle('hidden', settingsErrorKey === null);
+}
+
+function setSettingsError(key: TextKey | null): void {
+  settingsErrorKey = key;
+  renderSettingsError();
+}
+
+function renderCompatibilityStatus(): void {
+  compatibilityStatus.textContent = i18n.t(compatibilityKey);
+}
+
+function monthLabel(key: string): string {
+  return months.find((month) => month.key === key)?.label ?? key;
+}
+
+function sourceLabel(source: TimelineSource): string {
+  return source.sample ? i18n.t('sampleSourceName') : source.name;
+}
+
+function renderFileStatus(): void {
+  const state = fileStatusState;
+  if (state.kind === 'key') {
+    fileStatus.textContent = i18n.t(state.key);
+    return;
+  }
+  if (state.kind === 'reading') {
+    fileStatus.textContent = i18n.t('fileStatusReading', { name: state.name });
+    return;
+  }
+  // Whole clauses joined by the catalog separator, never suffix fragments: a language that
+  // orders these differently can reorder the clauses, which a ' · ' suffix cannot express.
+  fileStatus.textContent = i18n.join(
+    i18n.t('fileStatusLoaded', {
+      count: state.count,
+      source: sourceLabel(state.source),
+      firstMonth: monthLabel(state.firstMonthKey),
+      lastMonth: monthLabel(state.lastMonthKey),
+    }),
+    state.rawFallback ? i18n.t('fileStatusRawFallback') : '',
+    state.timezoneMissing ? i18n.t('fileStatusTimezoneMissing') : '',
+  );
+}
+
+function setFileStatus(state: FileStatusState): void {
+  fileStatusState = state;
+  renderFileStatus();
+}
+
+function renderProgressLabel(): void {
+  const state = progressState;
+  switch (state.kind) {
+    case 'key':
+      progressLabel.textContent = i18n.t(state.key);
+      return;
+    case 'preparing':
+      progressLabel.textContent = i18n.t('progressPreparingMapCount', {
+        completed: state.completed,
+        total: state.total,
+      });
+      return;
+    case 'creating':
+      progressLabel.textContent = i18n.t('progressCreatingPercent', {
+        percent: i18n.formatPercent(state.fraction),
+      });
+      return;
+    case 'ready':
+      progressLabel.textContent = i18n.t('progressVideoReady', {
+        size: i18n.formatNumber(state.bytes / 1_000_000, {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }),
+      });
+  }
+}
+
+function setProgress(state: ProgressState): void {
+  progressState = state;
+  renderProgressLabel();
 }
 
 function populateMonths(select: HTMLSelectElement, options: MonthOption[]): void {
@@ -132,7 +307,7 @@ function rebuildRawSignalProcessing(): boolean {
   const trimmed = rawAccuracyLimit.value.trim();
   const limit = trimmed === '' ? null : Number(trimmed);
   if (limit !== null && (!Number.isFinite(limit) || limit < 0)) {
-    setSettingsError('Enter a non-negative accuracy limit, or leave it blank.');
+    setSettingsError('errorAccuracyLimit');
     rawAccuracyLimit.focus();
     return false;
   }
@@ -163,19 +338,27 @@ function currentPoints(): GeoPoint[] {
 
 function formatInputDate(value: string): string {
   const [year, month, day] = value.split('-').map(Number);
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(year, month - 1, day));
+  return i18n.formatMediumDate(new Date(year, month - 1, day));
 }
 
 function currentPeriodLabel(): string {
-  if (rawSignalsToggle.checked) return 'Raw location data';
+  if (rawSignalsToggle.checked) return i18n.t('periodRawLocationData');
   if (exactDateToggle.checked) {
     const start = formatInputDate(startDateInput.value);
     const end = formatInputDate(endDateInput.value);
-    return startDateInput.value === endDateInput.value ? start : `${start} – ${end}`;
+    return startDateInput.value === endDateInput.value ? start : i18n.t('periodRange', { start, end });
   }
-  const start = months.find((month) => month.key === startSelect.value)?.label ?? startSelect.value;
-  const end = months.find((month) => month.key === endSelect.value)?.label ?? endSelect.value;
-  return startSelect.value === endSelect.value ? start : `${start} – ${end}`;
+  const start = monthLabel(startSelect.value);
+  const end = monthLabel(endSelect.value);
+  return startSelect.value === endSelect.value ? start : i18n.t('periodRange', { start, end });
+}
+
+/** The renderer holds no copy, so the title fallback is resolved here against the catalog. */
+function overlayText(): OverlayText {
+  return {
+    title: titleInput.value.trim() || i18n.t('defaultVideoTitle'),
+    periodLabel: currentPeriodLabel(),
+  };
 }
 
 function currentFormat(): VideoFormat {
@@ -225,7 +408,7 @@ function applyVideoFormat(): void {
   const format = currentFormat();
   applyPreviewAspect();
   if (setCanvasSize({ width: format.width, height: format.height })) {
-    progressLabel.textContent = 'Ready';
+    setProgress({ kind: 'key', key: 'progressReady' });
     progress.classList.add('hidden');
     progress.value = 0;
   }
@@ -253,7 +436,7 @@ function applyPreviewResize(): void {
   }
   if (!prepared || !lastPreviewFrame) return;
   if (!applyPreviewCanvasSize()) return;
-  drawFrame(canvas, prepared, lastPreviewFrame, titleInput.value.trim(), currentPeriodLabel());
+  drawFrame(canvas, prepared, lastPreviewFrame, overlayText());
 }
 
 /** devicePixelRatio changes silently when the window moves to another monitor. */
@@ -280,15 +463,30 @@ function updateFormatWarning(format: VideoFormat, supported: boolean): void {
   const locked = isExporting || isPreparing;
   const unsupported = !locked && formatSupport !== null && !supported;
   let message: string | null = null;
-  if (isExporting) message = 'Video format cannot change while a video is being created.';
-  else if (isPreparing) message = 'Video format cannot change while the map is being prepared.';
+  if (isExporting) message = i18n.t('warnFormatLockedExporting');
+  else if (isPreparing) message = i18n.t('warnFormatLockedPreparing');
   else if (unsupported) {
-    message = `This browser cannot create ${format.width}×${format.height} videos. Choose another format.`;
+    message = i18n.t('errorFormatUnsupported', { width: format.width, height: format.height });
   }
   formatWarning.textContent = message ?? '';
   formatWarning.classList.toggle('hidden', message === null);
   formatWarning.classList.toggle('error', unsupported);
   formatSelect.setAttribute('aria-invalid', unsupported ? 'true' : 'false');
+}
+
+/**
+ * Switching language while the map is being prepared or a video is being encoded would relabel
+ * a run already in progress, and the overlay of that video was frozen when it started, so the
+ * two would disagree. Same reasoning as the format select: the reason is visible text rather
+ * than a title attribute, which VoiceOver skips on a disabled control.
+ */
+function updateLanguageAvailability(): void {
+  languageSelect.disabled = isExporting || isPreparing;
+  let message: string | null = null;
+  if (isExporting) message = i18n.t('languageLockedExporting');
+  else if (isPreparing) message = i18n.t('languageLockedPreparing');
+  languageWarning.textContent = message ?? '';
+  languageWarning.classList.toggle('hidden', message === null);
 }
 
 // The format is baked into the prepared journey: camera aspect, per-frame tile zoom,
@@ -297,6 +495,8 @@ function updateFormatWarning(format: VideoFormat, supported: boolean): void {
 // Since drawFrame checks only the aspect ratio, this is the sole guarantee that an export
 // receives a journey prepared at the format size. Dropping the format from the key, or adding
 // the preview size to it, would silently encode a video from too low a tile zoom.
+// The language is deliberately absent: it changes no pixel of the map, and including it would
+// throw away every downloaded tile and re-request them from CARTO on every switch.
 function currentRangeSignature(): string {
   const format = `:format:${currentFormat().key}`;
   if (rawSignalsToggle.checked) return `raw:${rawAccuracyLimit.value.trim()}${format}`;
@@ -319,17 +519,62 @@ function refreshActionAvailability(points = currentPoints()): void {
   createButton.disabled = isExporting || isPreparing || !hasJourney || !formatSupported;
   formatSelect.disabled = isExporting || isPreparing;
   if (!compatibilityChecked) {
-    createButton.title = 'Checking browser video support.';
+    createButton.title = i18n.t('hintCheckingSupport');
   } else if (!hasEncoder) {
-    createButton.title = 'MP4 creation requires Safari 16.4 or newer with H.264 encoding support.';
+    createButton.title = i18n.t('hintNoEncoder');
   } else if (!formatSupported) {
-    createButton.title = `This browser cannot create ${format.width}×${format.height} videos. Choose another format.`;
+    createButton.title = i18n.t('hintFormatUnsupported', {
+      width: format.width,
+      height: format.height,
+    });
   } else if (!hasJourney) {
-    createButton.title = 'Select a period containing at least two different locations.';
+    createButton.title = i18n.t('hintSelectWiderPeriod');
   } else {
     createButton.removeAttribute('title');
   }
   updateFormatWarning(format, formatSupported);
+  updateLanguageAvailability();
+}
+
+/**
+ * Rebuilds every derived line of the settings card from the current state. Kept apart from
+ * updateSelection because a language switch has to redraw this text without discarding the
+ * prepared journey and the map tiles that came with it.
+ */
+function renderSelection(): void {
+  const points = currentPoints();
+  const distanceKm = selectedDistanceKm(points);
+  const outliersIgnored = rawSignalsToggle.checked
+    ? 0
+    : Math.max(0, selectSemanticRange(semanticPoints).length - points.length);
+  const outlierNote = outliersIgnored > 0
+    ? i18n.t('summaryOutliersIgnored', { count: outliersIgnored })
+    : '';
+  if (points.length === 0) {
+    selectionSummary.textContent = i18n.join(i18n.t('summaryNoLocations'), outlierNote);
+  } else if (points.length === 1) {
+    selectionSummary.textContent = i18n.join(i18n.t('summaryOneLocation'), outlierNote);
+  } else if (distanceKm <= 0) {
+    selectionSummary.textContent = i18n.join(
+      i18n.t('summaryNoMovement', { count: points.length }),
+      outlierNote,
+    );
+  } else {
+    // Two whole messages rather than an 'About ' / 'Estimated ' prefix glued to a number: the
+    // hedge moves or inflects in several of the nine locales and cannot survive as a fragment.
+    const rejected = rawSignalsToggle.checked && rawSignalProcessing?.rejectedCount
+      ? i18n.t('summaryRawRejected', { count: rawSignalProcessing.rejectedCount })
+      : '';
+    selectionSummary.textContent = i18n.join(
+      i18n.t(rawSignalsToggle.checked ? 'summaryDistanceEstimated' : 'summaryDistanceAbout', {
+        count: points.length,
+        distance: i18n.formatDistanceKm(distanceKm),
+      }),
+      rejected,
+      outlierNote,
+    );
+  }
+  refreshActionAvailability(points);
 }
 
 function updateSelection(): void {
@@ -340,33 +585,10 @@ function updateSelection(): void {
   } else if (!rawSignalsToggle.checked && startSelect.value > endSelect.value) {
     endSelect.value = startSelect.value;
   }
-
-  const points = currentPoints();
-  const distanceKm = selectedDistanceKm(points);
-  // Raw signals never run through the outlier filter, so nothing is ignored on that path.
-  const outliersIgnored = rawSignalsToggle.checked
-    ? 0
-    : Math.max(0, selectSemanticRange(semanticPoints).length - points.length);
-  const outlierNote = outliersIgnored > 0
-    ? ` · ${outliersIgnored.toLocaleString()} suspicious ${outliersIgnored === 1 ? 'location' : 'locations'} ignored`
-    : '';
-  if (points.length === 0) {
-    selectionSummary.textContent = `No locations in this period${outlierNote}`;
-  } else if (points.length === 1) {
-    selectionSummary.textContent = `1 location point · Choose a wider period${outlierNote}`;
-  } else if (distanceKm <= 0) {
-    selectionSummary.textContent = `${points.length.toLocaleString()} location points · No movement${outlierNote}`;
-  } else {
-    const estimate = rawSignalsToggle.checked ? 'Estimated ' : 'About ';
-    const ignored = rawSignalsToggle.checked && rawSignalProcessing?.rejectedCount
-      ? ` · ${rawSignalProcessing.rejectedCount.toLocaleString()} noisy or inaccurate points ignored`
-      : '';
-    selectionSummary.textContent = `${points.length.toLocaleString()} location points · ${estimate}${Math.round(distanceKm).toLocaleString()} km${ignored}${outlierNote}`;
-  }
   prepared = null;
   lastPreviewFrame = null;
   selectedSignature = '';
-  refreshActionAvailability(points);
+  renderSelection();
 }
 
 async function getPreparedJourney(signal?: AbortSignal): Promise<PreparedJourney> {
@@ -376,7 +598,7 @@ async function getPreparedJourney(signal?: AbortSignal): Promise<PreparedJourney
   const signature = `${currentRangeSignature()}:camera:${cameraMovement}:duration:${durationSeconds}`;
   if (prepared && signature === selectedSignature) return prepared;
   if (signal?.aborted) throw new DOMException('Video creation was cancelled.', 'AbortError');
-  progressLabel.textContent = 'Preparing map';
+  setProgress({ kind: 'key', key: 'progressPreparingMap' });
   const nextJourney = await prepareJourney(
     currentPoints(),
     { width: format.width, height: format.height },
@@ -384,7 +606,7 @@ async function getPreparedJourney(signal?: AbortSignal): Promise<PreparedJourney
     durationSeconds,
     signal,
     (completed, total) => {
-      progressLabel.textContent = `Preparing map ${completed}/${total}`;
+      setProgress({ kind: 'preparing', completed, total });
     },
   );
   if (signal?.aborted) throw new DOMException('Video creation was cancelled.', 'AbortError');
@@ -395,9 +617,58 @@ async function getPreparedJourney(signal?: AbortSignal): Promise<PreparedJourney
 
 function requireMapConsent(): boolean {
   if (mapConsent.checked) return true;
-  setSettingsError('Confirm the map privacy notice before requesting map images from CARTO.');
+  setSettingsError('errorMapConsent');
   mapConsent.focus();
   return false;
+}
+
+/**
+ * Re-applies the whole catalog to the document and repaints every message that was derived
+ * rather than authored in the HTML. applyStrings resets those nodes to their catalog defaults,
+ * so the state-backed lines have to be rendered after it, not before.
+ */
+function renderLocalizedText(): void {
+  applyStrings(document, i18n);
+  syncDocumentLang(i18n);
+  renderCompatibilityStatus();
+  renderFileStatus();
+  renderProgressLabel();
+  renderErrorMessage();
+  renderSettingsError();
+  updateLanguageAvailability();
+}
+
+/**
+ * Re-renders in place rather than reloading. A reload would lose the picked File, which cannot
+ * be restored without a second trip through the Files app, revoke the object URL of a finished
+ * but not yet downloaded MP4, and throw away the prepared journey along with every map tile it
+ * downloaded, which means another round of requests to CARTO.
+ */
+function onLanguageChange(): void {
+  const value = languageSelect.value;
+  if (!isLanguagePreference(value)) return;
+  languagePreference = value;
+  writeLanguagePreference(languagePreference); // a failed write never blocks the switch
+  i18n = buildI18n(languagePreference);
+  renderLocalizedText();
+  // A running preview would draw consecutive frames in two languages. The last frame is
+  // repainted once in the new language instead; restarting the animation was never asked for.
+  stopPreview();
+  if (months.length > 0) {
+    // Month keys are locale independent 'YYYY-MM', so restoring the selection is exact.
+    const start = startSelect.value;
+    const end = endSelect.value;
+    months = availableMonths(allPoints, i18n.formatLocale);
+    populateMonths(startSelect, months);
+    populateMonths(endSelect, months);
+    startSelect.value = start;
+    endSelect.value = end;
+    renderFileStatus(); // the month labels inside it have just changed
+  }
+  if (!settingsCard.classList.contains('hidden')) renderSelection();
+  if (prepared && lastPreviewFrame && !previewCard.classList.contains('hidden')) {
+    drawFrame(canvas, prepared, lastPreviewFrame, overlayText());
+  }
 }
 
 function parseTimelineText(text: string): unknown {
@@ -408,7 +679,7 @@ function parseTimelineText(text: string): unknown {
   }
 }
 
-function applyTimeline(data: unknown, sourceName: string, useRawOnly = false): void {
+function applyTimeline(data: unknown, source: TimelineSource, useRawOnly = false): void {
   rawSignalPoints = parseRawSignalsJson(data);
   rawSignalProcessing = processRawSignals(rawSignalPoints, Number(rawAccuracyLimit.value));
   semanticPoints = useRawOnly ? [] : parseTimelineJson(data);
@@ -417,7 +688,7 @@ function applyTimeline(data: unknown, sourceName: string, useRawOnly = false): v
   if (allPoints.length === 0) {
     throw new TimelineParseError('no-usable-locations', 'This Timeline export contains no usable location points.');
   }
-  months = availableMonths(allPoints);
+  months = availableMonths(allPoints, i18n.formatLocale);
   populateMonths(startSelect, months);
   populateMonths(endSelect, months);
   startSelect.value = months[0].key;
@@ -443,26 +714,31 @@ function applyTimeline(data: unknown, sourceName: string, useRawOnly = false): v
   mapConsent.checked = false;
   settingsCard.classList.remove('hidden');
   previewCard.classList.add('hidden');
-  const timezoneNote = allPoints.some((point) => point.timeZoneMissing)
-    ? ' · Timezone missing, preserving exported route order'
-    : '';
-  const sourceNote = useRawOnly ? ' · Raw location fallback' : '';
-  fileStatus.textContent = `${sourceName} · ${allPoints.length.toLocaleString()} valid points from ${months[0].label} to ${months.at(-1)?.label}${sourceNote}${timezoneNote}`;
+  setFileStatus({
+    kind: 'loaded',
+    source,
+    count: allPoints.length,
+    firstMonthKey: months[0].key,
+    lastMonthKey: months.at(-1)?.key ?? months[0].key,
+    rawFallback: useRawOnly,
+    timezoneMissing: allPoints.some((point) => point.timeZoneMissing),
+  });
   updateSelection();
 }
 
 async function loadTimeline(file: File): Promise<void> {
   setError(null);
   setSettingsError(null);
-  fileStatus.textContent = `Reading ${file.name}…`;
+  setFileStatus({ kind: 'reading', name: file.name });
+  const source: TimelineSource = { sample: false, name: file.name };
   const data = parseTimelineText(await file.text());
   try {
-    applyTimeline(data, file.name);
+    applyTimeline(data, source);
   } catch (error) {
     const rawPoints = parseRawSignalsJson(data);
     if (error instanceof TimelineParseError && error.reason === 'raw-signals-only' && rawPoints.length > 0) {
-      pendingRawOnlyImport = { data, sourceName: file.name };
-      fileStatus.textContent = 'Only raw location data found';
+      pendingRawOnlyImport = { data, source };
+      setFileStatus({ kind: 'key', key: 'fileStatusRawOnly' });
       rawOnlyDialog.showModal();
       return;
     }
@@ -485,8 +761,8 @@ fileInput.addEventListener('change', async () => {
     await loadTimeline(file);
   } catch (error) {
     settingsCard.classList.add('hidden');
-    fileStatus.textContent = 'Timeline could not be loaded';
-    setError(error instanceof Error ? error.message : 'The selected file could not be read.');
+    setFileStatus({ kind: 'key', key: 'fileStatusLoadFailed' });
+    setError(describeError(error, 'errorFileUnreadable'));
     previewCard.classList.remove('hidden');
   }
 });
@@ -494,15 +770,17 @@ fileInput.addEventListener('change', async () => {
 sampleButton.addEventListener('click', async () => {
   setError(null);
   setSettingsError(null);
-  fileStatus.textContent = 'Loading fictional sample…';
+  setFileStatus({ kind: 'key', key: 'fileStatusLoadingSample' });
   try {
     const response = await fetch(`${import.meta.env.BASE_URL}sample-timeline.json`);
-    if (!response.ok) throw new Error('The fictional sample could not be loaded.');
-    applyTimeline(parseTimelineText(await response.text()), 'Fictional sample');
+    if (!response.ok) {
+      throw new AppError('errorSampleUnavailable', 'The fictional sample could not be loaded.');
+    }
+    applyTimeline(parseTimelineText(await response.text()), { sample: true, name: '' });
   } catch (error) {
     settingsCard.classList.add('hidden');
-    fileStatus.textContent = 'Sample could not be loaded';
-    setError(error instanceof Error ? error.message : 'The fictional sample could not be loaded.');
+    setFileStatus({ kind: 'key', key: 'fileStatusSampleFailed' });
+    setError(describeError(error, 'errorSampleUnavailable'));
     previewCard.classList.remove('hidden');
   }
 });
@@ -513,6 +791,7 @@ startDateInput.addEventListener('change', updateSelection);
 endDateInput.addEventListener('change', updateSelection);
 durationSelect.addEventListener('change', updateSelection);
 cameraMovementSelect.addEventListener('change', updateSelection);
+languageSelect.addEventListener('change', onLanguageChange);
 formatSelect.addEventListener('change', () => {
   stopPreview();
   applyVideoFormat();
@@ -544,7 +823,7 @@ openGoogleMapsButton.addEventListener('click', () => {
   pendingRawOnlyImport = null;
   rawOnlyDialog.close();
   settingsCard.classList.add('hidden');
-  fileStatus.textContent = 'Export your Timeline again after visits and trips appear, then load the new file here.';
+  setFileStatus({ kind: 'key', key: 'fileStatusExportAgain' });
 });
 
 continueRawDataButton.addEventListener('click', () => {
@@ -553,11 +832,11 @@ continueRawDataButton.addEventListener('click', () => {
   pendingRawOnlyImport = null;
   rawOnlyDialog.close();
   try {
-    applyTimeline(pending.data, pending.sourceName, true);
+    applyTimeline(pending.data, pending.source, true);
   } catch (error) {
     settingsCard.classList.add('hidden');
-    fileStatus.textContent = 'Timeline could not be loaded';
-    setError(error instanceof Error ? error.message : 'The selected file could not be read.');
+    setFileStatus({ kind: 'key', key: 'fileStatusLoadFailed' });
+    setError(describeError(error, 'errorFileUnreadable'));
     previewCard.classList.remove('hidden');
   }
 });
@@ -565,7 +844,7 @@ continueRawDataButton.addEventListener('click', () => {
 rawOnlyDialog.addEventListener('cancel', () => {
   pendingRawOnlyImport = null;
   settingsCard.classList.add('hidden');
-  fileStatus.textContent = 'Raw location import cancelled';
+  setFileStatus({ kind: 'key', key: 'fileStatusRawImportCancelled' });
 });
 
 previewButton.addEventListener('click', async () => {
@@ -600,13 +879,16 @@ previewButton.addEventListener('click', async () => {
       const fraction = elapsedSeconds / previewDuration;
       const animationFrame = frameAtElapsedSeconds(elapsedSeconds, previewJourneyDuration);
       lastPreviewFrame = animationFrame;
-      drawFrame(canvas, journey, animationFrame, titleInput.value.trim(), currentPeriodLabel());
-      progressLabel.textContent = fraction < 1 ? 'Previewing' : 'Preview complete';
+      drawFrame(canvas, journey, animationFrame, overlayText());
+      setProgress({
+        kind: 'key',
+        key: fraction < 1 ? 'progressPreviewing' : 'progressPreviewComplete',
+      });
       previewAnimation = fraction < 1 ? requestAnimationFrame(tick) : 0;
     };
     previewAnimation = requestAnimationFrame(tick);
   } catch (error) {
-    setError(error instanceof Error ? error.message : 'Preview failed.');
+    setError(describeError(error, 'errorPreviewFailed'));
   } finally {
     isPreparing = false;
     refreshActionAvailability();
@@ -615,7 +897,7 @@ previewButton.addEventListener('click', async () => {
 
 cancelButton.addEventListener('click', () => {
   cancelButton.disabled = true;
-  progressLabel.textContent = 'Cancelling…';
+  setProgress({ kind: 'key', key: 'progressCancelling' });
   exportController?.abort();
 });
 
@@ -626,7 +908,13 @@ createButton.addEventListener('click', async () => {
     : resolveVideoFormat(formatSelect.value, formatSupport);
   if (!format) {
     const unsupported = currentFormat();
-    setError(`This browser cannot create ${unsupported.width}×${unsupported.height} videos. Choose another format.`);
+    setError({
+      kind: 'text',
+      text: i18n.t('errorFormatUnsupported', {
+        width: unsupported.width,
+        height: unsupported.height,
+      }),
+    });
     return;
   }
   // Both before the first await: a queued tick would otherwise draw over the restored size,
@@ -648,16 +936,16 @@ createButton.addEventListener('click', async () => {
   const wakeLock = await requestWakeLock();
   try {
     const journey = await getPreparedJourney(exportController.signal);
-    progressLabel.textContent = 'Creating MP4';
+    setProgress({ kind: 'key', key: 'progressCreating' });
     const blob = await createJourneyMp4(canvas, journey, {
       durationSeconds: Number(durationSelect.value),
-      title: titleInput.value.trim() || 'My Journey',
-      periodLabel: currentPeriodLabel(),
+      // Frozen here, so the whole video carries one language even if the select were unlocked.
+      overlay: overlayText(),
       format,
       signal: exportController.signal,
       onProgress: (fraction) => {
         progress.value = fraction;
-        progressLabel.textContent = `Creating MP4 ${Math.round(fraction * 100)}%`;
+        setProgress({ kind: 'creating', fraction });
       },
     });
     if (resultUrl) URL.revokeObjectURL(resultUrl);
@@ -668,18 +956,18 @@ createButton.addEventListener('click', async () => {
     resultVideo.style.setProperty('--preview-aspect', String(format.width / format.height));
     resultVideo.classList.remove('hidden');
     resultActions.classList.remove('hidden');
-    progressLabel.textContent = `Video ready · ${(blob.size / 1_000_000).toFixed(1)} MB`;
+    setProgress({ kind: 'ready', bytes: blob.size });
     const shareData = { files: [resultFile] };
     const canShare = typeof navigator.share === 'function'
       && (typeof navigator.canShare !== 'function' || navigator.canShare(shareData));
     shareButton.hidden = !canShare;
   } catch (error) {
     if (exportController.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
-      progressLabel.textContent = 'Video creation cancelled';
+      setProgress({ kind: 'key', key: 'progressCancelled' });
       progress.value = 0;
     } else {
-      setError(error instanceof Error ? error.message : 'Video creation failed.');
-      progressLabel.textContent = 'Could not create video';
+      setError(describeError(error, 'errorExportFailed'));
+      setProgress({ kind: 'key', key: 'progressFailed' });
     }
   } finally {
     await wakeLock?.release().catch(() => undefined);
@@ -693,10 +981,10 @@ createButton.addEventListener('click', async () => {
 shareButton.addEventListener('click', async () => {
   if (!resultFile || typeof navigator.share !== 'function') return;
   try {
-    await navigator.share({ files: [resultFile], title: titleInput.value.trim() || 'My Journey' });
+    await navigator.share({ files: [resultFile], title: overlayText().title });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return;
-    setError('The iPhone share sheet could not be opened. Use Download MP4 instead.');
+    setError({ kind: 'key', key: 'errorShareUnavailable' });
   }
 });
 
@@ -705,15 +993,20 @@ function applyFormatSupport(support: VideoFormatSupport): void {
   formatSupport = support;
   const usable = VIDEO_FORMATS.filter((format) => support.get(format.key) != null).length;
   if (usable === VIDEO_FORMATS.length) {
-    compatibilityStatus.textContent = 'This browser can create H.264 MP4 video.';
+    compatibilityKey = 'compatibilityFull';
   } else if (usable > 0) {
-    compatibilityStatus.textContent = 'This browser can create H.264 MP4 video. Some video formats are not available.';
+    compatibilityKey = 'compatibilityPartial';
   } else {
-    compatibilityStatus.textContent = 'Preview only. MP4 creation requires Safari 16.4 or newer with H.264 support.';
+    compatibilityKey = 'compatibilityPreviewOnly';
   }
+  renderCompatibilityStatus();
   refreshActionAvailability();
 }
 
+// Before anything else touches the DOM: the HTML ships the English source text so a failed
+// script still renders a usable page, and this replaces it with the active catalog.
+languageSelect.value = languagePreference;
+renderLocalizedText();
 // Safari restores form control values on reload and on bfcache restore without firing
 // change, so the canvas has to be synced to the selected format before anything is drawn.
 applyVideoFormat();

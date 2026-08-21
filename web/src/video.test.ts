@@ -247,8 +247,7 @@ describe('createJourneyMp4', () => {
   const canvas = { width: format.width, height: format.height } as HTMLCanvasElement;
   const options = {
     durationSeconds: 1,
-    title: 'Trip',
-    periodLabel: 'March 2026',
+    overlay: { title: 'Trip', periodLabel: 'March 2026' },
     format,
   };
 

@@ -17,9 +17,34 @@ import type {
   Viewport,
   WorldPoint,
 } from './types';
+import { AppError } from './errors';
 import { overlayCard, overlayScale } from './overlay';
 
 const TILE_TEMPLATE = 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
+
+/**
+ * The overlay text of one frame, already resolved by the caller.
+ *
+ * This module never sees a locale. main.ts formats the period label and falls back to the
+ * translated default title, so the renderer holds no user copy and imports nothing from the
+ * i18n layer. An export freezes one OverlayText for the whole video, so the text of a finished
+ * MP4 can never be half in one language and half in another.
+ */
+export interface OverlayText {
+  /** Already resolved and guaranteed non-empty by the caller. */
+  readonly title: string;
+  readonly periodLabel: string;
+}
+
+/**
+ * The map attribution is a licensing artifact burned into the MP4, which outlives the app
+ * locale, so it is developer-owned and deliberately not translatable. Android does translate
+ * its map_attribution and that has already regressed: values-pt-rBR dropped '© CARTO'
+ * altogether, and five other locales collapsed the double space. A viewer of an exported video
+ * has no way to correct it afterwards, so the only translatable token here, 'contributors', is
+ * not worth the risk. renderer.test.ts pins both names against exactly that class of loss.
+ */
+export const MAP_ATTRIBUTION = '© OpenStreetMap contributors  © CARTO';
 
 // Route and marker sizes are authored on the same 720 design grid as the overlay,
 // so a single scale keeps every stroke proportional at any output size.
@@ -100,7 +125,7 @@ function drawMapBackground(
   tiles: Map<string, HTMLImageElement>,
 ): void {
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('Canvas rendering is unavailable.');
+  if (!context) throw new AppError('errorCanvasUnavailable', 'Canvas rendering is unavailable.');
   const size: RenderSize = { width: canvas.width, height: canvas.height };
   context.fillStyle = '#f2edf0';
   context.fillRect(0, 0, size.width, size.height);
@@ -163,7 +188,9 @@ export async function prepareJourney(
   signal?: AbortSignal,
   onProgress?: (completed: number, total: number) => void,
 ): Promise<PreparedJourney> {
-  if (points.length < 2) throw new Error('Select a period containing at least two location points.');
+  if (points.length < 2) {
+    throw new AppError('errorTooFewPoints', 'Select a period containing at least two location points.');
+  }
   const worldPoints = unwrapJourneyPoints(points);
   const distances = cumulativeDistances(points);
   const journey = {
@@ -269,18 +296,17 @@ export function drawFrame(
   canvas: HTMLCanvasElement,
   journey: PreparedJourney,
   frame: TimelineFrame,
-  title: string,
-  periodLabel: string,
+  text: OverlayText,
 ): void {
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('Canvas rendering is unavailable.');
+  if (!context) throw new AppError('errorCanvasUnavailable', 'Canvas rendering is unavailable.');
   const size: RenderSize = { width: canvas.width, height: canvas.height };
   // The preview draws the prepared journey on a proportionally smaller canvas, which is the
   // same picture under a uniform scale, so only the ratio has to match. Absolute size is no
   // longer checked here: the export path is held to the format size by createJourneyMp4.
   const preparedAspect = aspectOf(journey.size);
   if (Math.abs(aspectOf(size) - preparedAspect) > preparedAspect * ASPECT_EPSILON) {
-    throw new Error('The prepared journey does not match the canvas aspect ratio.');
+    throw new AppError('errorAspectRatio', 'The prepared journey does not match the canvas aspect ratio.');
   }
   const scale = overlayScale(size);
   context.clearRect(0, 0, size.width, size.height);
@@ -366,16 +392,16 @@ export function drawFrame(
   context.textAlign = 'center';
   context.fillStyle = '#24191d';
   context.font = `700 ${34 * scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
-  context.fillText(title || 'My Journey', card.centerX, 72 * scale, card.width - 36 * scale);
+  context.fillText(text.title, card.centerX, 72 * scale, card.width - 36 * scale);
   context.fillStyle = '#5c4b52';
   context.font = `${20 * scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
-  context.fillText(periodLabel, card.centerX, 108 * scale);
+  context.fillText(text.periodLabel, card.centerX, 108 * scale);
 
   context.textAlign = 'right';
   context.fillStyle = 'rgba(36, 25, 29, 0.78)';
   context.font = `${13 * scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
   context.fillText(
-    '© OpenStreetMap contributors  © CARTO',
+    MAP_ATTRIBUTION,
     size.width - 12 * scale,
     size.height - 12 * scale,
   );

@@ -1,12 +1,14 @@
 import { BufferTarget, CanvasSource, Mp4OutputFormat, Output, Quality } from 'mediabunny';
 import { frameAtElapsedSeconds, OUTRO_SECONDS } from './animation';
+import { AppError } from './errors';
 import { drawFrame } from './renderer';
+import type { OverlayText } from './renderer';
 import type { PreparedJourney } from './types';
 
 export interface ExportOptions {
   durationSeconds: number;
-  title: string;
-  periodLabel: string;
+  /** Frozen once for the whole export, so every frame carries the same text. */
+  overlay: OverlayText;
   format: ResolvedVideoFormat;
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
@@ -161,12 +163,12 @@ export async function createJourneyMp4(
   options: ExportOptions,
 ): Promise<Blob> {
   if (!hasVideoEncoder()) {
-    throw new Error('This browser cannot create MP4 video. Use Safari 16.4 or newer.');
+    throw new AppError('errorNoEncoder', 'This browser cannot create MP4 video. Use Safari 16.4 or newer.');
   }
 
   const { width, height, frameRate: fps, bitrate, codec } = options.format;
   if (canvas.width !== width || canvas.height !== height) {
-    throw new Error('The preview is not using the selected video format size.');
+    throw new AppError('errorCanvasSize', 'The preview is not using the selected video format size.');
   }
 
   const frameDuration = 1 / fps;
@@ -186,7 +188,7 @@ export async function createJourneyMp4(
     hardwareAcceleration: 'no-preference',
   });
   output.addVideoTrack(source, { frameRate: fps });
-  output.setMetadataTags({ title: options.title });
+  output.setMetadataTags({ title: options.overlay.title });
   await output.start();
 
   // Every failure after start() has to reach output.cancel(): only cancel force-closes
@@ -208,17 +210,17 @@ export async function createJourneyMp4(
           options.durationSeconds + (frame - journeyFrameCount) / fps,
           options.durationSeconds,
         );
-      drawFrame(canvas, journey, animationFrame, options.title, options.periodLabel);
+      drawFrame(canvas, journey, animationFrame, options.overlay);
       await source.add(frame * frameDuration, frameDuration, { keyFrame: frame % fps === 0 });
       options.onProgress?.((frame + 1) / frameCount);
     }
 
     await output.finalize();
     if (!target.buffer) {
-      throw new Error('The video encoder did not produce an MP4 file.');
+      throw new AppError('errorEncoderOutput', 'The video encoder did not produce an MP4 file.');
     }
     if (!isMp4(target.buffer)) {
-      throw new Error('The video encoder produced an invalid MP4 file.');
+      throw new AppError('errorEncoderInvalid', 'The video encoder produced an invalid MP4 file.');
     }
     return new Blob([target.buffer], { type: 'video/mp4' });
   } catch (error) {
