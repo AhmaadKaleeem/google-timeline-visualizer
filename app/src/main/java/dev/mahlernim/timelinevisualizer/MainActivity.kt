@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.text.InputType
 import android.util.Log
@@ -64,6 +65,7 @@ import dev.mahlernim.timelinevisualizer.databinding.ScreenPlayerBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenSettingsBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenVideosBinding
 import dev.mahlernim.timelinevisualizer.export.ExportProgress
+import dev.mahlernim.timelinevisualizer.export.ExportEtaEstimator
 import dev.mahlernim.timelinevisualizer.export.ExportPhase
 import dev.mahlernim.timelinevisualizer.export.VideoExportRequest
 import dev.mahlernim.timelinevisualizer.export.VideoExportRequestStore
@@ -185,6 +187,7 @@ class MainActivity : AppCompatActivity() {
     private var interruptedTimelineRecovered = false
     private var lastRenderedExportStatus = VideoExportStatus.IDLE
     private var lastAnnouncedExportPhase: ExportPhase? = null
+    private val exportEtaEstimator = ExportEtaEstimator()
     private var videoPlayer: ExoPlayer? = null
     private var playerUri: Uri? = null
     private var playerPositionMs = 0L
@@ -1546,9 +1549,10 @@ class MainActivity : AppCompatActivity() {
                 hideExportTray()
             }
             VideoExportStatus.RUNNING -> {
+                if (lastRenderedExportStatus != VideoExportStatus.RUNNING) exportEtaEstimator.reset()
                 setExporting(true)
                 showRunningExportTray()
-                snapshot.progress?.let { showExportProgress(it, snapshot.startedAtMillis) }
+                snapshot.progress?.let(::showExportProgress)
             }
             VideoExportStatus.COMPLETE -> {
                 setExporting(false)
@@ -1623,9 +1627,10 @@ class MainActivity : AppCompatActivity() {
     private fun hideExportTray() {
         binding.exportStatusTray.visibility = View.GONE
         lastAnnouncedExportPhase = null
+        exportEtaEstimator.reset()
     }
 
-    private fun showExportProgress(progress: ExportProgress, startedAtMillis: Long) {
+    private fun showExportProgress(progress: ExportProgress) {
         binding.exportTrayProgress.progress = (progress.fraction * 1000).toInt()
         if (progress.phase == ExportPhase.COMPLETE) return
         val base = when (progress.phase) {
@@ -1644,10 +1649,10 @@ class MainActivity : AppCompatActivity() {
             )
             ExportPhase.COMPLETE -> return
         }
-        val elapsedMs = (System.currentTimeMillis() - startedAtMillis).coerceAtLeast(0L)
-        val remaining = if (elapsedMs >= 3_000 && progress.fraction in 0.05f..0.98f) {
-            ceil(elapsedMs / 1000.0 * (1.0 - progress.fraction) / progress.fraction).toInt()
-        } else null
+        val remaining = exportEtaEstimator.estimateRemainingSeconds(
+            progress,
+            SystemClock.elapsedRealtime(),
+        )
         val status = if (remaining != null) {
             getString(R.string.progress_with_eta, base, formatRemainingTime(remaining))
         } else base
