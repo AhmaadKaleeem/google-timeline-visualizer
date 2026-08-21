@@ -30,6 +30,7 @@
     <string name="remembered_timeline_unavailable">之前使用的Timeline不再可用。</string>
     <string name="choose_timeline_again">再次选择 Timeline.json 文件。</string>
     <string name="video_export_failed">无法创建视频</string>
+    <string name="map_tiles_unavailable">地图未能完全加载。请检查网络连接后重试。</string>
     <string name="location_settings_unavailable">此手机上无法使用位置设置</string>
     <string name="traveler">游客</string>
     <string name="tagline">将您的 Timeline 文件变成动画旅行视频。</string>

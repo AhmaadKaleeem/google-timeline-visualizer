@@ -29,6 +29,7 @@
     <string name="remembered_timeline_unavailable">The previously used Timeline is no longer available.</string>
     <string name="choose_timeline_again">Choose the Timeline.json file again.</string>
     <string name="video_export_failed">Could not create video</string>
+    <string name="map_tiles_unavailable">The map could not be completely loaded. Check your connection and try again.</string>
     <string name="location_settings_unavailable">Location settings are unavailable on this phone</string>
     <string name="traveler">Traveler</string>
     <string name="tagline">Turn your Timeline file into an animated travel video.</string>

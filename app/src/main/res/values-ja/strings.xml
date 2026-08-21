@@ -29,6 +29,7 @@
     <string name="remembered_timeline_unavailable">前回使用したタイムラインを開けなくなりました。</string>
     <string name="choose_timeline_again">Timeline.jsonをもう一度選択してください。</string>
     <string name="video_export_failed">動画を作成できませんでした</string>
+    <string name="map_tiles_unavailable">地図を完全に読み込めませんでした。接続を確認して、もう一度お試しください。</string>
     <string name="location_settings_unavailable">この端末では位置情報の設定を開けません</string>
     <string name="traveler">旅行者</string>
     <string name="tagline">タイムライン ファイルから旅のアニメーション動画を作成します。</string>

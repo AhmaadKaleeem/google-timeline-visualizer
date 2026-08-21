@@ -30,6 +30,7 @@
     <string name="remembered_timeline_unavailable">之前使用的時間軸已不再可用。</string>
     <string name="choose_timeline_again">請再次選擇「時間軸.json」檔案。</string>
     <string name="video_export_failed">無法建立影片</string>
+    <string name="map_tiles_unavailable">地圖未能完整載入。請檢查網路連線後再試一次。</string>
     <string name="location_settings_unavailable">無法開啟這支手機的位置設定</string>
     <string name="traveler">遊客</string>
     <string name="tagline">將您的時間軸紀錄檔案變成旅遊影片。</string>
