@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.11
+
+- Wait for video-rendering throughput to stabilize before showing an estimated remaining time.
+- Calculate the estimate from recent journey-frame throughput instead of fixed whole-export phase weights.
+- Hide the estimate during map preparation, finishing, and materially unstable rendering speeds.
+- Use the same estimator for the in-app progress tray and foreground notification.
+- Set Android version code 30 and version name 2.2.11.
+
 ## 2.2.10
 
 - Move settings, video-export state, and the creations list behind lifecycle-aware ViewModels.

@@ -43,6 +43,7 @@ class VideoExportService : Service() {
     private var exportJob: Job? = null
     private var lastNotificationAt = 0L
     private var lastNotificationPhase: ExportPhase? = null
+    private val etaEstimator = ExportEtaEstimator()
 
     override fun onCreate() {
         super.onCreate()
@@ -91,7 +92,7 @@ class VideoExportService : Service() {
     private suspend fun runExport(request: VideoExportRequest, startId: Int) {
         val uri = request.outputUri.toUri()
         val startedAtMillis = System.currentTimeMillis()
-        val startedAtElapsed = SystemClock.elapsedRealtime()
+        etaEstimator.reset()
         publish(
             VideoExportSnapshot(
                 status = VideoExportStatus.RUNNING,
@@ -126,7 +127,7 @@ class VideoExportService : Service() {
                     lastNotificationPhase = progress.phase
                     notificationManager.notify(
                         NOTIFICATION_ID,
-                        buildProgressNotification(snapshot, startedAtElapsed),
+                        buildProgressNotification(snapshot),
                     )
                 }
             }
@@ -273,9 +274,9 @@ class VideoExportService : Service() {
         .addAction(0, getString(R.string.cancel), cancelPendingIntent())
         .build()
 
-    private fun buildProgressNotification(snapshot: VideoExportSnapshot, startedAtElapsed: Long): Notification {
+    private fun buildProgressNotification(snapshot: VideoExportSnapshot): Notification {
         val progress = snapshot.progress ?: return buildStartingNotification()
-        val text = progressText(progress, startedAtElapsed)
+        val text = progressText(progress)
         return notificationBuilder()
             .setContentTitle(getString(R.string.creating_video_notification_title))
             .setContentText(text)
@@ -329,7 +330,7 @@ class VideoExportService : Service() {
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
-    private fun progressText(progress: ExportProgress, startedAtElapsed: Long): String {
+    private fun progressText(progress: ExportProgress): String {
         val base = when (progress.phase) {
             ExportPhase.PREPARING_MAP -> getString(
                 R.string.preparing_map_progress,
@@ -346,10 +347,7 @@ class VideoExportService : Service() {
             )
             ExportPhase.COMPLETE -> getString(R.string.video_saved)
         }
-        val elapsedMs = SystemClock.elapsedRealtime() - startedAtElapsed
-        val remaining = if (elapsedMs >= 3_000 && progress.fraction in 0.05f..0.98f) {
-            ceil(elapsedMs / 1000.0 * (1.0 - progress.fraction) / progress.fraction).toInt()
-        } else null
+        val remaining = etaEstimator.estimateRemainingSeconds(progress, SystemClock.elapsedRealtime())
         return if (remaining == null) base else getString(
             R.string.progress_with_eta,
             base,
