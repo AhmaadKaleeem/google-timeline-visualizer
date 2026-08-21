@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.12
+
+- Render every map tile intersecting portrait and landscape export frames instead of truncating the visible tile grid.
+- Preserve complete right-side and lower-edge map coverage during preview, video rendering, and overview generation.
+- Add regression coverage for high-resolution portrait and landscape tile grids that require more than 36 tiles.
+- Set Android version code 31 and version name 2.2.12.
+
 ## 2.2.11
 
 - Wait for video-rendering throughput to stabilize before showing an estimated remaining time.
