@@ -650,6 +650,118 @@ class MainActivityTest {
     }
 
     @Test
+    fun watchingCompletedExportAcknowledgesTrayWithoutRemovingSavedVideo() {
+        val uri = "content://example/generated-video"
+        store.upsert(
+            VideoRecord(
+                uri = uri,
+                title = "Trip",
+                fileName = "trip.mp4",
+                createdAtMillis = 1L,
+                durationSeconds = 30,
+            ),
+        )
+        val activity = launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(status = VideoExportStatus.COMPLETE, outputUri = uri, title = "Trip"),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        activity.findViewById<View>(R.id.exportTrayWatchButton).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.playerScreen).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(VideoExportStatus.IDLE, VideoExportStateStore(context).load().status)
+        assertEquals(listOf(uri), store.list().map { it.uri })
+    }
+
+    @Test
+    fun sharingCompletedExportAcknowledgesTrayWithoutRemovingSavedVideo() {
+        val uri = "content://example/generated-video"
+        store.upsert(
+            VideoRecord(
+                uri = uri,
+                title = "Trip",
+                fileName = "trip.mp4",
+                createdAtMillis = 1L,
+                durationSeconds = 30,
+            ),
+        )
+        val activity = launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(status = VideoExportStatus.COMPLETE, outputUri = uri, title = "Trip"),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        activity.findViewById<View>(R.id.exportTrayShareButton).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(Intent.ACTION_CHOOSER, shadowOf(activity).nextStartedActivity.action)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(VideoExportStatus.IDLE, VideoExportStateStore(context).load().status)
+        assertEquals(listOf(uri), store.list().map { it.uri })
+    }
+
+    @Test
+    fun userNavigationToVideosAcknowledgesCompletionButSettingsDoesNot() {
+        val activity = launchActivity()
+        val completed = VideoExportSnapshot(
+            status = VideoExportStatus.COMPLETE,
+            outputUri = "content://example/generated-video",
+            title = "Trip",
+        )
+        VideoExportCoordinator.publish(context, completed)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        activity.findViewById<View>(R.id.navigationSettings).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(VideoExportStatus.COMPLETE, VideoExportStateStore(context).load().status)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+
+        activity.findViewById<View>(R.id.navigationVideos).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(VideoExportStatus.IDLE, VideoExportStateStore(context).load().status)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+
+        VideoExportCoordinator.publish(context, completed)
+        shadowOf(Looper.getMainLooper()).idle()
+        activity.findViewById<View>(R.id.navigationVideos).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(VideoExportStatus.IDLE, VideoExportStateStore(context).load().status)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+    }
+
+    @Test
+    fun automaticVideosLaunchDoesNotAcknowledgeRestoredCompletion() {
+        val uri = "content://example/generated-video"
+        store.upsert(
+            VideoRecord(
+                uri = uri,
+                title = "Trip",
+                fileName = "trip.mp4",
+                createdAtMillis = 1L,
+                durationSeconds = 30,
+            ),
+        )
+        VideoExportStateStore(context).save(
+            VideoExportSnapshot(status = VideoExportStatus.COMPLETE, outputUri = uri, title = "Trip"),
+        )
+
+        val activity = launchActivity()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(VideoExportStatus.COMPLETE, VideoExportStateStore(context).load().status)
+    }
+
+    @Test
     @Config(sdk = [35], qualifiers = "de-w360dp-h640dp-xxhdpi")
     fun completedExportTrayActionsFitCompactWidth() {
         val activity = launchActivity()
