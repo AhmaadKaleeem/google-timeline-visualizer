@@ -2,7 +2,7 @@
 
 [한국어](privacy.ko.md) · [日本語](privacy.ja.md)
 
-**Effective date:** August 18, 2026
+**Effective date:** August 21, 2026
 
 **Developer:** MahlerLab
 
@@ -19,21 +19,28 @@ permission.
 
 ## Data storage
 
-The selected JSON is not copied into app storage. While a video is being created,
-the selected route points and export settings are temporarily stored in private
-app storage so creation can continue when the app is no longer on screen and can
-restart if Android recreates the app process. This temporary export data is
-deleted after completion, cancellation, or failure and is excluded from Android
-backup and device transfer. Generated videos are written through Android's
-media storage interfaces. On Android 10 and later, completed MP4 files are saved
-through MediaStore under
+The selected JSON file is not copied into app storage. After a successful import,
+the app may keep a compact preprocessed copy of normalized Timeline points in its
+private temporary cache so the remembered document can open faster. The cache is
+versioned and tied to the selected document reference and available file metadata.
+Selecting the document again refreshes it. Android may remove it at any time, and
+the app safely reads the original JSON again when the cache is absent, changed,
+incompatible, or damaged.
+
+While a video is being created, the selected route points and export settings are
+temporarily stored in private app storage so creation can continue when the app is
+no longer on screen and can restart if Android recreates the app process. This
+temporary export data is deleted after completion, cancellation, or failure and is
+excluded from Android backup and device transfer. Generated videos are written
+through Android's media storage interfaces. On Android 10 and later, completed MP4
+files are saved through MediaStore under
 `Movies/Timeline Visualizer`. Android 8 and 9 use the system Save As picker.
 Cached basemap image tiles may remain in the app's temporary cache
 and can be removed by clearing the app cache or uninstalling the app.
 
-After a successful Timeline import, the app stores only the selected document URI
+After a successful Timeline import, the app also stores the selected document URI
 so it can request access to the same document on the next launch. Replacing the
-selection replaces this URI. The Timeline contents are not duplicated.
+selection replaces this URI.
 
 On Android 13 and newer, the app may request notification permission so it can
 show video progress and a completion alert. Declining this permission does not
@@ -70,8 +77,9 @@ process network and tile-request information under its own privacy notice.
 ## Deleting data
 
 Use Android's **Settings → Apps → Timeline Visualizer → Storage & cache → Clear
-cache** to remove cached map tiles. Clear storage or uninstall the app to remove
-the Videos index and thumbnails along with all other application data. Removing
+cache** to remove preprocessed Timeline points, cached map tiles, and other temporary
+files. Clear storage or uninstall the app to remove the Videos index and thumbnails
+along with all other application data. Removing
 an entry from Videos does not delete the MP4. Use the separately confirmed
 **Delete video** action, or delete the file from its saved location, to remove the
 actual video.

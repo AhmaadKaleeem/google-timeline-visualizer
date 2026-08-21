@@ -45,6 +45,7 @@ import com.google.android.material.datepicker.MaterialDatePicker
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
+import dev.mahlernim.timelinevisualizer.data.CachedTimelineLoader
 import dev.mahlernim.timelinevisualizer.data.LocationFilterMode
 import dev.mahlernim.timelinevisualizer.data.LocationOutlierFilter
 import dev.mahlernim.timelinevisualizer.data.RawSignalPoint
@@ -52,7 +53,6 @@ import dev.mahlernim.timelinevisualizer.data.RawSignalProcessingResult
 import dev.mahlernim.timelinevisualizer.data.RawSignalProcessor
 import dev.mahlernim.timelinevisualizer.data.TimelineParseException
 import dev.mahlernim.timelinevisualizer.data.TimelineParseReason
-import dev.mahlernim.timelinevisualizer.data.TimelineParser
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.databinding.ActivityMainBinding
 import dev.mahlernim.timelinevisualizer.databinding.ItemVideoBinding
@@ -148,6 +148,7 @@ class MainActivity : AppCompatActivity() {
     private val videoStore by lazy { VideoStore(applicationContext) }
     private val videoMedia by lazy { VideoMedia(applicationContext) }
     private val generatedMedia by lazy { GeneratedMediaRepository(applicationContext) }
+    private val timelineLoader by lazy { CachedTimelineLoader(applicationContext) }
     private val timelineSourceStore by lazy { TimelineSourceStore(applicationContext) }
     private val cameraSettingsPreferences by lazy { CameraSettingsPreferences(applicationContext) }
     private val distanceUnitPreferences by lazy { DistanceUnitPreferences(applicationContext) }
@@ -562,8 +563,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 editor.loadingStageText.setText(R.string.reading_timeline)
                 val parsed = withContext(Dispatchers.IO) {
-                    contentResolver.openInputStream(uri)?.use(TimelineParser()::parseWithRawSignals)
-                        ?: throw java.io.FileNotFoundException()
+                    timelineLoader.load(uri, useCache = remembered)
                 }
                 if (parsed.timeline == null) {
                     showRawOnlyImportChoice(uri, parsed.rawSignals, remembered)
