@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.8
+
+- Clear the completed Video ready tray after watching or sharing the matching video.
+- Clear the tray when the user intentionally opens or reopens My videos.
+- Keep unacknowledged completions visible across automatic app startup and screen restoration.
+- Preserve every generated video when its transient completion state is cleared.
+- Set Android version code 27 and version name 2.2.8.
+
 ## 2.2.7
 
 - Prepare every map tile used by every video frame and the final overview before encoding begins.
