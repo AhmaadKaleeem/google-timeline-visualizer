@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.9
+
+- Save normalized semantic and raw-signal points in the app-private cache after a successful Timeline import.
+- Open remembered Timeline files from a compact versioned cache when the source URI, size, and modification time still match.
+- Always reprocess a manually selected Timeline file so users can explicitly refresh cached data.
+- Fall back safely to the original JSON when cached data is missing, stale, incompatible, or damaged.
+- Set Android version code 28 and version name 2.2.9.
+
 ## 2.2.8
 
 - Clear the completed Video ready tray after watching or sharing the matching video.
