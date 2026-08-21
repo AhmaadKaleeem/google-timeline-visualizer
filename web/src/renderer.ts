@@ -6,7 +6,7 @@ import {
   overviewViewport,
   worldPositionAtProgress,
 } from './camera';
-import { cumulativeDistances, overviewRouteSegments, project, unwrapWorldPoints } from './geo';
+import { cumulativeDistances, overviewRouteSegments, unwrapJourneyPoints } from './geo';
 import type {
   CameraMovement,
   GeoPoint,
@@ -150,7 +150,7 @@ export async function prepareJourney(
   onProgress?: (completed: number, total: number) => void,
 ): Promise<PreparedJourney> {
   if (points.length < 2) throw new Error('Select a period containing at least two location points.');
-  const worldPoints = unwrapWorldPoints(points.map((point) => project(point.latitude, point.longitude)));
+  const worldPoints = unwrapJourneyPoints(points);
   const distances = cumulativeDistances(points);
   const journey = {
     points,

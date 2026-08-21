@@ -3,6 +3,7 @@ import {
   cumulativeDistances,
   overviewRouteSegments,
   project,
+  unwrapJourneyPoints,
   unwrapWorldPoints,
   viewportFor,
 } from './geo';
@@ -16,6 +17,42 @@ describe('geography helpers', () => {
     const points = unwrapWorldPoints([project(0, 179), project(0, -179)]);
     expect(Math.abs(points[1].x - points[0].x)).toBeLessThan(0.01);
     expect(viewportFor(points, 480).maxX - viewportFor(points, 480).minX).toBeLessThan(0.02);
+  });
+
+  it('returns west after an eastbound Arctic round trip', () => {
+    const points = [
+      { instant: new Date(0), latitude: 37, longitude: 127 },
+      { instant: new Date(1), latitude: 70, longitude: 170 },
+      { instant: new Date(2), latitude: 82, longitude: -170 },
+      { instant: new Date(3), latitude: 38, longitude: -122 },
+      { instant: new Date(4), latitude: 70, longitude: -60 },
+      { instant: new Date(5), latitude: 82, longitude: 20 },
+      { instant: new Date(6), latitude: 70, longitude: 100 },
+      { instant: new Date(7), latitude: 37, longitude: 127 },
+    ];
+
+    const route = unwrapJourneyPoints(points);
+
+    expect(route[3].x).toBeGreaterThan(route[0].x);
+    expect(route[7].x).toBeLessThan(route[3].x);
+    expect(route[7].x).toBeCloseTo(route[0].x);
+    expect(Math.max(...route.map((point) => point.x)) - Math.min(...route.map((point) => point.x)))
+      .toBeLessThan(0.5);
+  });
+
+  it('does not collapse ordinary low-latitude date-line travel', () => {
+    const points = [
+      { instant: new Date(0), latitude: 10, longitude: 170 },
+      { instant: new Date(1), latitude: 10, longitude: -170 },
+      { instant: new Date(2), latitude: 10, longitude: -140 },
+    ];
+
+    const route = unwrapJourneyPoints(points);
+
+    expect(route.map((point) => point.x)).toEqual(unwrapWorldPoints(
+      points.map((point) => project(point.latitude, point.longitude)),
+    ).map((point) => point.x));
+    expect(route[2].x).toBeGreaterThan(route[0].x);
   });
 
   it('collapses accumulated world copies for the ending overview', () => {
