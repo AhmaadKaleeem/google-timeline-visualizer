@@ -78,6 +78,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.13.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.media3:media3-exoplayer:1.11.0")
+    implementation("androidx.media3:media3-muxer:1.11.0")
     implementation("androidx.media3:media3-ui:1.11.0")
 
     testImplementation("junit:junit:4.13.2")
