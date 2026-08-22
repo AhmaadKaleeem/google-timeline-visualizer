@@ -64,7 +64,9 @@
     <string name="creating_video_notification_title">正在建立您的時間軸影片</string>
     <string name="starting_video_creation">正在開始建立影片…</string>
     <string name="video_creation_notification_channel">建立影片</string>
-    <string name="video_creation_notification_channel_description">時間軸影片的產生進度和完成提醒</string>
+    <string name="video_creation_notification_channel_description">時間軸影片的產生進度</string>
+    <string name="video_completion_notification_channel">影片完成</string>
+    <string name="video_completion_notification_channel_description">時間軸影片準備就緒時發出提醒</string>
     <string name="no_video_player">沒有應用程式可播放該影片</string>
     <string name="period_same_year">%3$d 年 %1$s–%2$s</string>
     <string name="period_cross_year">%2$d 年 %1$s–%4$d 年 %3$s</string>

@@ -63,7 +63,9 @@
     <string name="creating_video_notification_title">타임라인 영상 만드는 중</string>
     <string name="starting_video_creation">영상 만들기를 시작하는 중…</string>
     <string name="video_creation_notification_channel">영상 만들기</string>
-    <string name="video_creation_notification_channel_description">타임라인 영상의 진행률과 완성 알림</string>
+    <string name="video_creation_notification_channel_description">타임라인 영상의 진행률 알림</string>
+    <string name="video_completion_notification_channel">영상 완성</string>
+    <string name="video_completion_notification_channel_description">타임라인 영상이 준비되면 알림</string>
     <string name="no_video_player">이 영상을 재생할 앱이 없습니다</string>
     <string name="period_same_year">%3$d년 %1$s–%2$s</string>
     <string name="period_cross_year">%2$d년 %1$s–%4$d년 %3$s</string>

@@ -66,7 +66,9 @@
     <string name="creating_video_notification_title">Creando tu vídeo timeline</string>
     <string name="starting_video_creation">Iniciando la creación de vídeo...</string>
     <string name="video_creation_notification_channel">Creación de vídeos</string>
-    <string name="video_creation_notification_channel_description">Alertas de progreso y finalización de videos timeline</string>
+    <string name="video_creation_notification_channel_description">Actualizaciones del progreso de los vídeos de la cronología</string>
+    <string name="video_completion_notification_channel">Finalización del vídeo</string>
+    <string name="video_completion_notification_channel_description">Alertas cuando los vídeos de la cronología están listos</string>
     <string name="no_video_player">No hay ninguna aplicación disponible para reproducir este vídeo.</string>
     <string name="period_same_year">%1$s–%2$s %3$d</string>
     <string name="period_cross_year">%1$s %2$d–%3$s %4$d</string>

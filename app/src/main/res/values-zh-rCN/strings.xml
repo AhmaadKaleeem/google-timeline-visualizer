@@ -64,7 +64,9 @@
     <string name="creating_video_notification_title">创建您的 timeline 视频</string>
     <string name="starting_video_creation">开始视频创作...</string>
     <string name="video_creation_notification_channel">视频创作</string>
-    <string name="video_creation_notification_channel_description">timeline 视频的进度和完成提醒</string>
+    <string name="video_creation_notification_channel_description">时间轴视频的生成进度</string>
+    <string name="video_completion_notification_channel">视频完成</string>
+    <string name="video_completion_notification_channel_description">时间轴视频准备就绪时发出提醒</string>
     <string name="no_video_player">没有可用的应用程序来播放该视频</string>
     <string name="period_same_year">%1$s–%2$s %3$d</string>
     <string name="period_cross_year">%1$s %2$d–%3$s %4$d</string>
