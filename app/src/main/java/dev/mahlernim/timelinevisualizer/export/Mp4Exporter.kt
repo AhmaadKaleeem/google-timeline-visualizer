@@ -6,7 +6,11 @@ import android.graphics.Canvas
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
-import android.media.MediaMuxer
+import androidx.media3.muxer.Mp4Muxer
+import androidx.media3.common.util.MediaFormatUtil
+import androidx.media3.container.MdtaMetadataEntry
+import androidx.media3.muxer.Muxer
+import java.io.FileOutputStream
 import android.net.Uri
 import dev.mahlernim.timelinevisualizer.data.TileRepository
 import dev.mahlernim.timelinevisualizer.model.Journey
@@ -31,10 +35,12 @@ data class ExportProgress(
     val total: Int,
 )
 
+@android.annotation.SuppressLint("UnsafeOptInUsageError")
 class Mp4Exporter(
     private val contentResolver: ContentResolver,
     private val tileRepository: TileRepository,
 ) {
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     suspend fun export(
         destination: Uri,
         journey: Journey,
@@ -100,7 +106,10 @@ class Mp4Exporter(
         val codec = MediaCodec.createByCodecName(encoder.name)
         val descriptor = contentResolver.openFileDescriptor(destination, "rwt")
             ?: error("Could not open the selected output file")
-        val muxer = MediaMuxer(descriptor.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        @Suppress("DEPRECATION")
+        val muxer = Mp4Muxer.Builder(FileOutputStream(descriptor.fileDescriptor)).build()
+        muxer.addMetadataEntry(MdtaMetadataEntry("title", title.toByteArray(Charsets.UTF_8), 0, 1))
+        muxer.addMetadataEntry(MdtaMetadataEntry("artist", "Timeline Visualizer".toByteArray(Charsets.UTF_8), 0, 1))
         var muxerStarted = false
         var trackIndex = -1
         val bufferInfo = MediaCodec.BufferInfo()
@@ -115,8 +124,9 @@ class Mp4Exporter(
                     outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> return false
                     outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         check(!muxerStarted) { "Encoder format changed twice" }
-                        trackIndex = muxer.addTrack(codec.outputFormat)
-                        muxer.start()
+                        val media3Format = MediaFormatUtil.createFormatFromMediaFormat(codec.outputFormat)
+                        trackIndex = muxer.addTrack(media3Format)
+                        // Note: Mp4Muxer doesn't have an explicit start() method, it implicitly starts when writing.
                         muxerStarted = true
                     }
                     outputIndex >= 0 -> {
@@ -127,7 +137,12 @@ class Mp4Exporter(
                             check(muxerStarted) { "Encoder produced data before its output format" }
                             encoded.position(bufferInfo.offset)
                             encoded.limit(bufferInfo.offset + bufferInfo.size)
-                            muxer.writeSampleData(trackIndex, encoded, bufferInfo)
+                            val media3BufferInfo = androidx.media3.muxer.BufferInfo(
+                                bufferInfo.presentationTimeUs,
+                                bufferInfo.size,
+                                bufferInfo.flags
+                            )
+                            muxer.writeSampleData(trackIndex, encoded, media3BufferInfo)
                         }
                         codec.releaseOutputBuffer(outputIndex, false)
                         if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return true
@@ -224,8 +239,8 @@ class Mp4Exporter(
         } finally {
             runCatching { codec.stop() }
             codec.release()
-            if (muxerStarted) runCatching { muxer.stop() }
-            muxer.release()
+            runCatching { muxer.close() }
+            // Mp4Muxer.close() completes and releases it
             descriptor.close()
             bitmap.recycle()
         }
