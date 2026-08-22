@@ -26,6 +26,9 @@ class DeviceSmokeTest {
             scenario.onActivity { activity ->
                 assertEquals(View.GONE, activity.findViewById<View>(R.id.videosScreen).visibility)
                 assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
+                val preset = activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown)
+                assertEquals(activity.getString(R.string.preset_custom), preset.text.toString())
+                assertEquals(1, preset.adapter.count)
 
                 activity.onBackPressedDispatcher.onBackPressed()
                 assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)

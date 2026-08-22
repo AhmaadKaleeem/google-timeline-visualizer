@@ -81,6 +81,12 @@ import dev.mahlernim.timelinevisualizer.model.Timeline
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import dev.mahlernim.timelinevisualizer.model.TitleTemplate
 import dev.mahlernim.timelinevisualizer.model.VideoDuration
+import dev.mahlernim.timelinevisualizer.presets.PresetDecodeResult
+import dev.mahlernim.timelinevisualizer.presets.PresetLink
+import dev.mahlernim.timelinevisualizer.presets.PresetNameResult
+import dev.mahlernim.timelinevisualizer.presets.PresetRepository
+import dev.mahlernim.timelinevisualizer.presets.PresetValues
+import dev.mahlernim.timelinevisualizer.presets.VideoPreset
 import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import dev.mahlernim.timelinevisualizer.render.RenderText
 import dev.mahlernim.timelinevisualizer.render.CameraSettings
@@ -160,6 +166,7 @@ class MainActivity : AppCompatActivity() {
     private val generatedMedia by lazy { GeneratedMediaRepository(applicationContext) }
     private val timelineLoader by lazy { CachedTimelineLoader(applicationContext) }
     private val timelineSourceStore by lazy { TimelineSourceStore(applicationContext) }
+    private val presetRepository by lazy { PresetRepository(applicationContext) }
     private val settingsViewModel by viewModels<SettingsViewModel> {
         viewModelFactory {
             initializer {
@@ -199,6 +206,8 @@ class MainActivity : AppCompatActivity() {
     private var syncingBottomNavigation = false
     private var exportingVideo = false
     private var pendingImportCompletionUri: Uri? = null
+    private var activePresetId: String? = null
+    private var presetsConfigured = false
 
     private val openTimeline = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importTimeline(uri)
@@ -359,6 +368,7 @@ class MainActivity : AppCompatActivity() {
         }
         makeDropdownOpenReliably(editor.durationDropdown)
         configureAdvancedSettings()
+        configurePresets()
         configureLocationFiltering()
         configureLanguageSelection()
         configureCameraPreparation()
@@ -375,6 +385,9 @@ class MainActivity : AppCompatActivity() {
         val incoming = intent?.data
         if (intent?.action == ACTION_WATCH_VIDEO && incoming != null) {
             if (savedInstanceState == null) watchVideo(incoming) else showVideoPlayer(incoming, resetPosition = false)
+        } else if (incoming != null && PresetLink.isPresetLink(incoming.toString())) {
+            showNewVideo(loadRemembered = true)
+            if (savedInstanceState == null) showIncomingPreset(incoming)
         } else if (incoming != null) {
             showNewVideo(loadRemembered = false)
             requestTimelineImport(incoming)
@@ -412,7 +425,11 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         intent.data?.let { uri ->
-            if (intent.action == ACTION_WATCH_VIDEO) watchVideo(uri) else {
+            if (intent.action == ACTION_WATCH_VIDEO) watchVideo(uri)
+            else if (PresetLink.isPresetLink(uri.toString())) {
+                showNewVideo(loadRemembered = true)
+                showIncomingPreset(uri)
+            } else {
                 showNewVideo(loadRemembered = false)
                 requestTimelineImport(uri)
             }
@@ -1217,15 +1234,247 @@ class MainActivity : AppCompatActivity() {
                 cameraSettings.copy(
                     videoQuality = cameraSettings.videoQuality.withResolution(VideoResolution.entries[position]),
                 ),
+                presetRelevantChange = false,
             )
         }
         settingsScreen.resetAdvancedSettingsButton.setOnClickListener {
+            markPresetCustom(clearDefault = true)
             settingsViewModel.resetVideoDefaults()
             val state = settingsViewModel.state.value
             applyAdvancedSettings(state.camera)
             Snackbar.make(binding.root, R.string.video_defaults_restored, Snackbar.LENGTH_SHORT).show()
         }
         applyAdvancedSettings(settingsViewModel.state.value.camera)
+    }
+
+    private fun configurePresets() {
+        presetsConfigured = true
+        val defaultId = presetRepository.defaultPresetId()
+        activePresetId = presetRepository.presets().firstOrNull {
+            it.id == defaultId && it.values == PresetValues.from(cameraSettings)
+        }?.id
+        editor.presetDropdown.setOnItemClickListener { _, _, position, _ ->
+            if (position == 0) {
+                markPresetCustom()
+            } else {
+                presetRepository.presets().getOrNull(position - 1)?.let(::applyPreset)
+            }
+        }
+        makeDropdownOpenReliably(editor.presetDropdown)
+        editor.presetSaveButton.setOnClickListener { saveCurrentPreset() }
+        editor.presetShareButton.setOnClickListener { selectedPreset()?.let(::sharePreset) }
+        editor.presetMoreButton.setOnClickListener { selectedPreset()?.let(::showPresetActions) }
+        renderPresetSelection()
+    }
+
+    private fun selectedPreset(): VideoPreset? = activePresetId?.let { selectedId ->
+        presetRepository.presets().firstOrNull { it.id == selectedId }
+    }
+
+    private fun applyPreset(preset: VideoPreset) {
+        activePresetId = preset.id
+        applyAdvancedSettings(preset.values.applyTo(cameraSettings))
+        renderPresetSelection()
+    }
+
+    private fun applySharedPreset(values: PresetValues, savedId: String? = null) {
+        activePresetId = savedId
+        applyAdvancedSettings(values.applyTo(cameraSettings))
+        renderPresetSelection()
+    }
+
+    private fun markPresetCustom(clearDefault: Boolean = false) {
+        activePresetId = null
+        if (clearDefault) presetRepository.setDefaultPresetId(null)
+        if (presetsConfigured) renderPresetSelection()
+    }
+
+    private fun renderPresetSelection() {
+        val presets = presetRepository.presets()
+        val labels = listOf(getString(R.string.preset_custom)) + presets.map(VideoPreset::name)
+        editor.presetDropdown.setAdapter(SelectionArrayAdapter(this, labels))
+        val selected = selectedPreset()
+        editor.presetDropdown.setText(selected?.name ?: getString(R.string.preset_custom), false)
+        editor.presetSummaryText.setText(
+            if (selected == null) R.string.preset_custom_summary else R.string.preset_applied_summary,
+        )
+        editor.presetShareButton.isEnabled = selected != null && !exportingVideo
+        editor.presetMoreButton.isEnabled = selected != null && !exportingVideo
+        editor.presetSaveButton.isEnabled = !exportingVideo
+        editor.presetDropdown.isEnabled = !exportingVideo
+    }
+
+    private fun saveCurrentPreset() {
+        if (presetRepository.presets().size >= PresetRepository.MAX_PRESETS) {
+            Snackbar.make(binding.root, R.string.preset_limit_reached, Snackbar.LENGTH_LONG).show()
+            return
+        }
+        showPresetNameDialog { name ->
+            val preset = presetRepository.add(name, PresetValues.from(cameraSettings))
+            activePresetId = preset.id
+            renderPresetSelection()
+            Snackbar.make(binding.root, R.string.preset_saved, Snackbar.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showPresetActions(preset: VideoPreset) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.preset_actions)
+            .setItems(
+                arrayOf(
+                    getString(R.string.rename_preset),
+                    getString(R.string.set_preset_default),
+                    getString(R.string.delete_preset),
+                ),
+            ) { _, position ->
+                when (position) {
+                    0 -> showPresetNameDialog(preset.name, preset.id) { name ->
+                        presetRepository.rename(preset.id, name)?.let {
+                            renderPresetSelection()
+                            Snackbar.make(binding.root, R.string.preset_renamed, Snackbar.LENGTH_SHORT).show()
+                        }
+                    }
+                    1 -> {
+                        presetRepository.setDefaultPresetId(preset.id)
+                        settingsViewModel.updateCamera(cameraSettings)
+                        Snackbar.make(binding.root, R.string.preset_default_set, Snackbar.LENGTH_SHORT).show()
+                    }
+                    2 -> confirmDeletePreset(preset)
+                }
+            }
+            .show()
+    }
+
+    private fun confirmDeletePreset(preset: VideoPreset) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.delete_preset_title)
+            .setMessage(R.string.delete_preset_message)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.delete_preset) { _, _ ->
+                if (presetRepository.delete(preset.id)) {
+                    if (activePresetId == preset.id) activePresetId = null
+                    renderPresetSelection()
+                    Snackbar.make(binding.root, R.string.preset_deleted, Snackbar.LENGTH_SHORT).show()
+                }
+            }
+            .show()
+    }
+
+    private fun showPresetNameDialog(
+        initialName: String = "",
+        excludingId: String? = null,
+        onValid: (String) -> Unit,
+    ) {
+        val input = TextInputEditText(this).apply {
+            id = R.id.presetNameInput
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setText(initialName)
+            selectAll()
+        }
+        val inputLayout = TextInputLayout(this).apply {
+            hint = getString(R.string.preset_name)
+            counterMaxLength = PresetRepository.MAX_NAME_CODE_POINTS
+            isCounterEnabled = true
+            addView(input)
+        }
+        val margin = (24 * resources.displayMetrics.density).toInt()
+        inputLayout.setPadding(margin, 0, margin, 0)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(if (excludingId == null) R.string.save_preset else R.string.rename_preset)
+            .setView(inputLayout)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save_preset, null)
+            .create()
+        dialog.show()
+        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+            when (val result = presetRepository.validateName(input.text?.toString().orEmpty(), excludingId)) {
+                PresetNameResult.Empty -> inputLayout.error = getString(R.string.preset_name_empty)
+                PresetNameResult.TooLong -> inputLayout.error = getString(R.string.preset_name_too_long)
+                PresetNameResult.Duplicate -> inputLayout.error = getString(R.string.preset_name_duplicate)
+                is PresetNameResult.Valid -> {
+                    inputLayout.error = null
+                    onValid(result.name)
+                    dialog.dismiss()
+                }
+            }
+        }
+    }
+
+    private fun sharePreset(preset: VideoPreset) {
+        val link = PresetLink.create(preset.values)
+        val share = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, link)
+        }
+        runCatching { startActivity(Intent.createChooser(share, getString(R.string.share_preset))) }
+            .onFailure {
+                Snackbar.make(binding.root, R.string.web_page_unavailable, Snackbar.LENGTH_LONG).show()
+            }
+    }
+
+    private fun showIncomingPreset(uri: Uri) {
+        when (val decoded = PresetLink.parse(uri.toString())) {
+            is PresetDecodeResult.Success -> {
+                val message = presetValueSummary(decoded.values) + "\n\n" +
+                    getString(R.string.shared_preset_privacy)
+                MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.shared_preset)
+                    .setMessage(message)
+                    .setNegativeButton(R.string.cancel, null)
+                    .setNeutralButton(R.string.save_and_use_preset) { _, _ ->
+                        if (presetRepository.presets().size >= PresetRepository.MAX_PRESETS) {
+                            Snackbar.make(binding.root, R.string.preset_limit_reached, Snackbar.LENGTH_LONG).show()
+                        } else {
+                            showPresetNameDialog { name ->
+                                val preset = presetRepository.add(name, decoded.values)
+                                applySharedPreset(decoded.values, preset.id)
+                                Snackbar.make(binding.root, R.string.preset_saved, Snackbar.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                    .setPositiveButton(R.string.use_preset) { _, _ -> applySharedPreset(decoded.values) }
+                    .show()
+            }
+            PresetDecodeResult.Invalid, PresetDecodeResult.Unsupported -> {
+                MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.preset_link_unsupported_title)
+                    .setMessage(R.string.preset_link_unsupported_message)
+                    .setPositiveButton(R.string.done, null)
+                    .show()
+            }
+        }
+    }
+
+    private fun presetValueSummary(values: PresetValues): String = listOf(
+        R.string.aspect_ratio to listOf(
+            R.string.aspect_square,
+            R.string.aspect_portrait,
+            R.string.aspect_landscape,
+        )[values.aspectRatio.ordinal],
+        R.string.camera_movement to listOf(
+            R.string.camera_fixed,
+            R.string.camera_steady,
+            R.string.camera_dynamic,
+            R.string.camera_close_up,
+        )[values.cameraMovement.ordinal],
+        R.string.trip_detection to listOf(
+            R.string.trip_detection_conservative,
+            R.string.trip_detection_balanced,
+            R.string.trip_detection_sensitive,
+        )[values.tripDetection.ordinal],
+        R.string.episode_framing to listOf(
+            R.string.local_framing_off,
+            R.string.local_framing_balanced,
+            R.string.local_framing_close,
+        )[values.localFraming.ordinal],
+        R.string.long_trip_compression to listOf(
+            R.string.compression_off,
+            R.string.compression_balanced,
+            R.string.compression_strong,
+            R.string.compression_stronger,
+        )[values.longTripCompression.ordinal],
+    ).joinToString("\n") { (label, value) ->
+        getString(R.string.preset_value_format, getString(label), getString(value))
     }
 
     private fun configureLocationFiltering() {
@@ -1364,7 +1613,11 @@ class MainActivity : AppCompatActivity() {
         if (reselect && selectedStartYear != null && selectedEndYear != null) selectRange()
     }
 
-    private fun updateAdvancedSettings(settings: CameraSettings) {
+    private fun updateAdvancedSettings(
+        settings: CameraSettings,
+        presetRelevantChange: Boolean = true,
+    ) {
+        if (presetRelevantChange) markPresetCustom(clearDefault = true)
         settingsViewModel.updateCamera(settings)
         applyAdvancedSettings(settings)
     }
@@ -1802,6 +2055,7 @@ class MainActivity : AppCompatActivity() {
         settingsScreen.videoQualityDropdown.isEnabled = !exporting
         settingsScreen.resetAdvancedSettingsButton.isEnabled = !exporting
         settingsScreen.locationFilterSwitch.isEnabled = !exporting
+        renderPresetSelection()
         if (exporting) editor.videoReadyGroup.visibility = View.GONE
         if (!exporting) updateCameraPreparationUi()
     }

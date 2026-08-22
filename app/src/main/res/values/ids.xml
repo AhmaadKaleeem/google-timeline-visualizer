@@ -1,3 +1,4 @@
 <resources>
+    <item name="presetNameInput" type="id" />
     <item name="customDurationInput" type="id" />
 </resources>

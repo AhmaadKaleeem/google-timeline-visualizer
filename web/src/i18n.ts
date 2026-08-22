@@ -86,6 +86,9 @@ export interface Strings {
   appDescription: string;
   previewBanner: string;
   headerTitle: string;
+  presetLinkTitle: string;
+  presetLinkBody: string;
+  presetLinkOpen: string;
 
   // --- Timeline file card ---
   fileCardTitle: string;
