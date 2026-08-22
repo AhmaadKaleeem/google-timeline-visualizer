@@ -386,6 +386,11 @@ class MainActivity : AppCompatActivity() {
         val incoming = intent?.data
         if (intent?.action == ACTION_WATCH_VIDEO && incoming != null) {
             if (savedInstanceState == null) watchVideo(incoming) else showVideoPlayer(incoming, resetPosition = false)
+            VideoExportService.clearNotification(applicationContext)
+        } else if (intent?.action == ACTION_SHARE_VIDEO && incoming != null) {
+            showVideos()
+            if (savedInstanceState == null) shareVideo(incoming)
+            VideoExportService.clearNotification(applicationContext)
         } else if (incoming != null && PresetLink.isPresetLink(incoming.toString())) {
             showNewVideo(loadRemembered = true)
             if (savedInstanceState == null) showIncomingPreset(incoming)
@@ -432,13 +437,23 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         intent.data?.let { uri ->
-            if (intent.action == ACTION_WATCH_VIDEO) watchVideo(uri)
-            else if (PresetLink.isPresetLink(uri.toString())) {
-                showNewVideo(loadRemembered = true)
-                showIncomingPreset(uri)
-            } else {
-                showNewVideo(loadRemembered = false)
-                requestTimelineImport(uri)
+            when (intent.action) {
+                ACTION_WATCH_VIDEO -> {
+                    watchVideo(uri)
+                    VideoExportService.clearNotification(applicationContext)
+                }
+                ACTION_SHARE_VIDEO -> {
+                    showVideos()
+                    shareVideo(uri)
+                    VideoExportService.clearNotification(applicationContext)
+                }
+                else -> if (PresetLink.isPresetLink(uri.toString())) {
+                    showNewVideo(loadRemembered = true)
+                    showIncomingPreset(uri)
+                } else {
+                    showNewVideo(loadRemembered = false)
+                    requestTimelineImport(uri)
+                }
             }
         }
     }
@@ -2650,6 +2665,7 @@ class MainActivity : AppCompatActivity() {
         private const val STATE_DRAFT_LOCAL_FRAMING = "draft_local_framing_v1"
         private const val STATE_ACTIVE_PRESET_ID = "active_preset_id_v1"
         internal const val ACTION_WATCH_VIDEO = "dev.mahlernim.timelinevisualizer.action.WATCH_VIDEO"
+        internal const val ACTION_SHARE_VIDEO = "dev.mahlernim.timelinevisualizer.action.SHARE_VIDEO"
         private const val PROJECT_URL = "https://github.com/mahlernim/google-timeline-visualizer"
         private const val PRIVACY_URL =
             "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/privacy.md"
@@ -2670,7 +2686,23 @@ class MainActivity : AppCompatActivity() {
                 action = ACTION_WATCH_VIDEO
                 data = uri
                 clipData = ClipData.newRawUri(context.getString(R.string.timeline_video), uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                )
+            }
+
+        internal fun shareIntent(context: Context, uri: Uri): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                action = ACTION_SHARE_VIDEO
+                data = uri
+                clipData = ClipData.newRawUri(context.getString(R.string.timeline_video), uri)
+                addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                )
             }
 
         internal fun restoreGuideUrl(language: String?): String = when (language) {

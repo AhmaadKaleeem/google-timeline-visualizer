@@ -65,7 +65,9 @@
     <string name="creating_video_notification_title">Erstellen Sie Ihr timeline-Video</string>
     <string name="starting_video_creation">Videoerstellung beginnt…</string>
     <string name="video_creation_notification_channel">Videoerstellung</string>
-    <string name="video_creation_notification_channel_description">Fortschritts- und Abschlusswarnungen für timeline-Videos</string>
+    <string name="video_creation_notification_channel_description">Fortschrittsmeldungen für Timeline-Videos</string>
+    <string name="video_completion_notification_channel">Videofertigstellung</string>
+    <string name="video_completion_notification_channel_description">Benachrichtigungen, wenn Timeline-Videos fertig sind</string>
     <string name="no_video_player">Für die Wiedergabe dieses Videos ist keine App verfügbar</string>
     <string name="period_same_year">%1$s–%2$s %3$d</string>
     <string name="period_cross_year">%1$s %2$d–%3$s %4$d</string>

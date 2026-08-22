@@ -5,7 +5,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -50,7 +49,7 @@ class VideoExportService : Service() {
         notificationManager = getSystemService(NotificationManager::class.java)
         requestStore = VideoExportRequestStore(applicationContext)
         VideoExportCoordinator.restore(applicationContext)
-        createNotificationChannel()
+        createNotificationChannels()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -288,15 +287,10 @@ class VideoExportService : Service() {
             .build()
     }
 
-    private fun buildCompletedNotification(uri: Uri, title: String): Notification {
+    internal fun buildCompletedNotification(uri: Uri, title: String): Notification {
         val watch = MainActivity.playbackIntent(this, uri)
-        val share = Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-            type = "video/mp4"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            clipData = ClipData.newRawUri(getString(R.string.timeline_video), uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }, getString(R.string.share_travel_video))
-        return notificationBuilder()
+        val share = MainActivity.shareIntent(this, uri)
+        return completionNotificationBuilder()
             .setContentTitle(getString(R.string.video_ready))
             .setContentText(title)
             .setAutoCancel(true)
@@ -329,6 +323,14 @@ class VideoExportService : Service() {
         .setCategory(NotificationCompat.CATEGORY_PROGRESS)
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+
+    private fun completionNotificationBuilder(): NotificationCompat.Builder =
+        NotificationCompat.Builder(this, COMPLETION_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentIntent(openAppPendingIntent())
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
     private fun progressText(progress: ExportProgress): String {
         val base = when (progress.phase) {
@@ -387,17 +389,26 @@ class VideoExportService : Service() {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    private fun createNotificationChannel() {
+    private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        notificationManager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.video_creation_notification_channel),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = getString(R.string.video_creation_notification_channel_description)
-                setShowBadge(false)
-            },
+        notificationManager.createNotificationChannels(
+            listOf(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    getString(R.string.video_creation_notification_channel),
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+                    description = getString(R.string.video_creation_notification_channel_description)
+                    setShowBadge(false)
+                },
+                NotificationChannel(
+                    COMPLETION_CHANNEL_ID,
+                    getString(R.string.video_completion_notification_channel),
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = getString(R.string.video_completion_notification_channel_description)
+                },
+            ),
         )
     }
 
@@ -405,7 +416,8 @@ class VideoExportService : Service() {
         private const val ACTION_START = "dev.mahlernim.timelinevisualizer.action.START_EXPORT"
         private const val ACTION_CANCEL = "dev.mahlernim.timelinevisualizer.action.CANCEL_EXPORT"
         private const val CHANNEL_ID = "video_creation"
-        private const val NOTIFICATION_ID = 4102
+        private const val COMPLETION_CHANNEL_ID = "video_completion"
+        internal const val NOTIFICATION_ID = 4102
         private const val NOTIFICATION_UPDATE_INTERVAL_MS = 500L
         private const val OPEN_APP_REQUEST_CODE = 4103
         private const val CANCEL_REQUEST_CODE = 4104

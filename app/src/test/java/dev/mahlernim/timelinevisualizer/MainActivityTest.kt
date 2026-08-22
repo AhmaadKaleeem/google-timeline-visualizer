@@ -1,5 +1,8 @@
 package dev.mahlernim.timelinevisualizer
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -30,6 +33,7 @@ import dev.mahlernim.timelinevisualizer.export.ExportProgress
 import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
 import dev.mahlernim.timelinevisualizer.export.VideoExportStateStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
+import dev.mahlernim.timelinevisualizer.export.VideoExportService
 import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
@@ -70,6 +74,7 @@ class MainActivityTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val store = VideoStore(context)
     private val timelineSourceStore = TimelineSourceStore(context)
+    private val testNotificationChannel = "test_completed_export"
     private lateinit var controller: ActivityController<MainActivity>
 
     @Before
@@ -83,6 +88,7 @@ class MainActivityTest {
         context.getSharedPreferences("distance-unit-settings", Context.MODE_PRIVATE).edit().clear().commit()
         timelineSourceStore.clearForTest()
         context.getSharedPreferences("video-presets", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSystemService(NotificationManager::class.java).deleteNotificationChannel(testNotificationChannel)
     }
 
     @Test
@@ -203,6 +209,7 @@ class MainActivityTest {
         VideoExportCoordinator.resetForTest()
         timelineSourceStore.clearForTest()
         context.getSharedPreferences("video-presets", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSystemService(NotificationManager::class.java).deleteNotificationChannel(testNotificationChannel)
     }
 
     @Test
@@ -1184,22 +1191,128 @@ class MainActivityTest {
         assertEquals(MainActivity.ACTION_WATCH_VIDEO, intent.action)
         assertEquals(uri, intent.data)
         assertEquals(MainActivity::class.java.name, intent.component?.className)
+        assertTrue(intent.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP != 0)
     }
 
     @Test
     fun playbackIntentDisplaysTheFullScreenInternalPlayer() {
         val uri = Uri.parse("content://example/video/internal")
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(
+                status = VideoExportStatus.COMPLETE,
+                outputUri = uri.toString(),
+                title = "Completed video",
+            ),
+        )
+        postCompletionNotification()
         val activity = launchActivity(MainActivity.playbackIntent(context, uri))
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.playerScreen).visibility)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.bottomNavigation).visibility)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.videosScreen).visibility)
+        assertEquals(VideoExportStatus.IDLE, VideoExportStateStore(context).load().status)
+        assertCompletionNotificationDismissed()
+    }
+
+    @Test
+    fun shareIntentRoutesThroughTheAppAndClearsCompletion() {
+        val uri = Uri.parse("content://example/video/internal")
+        val intent = MainActivity.shareIntent(context, uri)
+        assertEquals(MainActivity.ACTION_SHARE_VIDEO, intent.action)
+        assertEquals(uri, intent.data)
+        assertEquals(MainActivity::class.java.name, intent.component?.className)
+        assertTrue(intent.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP != 0)
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(
+                status = VideoExportStatus.COMPLETE,
+                outputUri = uri.toString(),
+                title = "Completed video",
+            ),
+        )
+        postCompletionNotification()
+
+        val activity = launchActivity(intent)
+        val chooser = shadowOf(activity).nextStartedActivity
+        val send = chooser.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+
+        assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+        assertEquals(Intent.ACTION_SEND, send?.action)
+        assertEquals(uri, send?.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java))
+        assertTrue(send!!.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+        assertEquals(VideoExportStatus.IDLE, VideoExportStateStore(context).load().status)
+        assertCompletionNotificationDismissed()
+    }
+
+    @Test
+    fun warmActivityHandlesShareNotificationIntent() {
+        val uri = Uri.parse("content://example/video/warm")
+        val activity = launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(
+                status = VideoExportStatus.COMPLETE,
+                outputUri = uri.toString(),
+                title = "Completed video",
+            ),
+        )
+
+        controller.newIntent(MainActivity.shareIntent(context, uri))
+        val chooser = shadowOf(activity).nextStartedActivity
+
+        assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+        assertEquals(VideoExportStatus.IDLE, VideoExportStateStore(context).load().status)
+    }
+
+    @Test
+    fun warmActivityHandlesWatchNotificationIntent() {
+        val uri = Uri.parse("content://example/video/warm")
+        val activity = launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(
+                status = VideoExportStatus.COMPLETE,
+                outputUri = uri.toString(),
+                title = "Completed video",
+            ),
+        )
+        postCompletionNotification()
+
+        controller.newIntent(MainActivity.playbackIntent(context, uri))
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.playerScreen).visibility)
+        assertEquals(VideoExportStatus.IDLE, VideoExportStateStore(context).load().status)
+        assertCompletionNotificationDismissed()
     }
 
     private fun acceptPrivacyDisclosure() {
         context.getSharedPreferences("display", Context.MODE_PRIVATE).edit()
             .putBoolean("map_privacy_accepted_v1", true)
             .commit()
+    }
+
+    private fun postCompletionNotification() {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(
+                testNotificationChannel,
+                "Test completion",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ),
+        )
+        manager.notify(
+            VideoExportService.NOTIFICATION_ID,
+            Notification.Builder(context, testNotificationChannel)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentTitle("Completed video")
+                .build(),
+        )
+    }
+
+    private fun assertCompletionNotificationDismissed() {
+        val active = context.getSystemService(NotificationManager::class.java).activeNotifications
+        assertTrue(active.none { it.id == VideoExportService.NOTIFICATION_ID })
     }
 
     private fun assertCompactButtons() {
