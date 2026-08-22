@@ -34,6 +34,15 @@ import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import dev.mahlernim.timelinevisualizer.render.VideoQuality
+import dev.mahlernim.timelinevisualizer.render.CameraMovement
+import dev.mahlernim.timelinevisualizer.render.CameraSettings
+import dev.mahlernim.timelinevisualizer.render.LocalFraming
+import dev.mahlernim.timelinevisualizer.render.LongTripCompression
+import dev.mahlernim.timelinevisualizer.render.TripDetection
+import dev.mahlernim.timelinevisualizer.render.VideoAspectRatio
+import dev.mahlernim.timelinevisualizer.presets.PresetLink
+import dev.mahlernim.timelinevisualizer.presets.PresetRepository
+import dev.mahlernim.timelinevisualizer.presets.PresetValues
 import dev.mahlernim.timelinevisualizer.render.DistanceUnit
 import dev.mahlernim.timelinevisualizer.render.DistanceUnitPreference
 import dev.mahlernim.timelinevisualizer.ui.CameraSettingsPreferences
@@ -73,6 +82,117 @@ class MainActivityTest {
         context.getSharedPreferences("timeline-filter-settings", Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences("distance-unit-settings", Context.MODE_PRIVATE).edit().clear().commit()
         timelineSourceStore.clearForTest()
+        context.getSharedPreferences("video-presets", Context.MODE_PRIVATE).edit().clear().commit()
+    }
+
+    @Test
+    fun presetAppliesOnlyFiveDraftFieldsAndKeepsResolutionAndDefaults() {
+        val defaults = CameraSettings(videoQuality = VideoQuality.LANDSCAPE_720)
+        CameraSettingsPreferences(context).save(defaults)
+        val repository = PresetRepository(context)
+        val preset = repository.add(
+            "Portrait close",
+            PresetValues(
+                VideoAspectRatio.PORTRAIT,
+                CameraMovement.CLOSE_UP,
+                TripDetection.SENSITIVE,
+                LocalFraming.CLOSE,
+                LongTripCompression.STRONGER,
+            ),
+        )
+        val activity = launchActivity()
+
+        val dropdown = activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown)
+        dropdown.onItemClickListener?.onItemClick(null, null, 1, preset.id.hashCode().toLong())
+
+        assertEquals("Portrait close", dropdown.text.toString())
+        assertEquals(
+            activity.getString(R.string.aspect_portrait),
+            activity.findViewById<AutoCompleteTextView>(R.id.aspectRatioDropdown).text.toString(),
+        )
+        assertEquals(
+            activity.getString(R.string.resolution_720),
+            activity.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown).text.toString(),
+        )
+        assertEquals(defaults, CameraSettingsPreferences(context).load())
+
+        controller.recreate()
+        val recreated = controller.get()
+        assertEquals("Portrait close", recreated.findViewById<AutoCompleteTextView>(R.id.presetDropdown).text.toString())
+        assertEquals(
+            recreated.getString(R.string.aspect_portrait),
+            recreated.findViewById<AutoCompleteTextView>(R.id.aspectRatioDropdown).text.toString(),
+        )
+        assertEquals(
+            recreated.getString(R.string.resolution_720),
+            recreated.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown).text.toString(),
+        )
+        assertEquals(defaults, CameraSettingsPreferences(context).load())
+    }
+
+    @Test
+    fun relevantManualChangeMarksPresetCustomButResolutionDoesNot() {
+        val repository = PresetRepository(context)
+        val preset = repository.add("Balanced", PresetValues.from(CameraSettings.DEFAULT))
+        val activity = launchActivity()
+        val presetDropdown = activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown)
+        presetDropdown.onItemClickListener?.onItemClick(null, null, 1, preset.id.hashCode().toLong())
+
+        activity.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown)
+            .onItemClickListener?.onItemClick(null, null, 1, 1L)
+        assertEquals("Balanced", presetDropdown.text.toString())
+
+        activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown)
+            .onItemClickListener?.onItemClick(null, null, 2, 2L)
+        assertEquals(activity.getString(R.string.preset_custom), presetDropdown.text.toString())
+    }
+
+    @Test
+    fun sharedPresetRequiresConfirmationBeforeChangingDraft() {
+        val values = PresetValues(
+            VideoAspectRatio.PORTRAIT,
+            CameraMovement.CLOSE_UP,
+            TripDetection.SENSITIVE,
+            LocalFraming.CLOSE,
+            LongTripCompression.STRONG,
+        )
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(PresetLink.create(values)))
+        val activity = launchActivity(intent)
+
+        assertEquals(
+            activity.getString(R.string.camera_steady),
+            activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
+        )
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        assertTrue(dialog.isShowing)
+        assertTrue(dialog.findViewById<TextView>(android.R.id.message)!!.text.contains(activity.getString(R.string.aspect_portrait)))
+
+        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(
+            activity.getString(R.string.camera_close_up),
+            activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
+        )
+        assertEquals(activity.getString(R.string.preset_custom), activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown).text.toString())
+        assertEquals(CameraSettings.DEFAULT, CameraSettingsPreferences(context).load())
+    }
+
+    @Test
+    fun invalidSharedPresetShowsErrorWithoutChangingSettings() {
+        val intent = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("${PresetLink.HTTPS_BASE}?preset=${"a".repeat(100)}"),
+        )
+        val activity = launchActivity(intent)
+
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        assertTrue(
+            dialog.findViewById<TextView>(android.R.id.message)!!.text.contains(
+                activity.getString(R.string.preset_link_unsupported_message),
+            ),
+        )
+        assertEquals(CameraSettings.DEFAULT, CameraSettingsPreferences(context).load())
     }
 
     @After
@@ -82,6 +202,7 @@ class MainActivityTest {
         VideoExportStateStore(context).clear()
         VideoExportCoordinator.resetForTest()
         timelineSourceStore.clearForTest()
+        context.getSharedPreferences("video-presets", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
     @Test
