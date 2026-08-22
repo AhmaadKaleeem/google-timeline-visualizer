@@ -6,20 +6,23 @@ import android.graphics.Canvas
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
-import androidx.media3.muxer.Mp4Muxer
-import androidx.media3.common.util.MediaFormatUtil
-import androidx.media3.container.MdtaMetadataEntry
-import androidx.media3.muxer.Muxer
-import java.io.FileOutputStream
 import android.net.Uri
+import android.os.ParcelFileDescriptor
+import androidx.annotation.OptIn
+import androidx.media3.common.util.MediaFormatUtil
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.container.MdtaMetadataEntry
+import androidx.media3.muxer.BufferInfo as MuxerBufferInfo
+import androidx.media3.muxer.Mp4Muxer
+import androidx.media3.muxer.SeekableMuxerOutput
 import dev.mahlernim.timelinevisualizer.data.TileRepository
 import dev.mahlernim.timelinevisualizer.model.Journey
-import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import dev.mahlernim.timelinevisualizer.render.CameraSettings
-import dev.mahlernim.timelinevisualizer.render.TileId
+import dev.mahlernim.timelinevisualizer.render.RenderText
+import dev.mahlernim.timelinevisualizer.render.TimelineAnimation
 import dev.mahlernim.timelinevisualizer.render.TimelineFrame
 import dev.mahlernim.timelinevisualizer.render.TimelinePainter
-import dev.mahlernim.timelinevisualizer.render.RenderText
+import dev.mahlernim.timelinevisualizer.render.TileId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -35,12 +38,11 @@ data class ExportProgress(
     val total: Int,
 )
 
-@android.annotation.SuppressLint("UnsafeOptInUsageError")
 class Mp4Exporter(
     private val contentResolver: ContentResolver,
     private val tileRepository: TileRepository,
 ) {
-    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    @OptIn(UnstableApi::class)
     suspend fun export(
         destination: Uri,
         journey: Journey,
@@ -106,10 +108,20 @@ class Mp4Exporter(
         val codec = MediaCodec.createByCodecName(encoder.name)
         val descriptor = contentResolver.openFileDescriptor(destination, "rwt")
             ?: error("Could not open the selected output file")
-        @Suppress("DEPRECATION")
-        val muxer = Mp4Muxer.Builder(FileOutputStream(descriptor.fileDescriptor)).build()
-        muxer.addMetadataEntry(MdtaMetadataEntry("title", title.toByteArray(Charsets.UTF_8), 0, 1))
-        muxer.addMetadataEntry(MdtaMetadataEntry("artist", "Timeline Visualizer".toByteArray(Charsets.UTF_8), 0, 1))
+        val outputStream = ParcelFileDescriptor.AutoCloseOutputStream(descriptor)
+        val muxer = try {
+            Mp4Muxer.Builder(SeekableMuxerOutput.of(outputStream)).build()
+        } catch (error: Throwable) {
+            runCatching { outputStream.close() }.onFailure(error::addSuppressed)
+            throw error
+        }
+        muxer.addMetadataEntry(
+            MdtaMetadataEntry(
+                "title",
+                title.toByteArray(Charsets.UTF_8),
+                MdtaMetadataEntry.TYPE_INDICATOR_STRING,
+            ),
+        )
         var muxerStarted = false
         var trackIndex = -1
         val bufferInfo = MediaCodec.BufferInfo()
@@ -126,7 +138,6 @@ class Mp4Exporter(
                         check(!muxerStarted) { "Encoder format changed twice" }
                         val media3Format = MediaFormatUtil.createFormatFromMediaFormat(codec.outputFormat)
                         trackIndex = muxer.addTrack(media3Format)
-                        // Note: Mp4Muxer doesn't have an explicit start() method, it implicitly starts when writing.
                         muxerStarted = true
                     }
                     outputIndex >= 0 -> {
@@ -137,10 +148,10 @@ class Mp4Exporter(
                             check(muxerStarted) { "Encoder produced data before its output format" }
                             encoded.position(bufferInfo.offset)
                             encoded.limit(bufferInfo.offset + bufferInfo.size)
-                            val media3BufferInfo = androidx.media3.muxer.BufferInfo(
+                            val media3BufferInfo = MuxerBufferInfo(
                                 bufferInfo.presentationTimeUs,
                                 bufferInfo.size,
-                                bufferInfo.flags
+                                bufferInfo.flags,
                             )
                             muxer.writeSampleData(trackIndex, encoded, media3BufferInfo)
                         }
@@ -151,6 +162,7 @@ class Mp4Exporter(
             }
         }
 
+        var exportFailure: Throwable? = null
         try {
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             codec.start()
@@ -236,13 +248,24 @@ class Mp4Exporter(
             )
             onProgress(ExportProgress(1f, ExportPhase.COMPLETE, 1, 1))
             overview
+        } catch (error: Throwable) {
+            exportFailure = error
+            throw error
         } finally {
-            runCatching { codec.stop() }
-            codec.release()
-            runCatching { muxer.close() }
-            // Mp4Muxer.close() completes and releases it
-            descriptor.close()
+            var cleanupFailure: Throwable? = null
+            fun cleanUp(block: () -> Unit) {
+                try {
+                    block()
+                } catch (error: Throwable) {
+                    val priorFailure = exportFailure ?: cleanupFailure
+                    if (priorFailure == null) cleanupFailure = error else priorFailure.addSuppressed(error)
+                }
+            }
+            cleanUp { codec.stop() }
+            cleanUp { codec.release() }
+            cleanUp { muxer.close() }
             bitmap.recycle()
+            if (exportFailure == null) cleanupFailure?.let { throw it }
         }
     }
 

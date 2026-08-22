@@ -1,9 +1,8 @@
 # Changelog
 
-## 2.2.14
+## Unreleased
 
-- Embed video title and artist metadata directly into the exported MP4 container to support third-party media players.
-- Migrate the video export muxer to Media3 to enable binary metadata injection.
+- Embed the resolved video title in exported MP4 metadata for media players and galleries.
 
 ## 2.2.13
 
