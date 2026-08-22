@@ -115,6 +115,19 @@ class MainActivityTest {
             activity.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown).text.toString(),
         )
         assertEquals(defaults, CameraSettingsPreferences(context).load())
+
+        controller.recreate()
+        val recreated = controller.get()
+        assertEquals("Portrait close", recreated.findViewById<AutoCompleteTextView>(R.id.presetDropdown).text.toString())
+        assertEquals(
+            recreated.getString(R.string.aspect_portrait),
+            recreated.findViewById<AutoCompleteTextView>(R.id.aspectRatioDropdown).text.toString(),
+        )
+        assertEquals(
+            recreated.getString(R.string.resolution_720),
+            recreated.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown).text.toString(),
+        )
+        assertEquals(defaults, CameraSettingsPreferences(context).load())
     }
 
     @Test

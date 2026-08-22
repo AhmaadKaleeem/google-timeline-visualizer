@@ -369,6 +369,7 @@ class MainActivity : AppCompatActivity() {
         makeDropdownOpenReliably(editor.durationDropdown)
         configureAdvancedSettings()
         configurePresets()
+        restoreDraftSettings(savedInstanceState)
         configureLocationFiltering()
         configureLanguageSelection()
         configureCameraPreparation()
@@ -418,6 +419,12 @@ class MainActivity : AppCompatActivity() {
         outState.putString(STATE_PLAYER_URI, playerUri?.toString())
         outState.putLong(STATE_PLAYER_POSITION, playerPositionMs)
         outState.putBoolean(STATE_PLAYER_PLAYING, playerPlayWhenReady)
+        outState.putString(STATE_DRAFT_CAMERA, cameraSettings.cameraMovement.name)
+        outState.putString(STATE_DRAFT_PACING, cameraSettings.longTripCompression.name)
+        outState.putString(STATE_DRAFT_QUALITY, cameraSettings.videoQuality.name)
+        outState.putString(STATE_DRAFT_TRIP_DETECTION, cameraSettings.tripDetection.name)
+        outState.putString(STATE_DRAFT_LOCAL_FRAMING, cameraSettings.localFraming.name)
+        outState.putString(STATE_ACTIVE_PRESET_ID, activePresetId)
         super.onSaveInstanceState(outState)
     }
 
@@ -1264,6 +1271,25 @@ class MainActivity : AppCompatActivity() {
         editor.presetSaveButton.setOnClickListener { saveCurrentPreset() }
         editor.presetShareButton.setOnClickListener { selectedPreset()?.let(::sharePreset) }
         editor.presetMoreButton.setOnClickListener { selectedPreset()?.let(::showPresetActions) }
+        renderPresetSelection()
+    }
+
+    private fun restoreDraftSettings(savedState: Bundle?) {
+        savedState ?: return
+        val restored = runCatching {
+            CameraSettings(
+                cameraMovement = CameraMovement.valueOf(savedState.getString(STATE_DRAFT_CAMERA)!!),
+                longTripCompression = LongTripCompression.valueOf(savedState.getString(STATE_DRAFT_PACING)!!),
+                videoQuality = VideoQuality.valueOf(savedState.getString(STATE_DRAFT_QUALITY)!!),
+                tripDetection = TripDetection.valueOf(savedState.getString(STATE_DRAFT_TRIP_DETECTION)!!),
+                localFraming = LocalFraming.valueOf(savedState.getString(STATE_DRAFT_LOCAL_FRAMING)!!),
+            )
+        }.getOrNull() ?: return
+        val restoredPresetId = savedState.getString(STATE_ACTIVE_PRESET_ID)
+        activePresetId = presetRepository.presets().firstOrNull {
+            it.id == restoredPresetId && it.values == PresetValues.from(restored)
+        }?.id
+        applyAdvancedSettings(restored)
         renderPresetSelection()
     }
 
@@ -2617,6 +2643,12 @@ class MainActivity : AppCompatActivity() {
         private const val STATE_PLAYER_URI = "player_uri_v1"
         private const val STATE_PLAYER_POSITION = "player_position_v1"
         private const val STATE_PLAYER_PLAYING = "player_playing_v1"
+        private const val STATE_DRAFT_CAMERA = "draft_camera_v1"
+        private const val STATE_DRAFT_PACING = "draft_pacing_v1"
+        private const val STATE_DRAFT_QUALITY = "draft_quality_v1"
+        private const val STATE_DRAFT_TRIP_DETECTION = "draft_trip_detection_v1"
+        private const val STATE_DRAFT_LOCAL_FRAMING = "draft_local_framing_v1"
+        private const val STATE_ACTIVE_PRESET_ID = "active_preset_id_v1"
         internal const val ACTION_WATCH_VIDEO = "dev.mahlernim.timelinevisualizer.action.WATCH_VIDEO"
         private const val PROJECT_URL = "https://github.com/mahlernim/google-timeline-visualizer"
         private const val PRIVACY_URL =
