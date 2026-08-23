@@ -16,6 +16,7 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
 import java.time.Instant
+import dev.mahlernim.timelinevisualizer.videos.VideoDataSource
 
 data class VideoExportRequest(
     val outputUri: String,
@@ -24,6 +25,9 @@ data class VideoExportRequest(
     val durationSeconds: Int,
     val renderText: RenderText = RenderText.ENGLISH,
     val cameraSettings: CameraSettings = CameraSettings.DEFAULT,
+    val projectId: String? = null,
+    val presetName: String? = null,
+    val dataSource: VideoDataSource = VideoDataSource.SEMANTIC,
 ) {
     val period: TimelinePeriod get() = journey.period
 }
@@ -61,6 +65,11 @@ class VideoExportRequestStore(context: Context) {
                 output.writeBoolean(exportFormat.customResolution)
                 output.writeBoolean(exportFormat.customFrameRate)
             }
+            output.writeBoolean(request.projectId != null)
+            request.projectId?.let(output::writeUTF)
+            output.writeBoolean(request.presetName != null)
+            request.presetName?.let(output::writeUTF)
+            output.writeUTF(request.dataSource.name)
             output.writeInt(request.journey.points.size)
             request.journey.points.forEach { point ->
                 output.writeLong(point.instant.toEpochMilli())
@@ -128,7 +137,7 @@ class VideoExportRequestStore(context: Context) {
                         } else {
                             LocalFraming.OFF
                         }
-                        val exportFormat = if (version >= 9) {
+                        val exportFormat = if (version == 9 || version >= 11) {
                             if (input.readBoolean()) {
                                 runCatching {
                                     ExportFormatSettings(
@@ -171,6 +180,14 @@ class VideoExportRequestStore(context: Context) {
                         legacyDefaultSettings()
                     }
                 }
+                val hasLabAssociations = version == 10 || version >= 11
+                val projectId = if (hasLabAssociations && input.readBoolean()) input.readUTF() else null
+                val presetName = if (hasLabAssociations && input.readBoolean()) input.readUTF() else null
+                val dataSource = if (version >= 10) {
+                    enumOrDefault(input.readUTF(), VideoDataSource.SEMANTIC)
+                } else {
+                    VideoDataSource.SEMANTIC
+                }
                 val pointCount = input.readInt().coerceIn(0, MAX_POINT_COUNT)
                 val points = List(pointCount) {
                     GeoPoint(
@@ -192,6 +209,9 @@ class VideoExportRequestStore(context: Context) {
                     durationSeconds = durationSeconds,
                     renderText = renderText,
                     cameraSettings = cameraSettings,
+                    projectId = projectId,
+                    presetName = presetName,
+                    dataSource = dataSource,
                 )
             }
         }.getOrNull()
@@ -204,7 +224,7 @@ class VideoExportRequestStore(context: Context) {
     }
 
     companion object {
-        private const val CURRENT_FILE_VERSION = 9
+        private const val CURRENT_FILE_VERSION = 11
         private const val MAX_POINT_COUNT = 2_000_000
         private const val REQUEST_FILE = "pending-video-export.bin"
         private const val TEMPORARY_FILE = "pending-video-export.tmp"

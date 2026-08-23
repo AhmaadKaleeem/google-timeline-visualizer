@@ -22,10 +22,12 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.videos.VideoRecord
 import dev.mahlernim.timelinevisualizer.videos.VideoStore
+import dev.mahlernim.timelinevisualizer.videos.VideoMedia
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportCoordinator
 import dev.mahlernim.timelinevisualizer.export.ExportPhase
@@ -37,6 +39,7 @@ import dev.mahlernim.timelinevisualizer.export.VideoExportService
 import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
+import dev.mahlernim.timelinevisualizer.model.VideoDuration
 import dev.mahlernim.timelinevisualizer.render.VideoQuality
 import dev.mahlernim.timelinevisualizer.render.CameraMovement
 import dev.mahlernim.timelinevisualizer.render.CameraSettings
@@ -67,6 +70,11 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import java.io.File
 import java.time.Instant
+import java.time.LocalDate
+import dev.mahlernim.timelinevisualizer.trips.TripKind
+import dev.mahlernim.timelinevisualizer.trips.TripSuggestion
+import dev.mahlernim.timelinevisualizer.trips.SuggestionConfidence
+import dev.mahlernim.timelinevisualizer.trips.TripsStore
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -88,6 +96,7 @@ class MainActivityTest {
         context.getSharedPreferences("distance-unit-settings", Context.MODE_PRIVATE).edit().clear().commit()
         timelineSourceStore.clearForTest()
         context.getSharedPreferences("video-presets", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("trips_lab", Context.MODE_PRIVATE).edit().clear().commit()
         context.getSystemService(NotificationManager::class.java).deleteNotificationChannel(testNotificationChannel)
     }
 
@@ -109,7 +118,8 @@ class MainActivityTest {
         val activity = launchActivity()
 
         val dropdown = activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown)
-        dropdown.onItemClickListener?.onItemClick(null, null, 1, preset.id.hashCode().toLong())
+        val presetPosition = repository.presets().indexOfFirst { it.id == preset.id } + 1
+        dropdown.onItemClickListener?.onItemClick(null, null, presetPosition, preset.id.hashCode().toLong())
 
         assertEquals("Portrait close", dropdown.text.toString())
         assertEquals(
@@ -142,7 +152,8 @@ class MainActivityTest {
         val preset = repository.add("Balanced", PresetValues.from(CameraSettings.DEFAULT))
         val activity = launchActivity()
         val presetDropdown = activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown)
-        presetDropdown.onItemClickListener?.onItemClick(null, null, 1, preset.id.hashCode().toLong())
+        val presetPosition = repository.presets().indexOfFirst { it.id == preset.id } + 1
+        presetDropdown.onItemClickListener?.onItemClick(null, null, presetPosition, preset.id.hashCode().toLong())
 
         activity.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown)
             .onItemClickListener?.onItemClick(null, null, 1, 1L)
@@ -150,7 +161,72 @@ class MainActivityTest {
 
         activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown)
             .onItemClickListener?.onItemClick(null, null, 2, 2L)
-        assertEquals(activity.getString(R.string.preset_custom), presetDropdown.text.toString())
+        assertEquals(activity.getString(R.string.preset_modified, "Balanced"), presetDropdown.text.toString())
+    }
+
+    @Test
+    fun videoSettingsSummaryStaysCompactAndKeepsAdvancedValuesInDetails() {
+        val activity = launchActivity()
+        val summary = activity.currentVideoSettingsSummary()
+
+        assertTrue(summary.contains(activity.getString(R.string.aspect_square)))
+        assertTrue(summary.contains(activity.resources.getQuantityString(R.plurals.duration_seconds, 30, 30)))
+        assertTrue(!summary.contains(activity.getString(R.string.camera_movement)))
+        assertTrue(!summary.contains("\n"))
+    }
+
+    @Test
+    fun tripWizardSelectsRecommendedPresetAndRestoresStyleStep() {
+        acceptPrivacyDisclosure()
+        val source = Uri.fromFile(repoRoot().resolve("test-fixtures/seoul-bohol-sample.json"))
+        val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
+        waitUntil { timelineSourceStore.importInProgress() == null }
+
+        activity.findViewById<View>(R.id.navigationVideos).performClick()
+        activity.findViewById<View>(R.id.createTripButton).performClick()
+        activity.findViewById<TextView>(R.id.projectTitleInput).text = "Bohol"
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.projectStepGroup).visibility)
+        activity.findViewById<View>(R.id.wizardContinueButton).performClick()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.styleStepGroup).visibility)
+        assertEquals("Bohol", activity.findViewById<TextView>(R.id.titleInput).text.toString())
+        assertEquals("Trip defaults", activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown).text.toString())
+        assertEquals(
+            activity.resources.getQuantityString(R.plurals.duration_seconds, 20, 20),
+            activity.findViewById<AutoCompleteTextView>(R.id.durationDropdown).text.toString(),
+        )
+        assertTrue(
+            activity.findViewById<TextView>(R.id.createStepDetails).contentDescription.toString()
+                .contains(activity.getString(R.string.step_status_completed)),
+        )
+        assertTrue(
+            activity.findViewById<TextView>(R.id.createStepStyle).contentDescription.toString()
+                .contains(activity.getString(R.string.step_status_current)),
+        )
+
+        controller.recreate()
+        val recreated = controller.get()
+        assertEquals(View.VISIBLE, recreated.findViewById<View>(R.id.styleStepGroup).visibility)
+        assertEquals("Bohol", recreated.findViewById<TextView>(R.id.titleInput).text.toString())
+    }
+
+    @Test
+    fun editedBuiltInIsMarkedModifiedAndCanReturnToExactMatch() {
+        val activity = launchActivity()
+        val preset = activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown)
+        preset.onItemClickListener?.onItemClick(null, null, 1, 1L)
+        val duration = activity.findViewById<AutoCompleteTextView>(R.id.durationDropdown)
+
+        duration.onItemClickListener?.onItemClick(null, null, VideoDuration.presets.indexOf(30), 30L)
+
+        assertEquals(
+            activity.getString(R.string.preset_modified, "Trip defaults"),
+            preset.text.toString(),
+        )
+        assertTrue(activity.findViewById<View>(R.id.presetSaveButton).isEnabled)
+
+        duration.onItemClickListener?.onItemClick(null, null, VideoDuration.presets.indexOf(20), 20L)
+        assertEquals("Trip defaults", preset.text.toString())
     }
 
     @Test
@@ -237,6 +313,46 @@ class MainActivityTest {
             "2026 Mina's Timeline",
             list.getChildAt(0).findViewById<android.widget.TextView>(R.id.videoTitle).text.toString(),
         )
+    }
+
+    @Test
+    fun projectAssociatedLibraryVideoUsesTheSharedThumbnailBinder() {
+        val project = TripsStore(context).create(
+            title = "Bohol",
+            start = LocalDate.parse("2026-07-01"),
+            end = LocalDate.parse("2026-07-05"),
+            kind = TripKind.TRIP,
+        )
+        val file = File.createTempFile("project-video", ".mp4", context.cacheDir)
+        val uri = Uri.fromFile(file)
+        val media = VideoMedia(context)
+        val overview = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        overview.eraseColor(android.graphics.Color.CYAN)
+        media.saveGeneratedOverview(uri, overview)
+        overview.recycle()
+        store.upsert(
+            VideoRecord(
+                uri = uri.toString(),
+                title = "Bohol video",
+                fileName = file.name,
+                createdAtMillis = 1_786_900_000_000L,
+                durationSeconds = 20,
+                projectId = project.id,
+            ),
+        )
+
+        try {
+            val activity = launchActivity()
+            val card = activity.window.decorView.findViewWithTag<View>(uri.toString())
+            assertNotNull(card)
+            waitUntil { card!!.findViewById<android.widget.ImageView>(R.id.videoThumbnail).paddingLeft == 0 }
+            assertNotNull(card!!.findViewById<android.widget.ImageView>(R.id.videoThumbnail).drawable)
+        } finally {
+            media.deleteThumbnail(uri)
+            media.deleteOverview(uri)
+            file.delete()
+            TripsStore(context).remove(project.id)
+        }
     }
 
     @Test
@@ -581,7 +697,7 @@ class MainActivityTest {
     }
 
     @Test
-    fun deleteAllVideosRequiresConfirmation() {
+    fun deleteAllLibraryContentRequiresConfirmation() {
         store.upsert(
             VideoRecord(
                 uri = "content://example/video",
@@ -600,7 +716,7 @@ class MainActivityTest {
         val dialog = ShadowDialog.getLatestDialog()
         assertTrue(dialog.isShowing)
         assertEquals(
-            activity.getString(R.string.delete_all_videos_title),
+            activity.getString(R.string.delete_all_library_title),
             dialog.findViewById<TextView>(com.google.android.material.R.id.alertTitle).text.toString(),
         )
     }
@@ -678,12 +794,12 @@ class MainActivityTest {
     fun compactBrazilianPortugueseButtonsRemainSingleLine() = assertCompactButtons()
 
     @Test
-    fun normalLaunchOpensCreateVideoWhenLibraryIsEmpty() {
+    fun normalLaunchOpensTripsWhenLibraryIsEmpty() {
         val activity = launchActivity()
 
-        assertEquals(View.GONE, activity.findViewById<View>(R.id.videosScreen).visibility)
-        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
-        assertEquals(R.id.navigationCreate, activity.findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.bottomNavigation).selectedItemId)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
+        assertEquals(R.id.navigationVideos, activity.findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.bottomNavigation).selectedItemId)
     }
 
     @Test
@@ -980,6 +1096,237 @@ class MainActivityTest {
     }
 
     @Test
+    fun createWithoutTimelineShowsOneTimeSetupGate() {
+        val activity = launchActivity()
+
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
+
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.createTypeStepGroup).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.timelineSourceGroup).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.projectStepGroup).visibility)
+        assertEquals("What would you like to make?", activity.findViewById<TextView>(R.id.createStepText).text.toString())
+    }
+
+    @Test
+    fun importedTimelineShowsFourCreationChoicesWithoutFilePicker() {
+        acceptPrivacyDisclosure()
+        val source = Uri.fromFile(repoRoot().resolve("test-fixtures/trips-lab-sample.json"))
+        val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
+        waitUntil { activity.findViewById<View>(R.id.createTypeStepGroup).visibility == View.VISIBLE }
+
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.timelineSourceGroup).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.tripVideoChoice).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.recapVideoChoice).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.customRecapChoice).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.rawDataChoice).visibility)
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "en-rUS")
+    fun recapTitlesDescribeSingleAndMultiPeriodRanges() {
+        val activity = launchActivity()
+
+        assertEquals(
+            "2024–2026 recap",
+            activity.suggestedProjectTitle(
+                TripKind.YEARLY_RECAP,
+                LocalDate.parse("2024-01-01"),
+                LocalDate.parse("2026-12-31"),
+            ),
+        )
+        assertEquals(
+            "Nov 2025–Feb 2026 recap",
+            activity.suggestedProjectTitle(
+                TripKind.MONTHLY_RECAP,
+                LocalDate.parse("2025-11-01"),
+                LocalDate.parse("2026-02-28"),
+            ),
+        )
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "ko-rKR")
+    fun recapTitlesUseKoreanResources() {
+        val activity = launchActivity()
+
+        val title = activity.suggestedProjectTitle(
+            TripKind.MONTHLY_RECAP,
+            LocalDate.parse("2025-11-01"),
+            LocalDate.parse("2026-02-28"),
+        )
+
+        assertTrue(title.contains("요약"))
+        assertTrue(title.contains("2025"))
+        assertTrue(title.contains("2026"))
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "en-rUS")
+    fun exportTitleResolvesOptionalNameBeforeGeneration() {
+        val activity = launchActivity()
+        activity.findViewById<TextView>(R.id.ownerInput).text = "Mina"
+        activity.findViewById<TextView>(R.id.titleInput).text = "{name}'s Feb–Jun 2026 recap"
+
+        assertEquals(
+            "Mina's Feb–Jun 2026 recap",
+            activity.resolvedTitle(TimelinePeriod.sameYear(2026, 2, 6)),
+        )
+
+        activity.findViewById<TextView>(R.id.ownerInput).text = ""
+        activity.findViewById<TextView>(R.id.titleInput).text = "Feb–Jun 2026 recap"
+        assertEquals(
+            "Feb–Jun 2026 recap",
+            activity.resolvedTitle(TimelinePeriod.sameYear(2026, 2, 6)),
+        )
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "en-rUS")
+    fun rawTitleUsesInclusiveDayCountAndTripTitleUsesDestinationFallback() {
+        val activity = launchActivity()
+
+        assertEquals(
+            "Recent 30-day recap",
+            activity.suggestedProjectTitle(
+                TripKind.RAW_DATA,
+                LocalDate.parse("2026-07-01"),
+                LocalDate.parse("2026-07-30"),
+            ),
+        )
+        assertEquals(
+            "Trip to Bohol",
+            activity.tripSuggestionTitle(
+                TripSuggestion(
+                    id = "named",
+                    startDate = LocalDate.parse("2026-07-01"),
+                    endDate = LocalDate.parse("2026-07-05"),
+                    confidence = SuggestionConfidence.STRONG,
+                    destinationName = "Bohol",
+                    distanceFromHomeKm = 4_000.0,
+                ),
+            ),
+        )
+        assertEquals(
+            "Suggested trip",
+            activity.tripSuggestionTitle(
+                TripSuggestion(
+                    id = "unnamed",
+                    startDate = LocalDate.parse("2026-07-01"),
+                    endDate = LocalDate.parse("2026-07-05"),
+                    confidence = SuggestionConfidence.POSSIBLE,
+                    destinationName = null,
+                    distanceFromHomeKm = 350.0,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun rawRangeValidationRejectsDatesOutsideActualBounds() {
+        val activity = launchActivity()
+        val bounds = LocalDate.parse("2026-07-01") to LocalDate.parse("2026-07-30")
+
+        assertTrue(activity.isDateRangeWithinBounds(LocalDate.parse("2026-07-05"), LocalDate.parse("2026-07-20"), bounds))
+        assertTrue(!activity.isDateRangeWithinBounds(LocalDate.parse("2026-06-30"), LocalDate.parse("2026-07-20"), bounds))
+        assertTrue(!activity.isDateRangeWithinBounds(LocalDate.parse("2026-07-05"), LocalDate.parse("2026-07-31"), bounds))
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "en-rUS")
+    fun rawProjectUsesActualRawBoundsAndUpdatesItsInclusiveTitle() {
+        acceptPrivacyDisclosure()
+        val source = Uri.fromFile(repoRoot().resolve("test-fixtures/semantic-and-raw-ranges.json"))
+        val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
+        waitUntil { activity.findViewById<View>(R.id.rawDataChoice).visibility == View.VISIBLE }
+
+        activity.findViewById<View>(R.id.rawDataChoice).performClick()
+
+        waitUntil { activity.findViewById<View>(R.id.rawDataAvailabilityGroup).visibility == View.VISIBLE }
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.rawDataAvailabilityGroup).visibility)
+        assertTrue(activity.findViewById<TextView>(R.id.rawDataAvailabilityText).text.toString().contains("Feb"))
+        assertEquals("Recent 5-day recap", activity.findViewById<TextView>(R.id.projectTitleInput).text.toString())
+        assertEquals("Recent 5-day recap", activity.findViewById<TextView>(R.id.titleInput).text.toString())
+        activity.findViewById<TextView>(R.id.ownerInput).text = "Mina"
+        assertEquals("Mina's Recent 5-day recap", activity.findViewById<TextView>(R.id.titleInput).text.toString())
+        assertEquals("Mina's Recent 5-day recap", activity.resolvedTitle(TimelinePeriod.sameYear(2026, 2, 2)))
+        assertTrue(activity.applyExactDateRange(LocalDate.parse("2026-02-02"), LocalDate.parse("2026-02-04")))
+        assertEquals("Recent 3-day recap", activity.findViewById<TextView>(R.id.projectTitleInput).text.toString())
+        assertTrue(!activity.applyExactDateRange(LocalDate.parse("2026-01-30"), LocalDate.parse("2026-02-04")))
+        assertEquals("Recent 3-day recap", activity.findViewById<TextView>(R.id.projectTitleInput).text.toString())
+    }
+
+    @Test
+    fun tripVideoChoiceOffersSavedDiscoveryAndManualSources() {
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
+
+        activity.findViewById<View>(R.id.tripVideoChoice).performClick()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.tripSourceStepGroup).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.findTripsButton).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.createTripButton).visibility)
+    }
+
+    @Test
+    @Config(sdk = [35])
+    fun advancedSettingsCancelDiscardsAndApplyKeepsChangesInTheDraft() {
+        acceptPrivacyDisclosure()
+        val source = Uri.fromFile(repoRoot().resolve("test-fixtures/seoul-bohol-sample.json"))
+        val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
+        waitUntil { activity.findViewById<View>(R.id.editorGroup).visibility == View.VISIBLE }
+        activity.findViewById<View>(R.id.tripVideoChoice).performClick()
+        activity.findViewById<View>(R.id.createTripButton).performClick()
+        val title = activity.findViewById<TextView>(R.id.projectTitleInput)
+        title.text = "Bohol test trip"
+        assertTrue(activity.findViewById<TextView>(R.id.projectDateText).text.toString().contains("–"))
+        assertTrue(activity.findViewById<TextView>(R.id.projectCoverageText).text.toString().contains("points"))
+        activity.findViewById<View>(R.id.wizardContinueButton).performClick()
+        val originalMovement = activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString()
+        activity.findViewById<View>(R.id.customizeSettingsButton).performClick()
+
+        var dialog = ShadowDialog.getLatestDialog() as BottomSheetDialog
+        assertTrue(dialog.isShowing)
+        dialog.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown)!!
+            .onItemClickListener?.onItemClick(null, null, 3, 3L)
+        dialog.findViewById<View>(R.id.cancelButton)!!.performClick()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.styleStepGroup).visibility)
+        assertEquals("Bohol test trip", activity.findViewById<TextView>(R.id.projectTitleInput).text.toString())
+        assertEquals(
+            originalMovement,
+            activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
+        )
+
+        activity.findViewById<View>(R.id.customizeSettingsButton).performClick()
+        dialog = ShadowDialog.getLatestDialog() as BottomSheetDialog
+        dialog.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown)!!
+            .onItemClickListener?.onItemClick(null, null, 2, 2L)
+        dialog.findViewById<View>(R.id.applyButton)!!.performClick()
+
+        assertEquals(
+            activity.getString(R.string.camera_dynamic),
+            activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
+        )
+        assertEquals(CameraSettings.DEFAULT, CameraSettingsPreferences(context).load())
+    }
+
+    @Test
+    fun createAnotherClearsTheDraftAndReturnsToDetails() {
+        val activity = launchActivity()
+        activity.findViewById<TextView>(R.id.ownerInput).text = "Mina"
+        activity.findViewById<TextView>(R.id.titleInput).text = "Edited trip"
+
+        activity.prepareAnotherVideo()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.timelineSourceGroup).visibility)
+        assertTrue(
+            activity.findViewById<TextView>(R.id.createStepDetails).contentDescription.toString()
+                .contains(activity.getString(R.string.step_status_current)),
+        )
+        assertTrue(activity.findViewById<TextView>(R.id.titleInput).text.toString() != "Edited trip")
+    }
+
+    @Test
     fun backFromNewVideoReturnsToVideosWithoutCancellingExport() {
         val activity = launchActivity()
         activity.findViewById<View>(R.id.navigationCreate).performClick()
@@ -1199,7 +1546,6 @@ class MainActivityTest {
             waitUntil { activity.findViewById<View>(R.id.editorGroup).visibility == View.VISIBLE }
 
             assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.rawSignalsDescription).visibility)
-            assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.rawAccuracyLayout).visibility)
             assertTrue(activity.findViewById<TextView>(R.id.periodSummaryText).text.contains("2"))
         } finally {
             source.delete()

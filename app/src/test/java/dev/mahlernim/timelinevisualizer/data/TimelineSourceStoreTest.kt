@@ -11,6 +11,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.LocalDate
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -54,5 +55,42 @@ class TimelineSourceStoreTest {
 
         assertEquals(source, store.load())
         assertNull(store.importInProgress())
+    }
+
+    @Test
+    fun storesLocalSourceSummaryAndClearsItWithTheMasterSource() {
+        val metadata = TimelineSourceMetadata(
+            fileName = "Timeline.json",
+            importedAtMillis = 1234L,
+            semanticStart = LocalDate.parse("2020-01-02"),
+            semanticEnd = LocalDate.parse("2026-08-23"),
+            rawStart = LocalDate.parse("2026-08-01"),
+            rawEnd = LocalDate.parse("2026-08-23"),
+            fileSizeBytes = 58L * 1024L * 1024L,
+        )
+        store.replace(Uri.parse("content://example/timeline.json"))
+        store.updateMetadata(metadata)
+
+        assertEquals(metadata, TimelineSourceStore(context).metadata())
+
+        store.clear()
+        assertNull(store.metadata())
+    }
+
+    @Test
+    fun olderMetadataWithoutFileSizeRemainsReadable() {
+        val metadata = TimelineSourceMetadata(
+            fileName = "Timeline.json",
+            importedAtMillis = 1234L,
+            semanticStart = null,
+            semanticEnd = null,
+            rawStart = null,
+            rawEnd = null,
+        )
+
+        store.updateMetadata(metadata)
+
+        assertEquals(metadata, store.metadata())
+        assertNull(store.metadata()?.fileSizeBytes)
     }
 }

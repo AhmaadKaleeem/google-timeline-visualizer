@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">
@@ -17,8 +16,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:maxLines="1"
-            android:text="@string/my_videos"
+            android:text="@string/library"
             android:textAppearance="?attr/textAppearanceHeadlineMedium"
             android:textStyle="bold" />
 
@@ -26,33 +24,67 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="@string/tagline"
+            android:text="@string/library_summary"
             android:textAppearance="?attr/textAppearanceBodyMedium" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/addExistingVideoButton"
-            style="@style/Widget.Material3.Button.OutlinedButton"
+        <TextView
+            android:id="@+id/emptyLibraryText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
-            android:maxLines="1"
-            android:text="@string/add_videos" />
+            android:text="@string/library_empty"
+            android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+        <TextView
+            android:id="@+id/tripsHeading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="@string/confirmed_trips"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/tripsList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <TextView
+            android:id="@+id/recapsHeading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/recaps"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/recapsList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <TextView
+            android:id="@+id/unassignedVideosHeading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/unassigned_videos"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:textStyle="bold"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/emptyVideosText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:gravity="center"
-            android:paddingVertical="40dp"
-            android:text="@string/no_videos"
-            android:textAppearance="?attr/textAppearanceBodyLarge" />
+            android:visibility="gone" />
 
         <LinearLayout
             android:id="@+id/videosList"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
             android:orientation="vertical" />
 
         <com.google.android.material.button.MaterialButton
@@ -71,9 +103,8 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:maxLines="1"
-            android:text="@string/delete_all_videos"
+            android:text="@string/delete_all_library_content"
             android:textColor="?attr/colorError"
             android:visibility="gone" />
-
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
