@@ -8,6 +8,7 @@ import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import dev.mahlernim.timelinevisualizer.render.RenderText
 import dev.mahlernim.timelinevisualizer.render.CameraSettings
 import dev.mahlernim.timelinevisualizer.render.CameraMovement
+import dev.mahlernim.timelinevisualizer.render.ExportFormatSettings
 import dev.mahlernim.timelinevisualizer.render.LongTripCompression
 import dev.mahlernim.timelinevisualizer.render.LocalFraming
 import dev.mahlernim.timelinevisualizer.render.TripDetection
@@ -109,6 +110,22 @@ class VideoExportRequestStoreTest {
     }
 
     @Test
+    fun restoresCustomResolutionAndFrameRate() {
+        val format = ExportFormatSettings(2000, 25, customResolution = true, customFrameRate = true)
+        val request = VideoExportRequest(
+            outputUri = "content://documents/custom.mp4",
+            journey = Journey.from(emptyList(), 2026),
+            title = "Custom",
+            durationSeconds = 30,
+            cameraSettings = CameraSettings.DEFAULT.copy(exportFormat = format),
+        )
+
+        store.save(request)
+
+        assertEquals(format, store.load()!!.cameraSettings.exportFormat)
+    }
+
+    @Test
     fun readsVersionOneAsASameYearEnglishRequest() {
         val requestFile = File(context.filesDir, "pending-video-export.bin")
         DataOutputStream(requestFile.outputStream().buffered()).use { output ->
@@ -130,7 +147,9 @@ class VideoExportRequestStoreTest {
         assertEquals(YearMonth.of(2025, 3), restored.period.start)
         assertEquals(YearMonth.of(2025, 11), restored.period.endInclusive)
         assertEquals(RenderText.ENGLISH, restored.renderText)
-        assertEquals(CameraSettings.DEFAULT.copy(localFraming = LocalFraming.OFF), restored.cameraSettings)
+        assertEquals(VideoQuality.STANDARD, restored.cameraSettings.videoQuality)
+        assertEquals(24, restored.cameraSettings.effectiveExportFormat.frameRate)
+        assertEquals(LocalFraming.OFF, restored.cameraSettings.localFraming)
         assertEquals(1, restored.journey.points.size)
     }
 
