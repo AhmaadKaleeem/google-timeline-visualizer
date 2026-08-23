@@ -24,6 +24,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import dev.mahlernim.timelinevisualizer.videos.VideoDataSource
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -63,6 +64,9 @@ class VideoExportRequestStoreTest {
                 tripDetection = TripDetection.SENSITIVE,
                 localFraming = LocalFraming.CLOSE,
             ),
+            projectId = "trip-123",
+            presetName = "Cinematic",
+            dataSource = VideoDataSource.RAW,
         )
 
         store.save(request)
@@ -74,6 +78,9 @@ class VideoExportRequestStoreTest {
         assertEquals(request.period, restored.period)
         assertEquals(request.renderText, restored.renderText)
         assertEquals(request.cameraSettings, restored.cameraSettings)
+        assertEquals(request.projectId, restored.projectId)
+        assertEquals(request.presetName, restored.presetName)
+        assertEquals(VideoDataSource.RAW, restored.dataSource)
         assertEquals(request.journey.points, restored.journey.points)
     }
 
@@ -126,6 +133,42 @@ class VideoExportRequestStoreTest {
     }
 
     @Test
+    fun readsProductionVersionNineExportFormat() {
+        writeModernRequest(version = 9) { output ->
+            output.writeBoolean(true)
+            output.writeInt(1440)
+            output.writeInt(60)
+            output.writeBoolean(false)
+            output.writeBoolean(false)
+        }
+
+        val restored = store.load()!!
+
+        assertEquals(1440, restored.cameraSettings.effectiveExportFormat.shortEdge)
+        assertEquals(60, restored.cameraSettings.effectiveExportFormat.frameRate)
+        assertNull(restored.projectId)
+        assertEquals(VideoDataSource.SEMANTIC, restored.dataSource)
+    }
+
+    @Test
+    fun readsTripsLabFourVersionTenAssociationsWithoutExportFormat() {
+        writeModernRequest(version = 10) { output ->
+            output.writeBoolean(true)
+            output.writeUTF("trip-lab-4")
+            output.writeBoolean(true)
+            output.writeUTF("Historical preset")
+            output.writeUTF(VideoDataSource.RAW.name)
+        }
+
+        val restored = store.load()!!
+
+        assertEquals(480, restored.cameraSettings.effectiveExportFormat.shortEdge)
+        assertEquals("trip-lab-4", restored.projectId)
+        assertEquals("Historical preset", restored.presetName)
+        assertEquals(VideoDataSource.RAW, restored.dataSource)
+    }
+
+    @Test
     fun readsVersionOneAsASameYearEnglishRequest() {
         val requestFile = File(context.filesDir, "pending-video-export.bin")
         DataOutputStream(requestFile.outputStream().buffered()).use { output ->
@@ -151,6 +194,33 @@ class VideoExportRequestStoreTest {
         assertEquals(24, restored.cameraSettings.effectiveExportFormat.frameRate)
         assertEquals(LocalFraming.OFF, restored.cameraSettings.localFraming)
         assertEquals(1, restored.journey.points.size)
+    }
+
+    private fun writeModernRequest(version: Int, extra: (DataOutputStream) -> Unit) {
+        val requestFile = File(context.filesDir, "pending-video-export.bin")
+        DataOutputStream(requestFile.outputStream().buffered()).use { output ->
+            output.writeInt(version)
+            output.writeUTF("content://documents/compatible.mp4")
+            output.writeUTF("Compatible request")
+            output.writeInt(30)
+            output.writeInt(2026)
+            output.writeInt(1)
+            output.writeInt(2026)
+            output.writeInt(1)
+            output.writeUTF("en-US")
+            output.writeUTF("My Timeline")
+            output.writeUTF("MMMM yyyy")
+            output.writeUTF("km")
+            output.writeUTF("attribution")
+            output.writeDouble(1.0)
+            output.writeUTF(CameraMovement.STEADY.name)
+            output.writeUTF(LongTripCompression.BALANCED.name)
+            output.writeUTF(VideoQuality.STANDARD.name)
+            output.writeUTF(TripDetection.BALANCED.name)
+            output.writeUTF(LocalFraming.BALANCED.name)
+            extra(output)
+            output.writeInt(0)
+        }
     }
 
     @Test

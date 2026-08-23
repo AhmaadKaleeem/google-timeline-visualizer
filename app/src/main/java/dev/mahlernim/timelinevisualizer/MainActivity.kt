@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.content.pm.PackageManager
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -16,12 +17,17 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
+import android.provider.OpenableColumns
 import android.text.InputType
+import android.text.format.Formatter
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.widget.AutoCompleteTextView
 import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.TextView
+import android.widget.PopupMenu
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.addCallback
 import androidx.activity.viewModels
@@ -46,6 +52,12 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.datepicker.CalendarConstraints
+import com.google.android.material.datepicker.CompositeDateValidator
+import com.google.android.material.datepicker.DateValidatorPointBackward
+import com.google.android.material.datepicker.DateValidatorPointForward
 import com.google.android.material.datepicker.MaterialDatePicker
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputEditText
@@ -59,12 +71,15 @@ import dev.mahlernim.timelinevisualizer.data.RawSignalProcessor
 import dev.mahlernim.timelinevisualizer.data.TimelineParseException
 import dev.mahlernim.timelinevisualizer.data.TimelineParseReason
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
+import dev.mahlernim.timelinevisualizer.data.TimelineSourceMetadata
 import dev.mahlernim.timelinevisualizer.databinding.ActivityMainBinding
 import dev.mahlernim.timelinevisualizer.databinding.ItemVideoBinding
+import dev.mahlernim.timelinevisualizer.databinding.ItemTripBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenNewVideoBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenPlayerBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenSettingsBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenVideosBinding
+import dev.mahlernim.timelinevisualizer.databinding.SheetAdvancedVideoSettingsBinding
 import dev.mahlernim.timelinevisualizer.export.ExportProgress
 import dev.mahlernim.timelinevisualizer.export.ExportEtaEstimator
 import dev.mahlernim.timelinevisualizer.export.ExportPhase
@@ -102,6 +117,7 @@ import dev.mahlernim.timelinevisualizer.render.TripDetection
 import dev.mahlernim.timelinevisualizer.render.VideoAspectRatio
 import dev.mahlernim.timelinevisualizer.render.VideoFormat
 import dev.mahlernim.timelinevisualizer.render.VideoQuality
+import dev.mahlernim.timelinevisualizer.render.VideoResolution
 import dev.mahlernim.timelinevisualizer.ui.CameraSettingsPreferences
 import dev.mahlernim.timelinevisualizer.ui.DistanceUnitPreferences
 import dev.mahlernim.timelinevisualizer.ui.AppLanguage
@@ -111,8 +127,22 @@ import dev.mahlernim.timelinevisualizer.ui.SettingsViewModel
 import dev.mahlernim.timelinevisualizer.videos.GeneratedMediaRepository
 import dev.mahlernim.timelinevisualizer.videos.VideoMedia
 import dev.mahlernim.timelinevisualizer.videos.VideoRecord
+import dev.mahlernim.timelinevisualizer.videos.VideoSettingsSnapshot
 import dev.mahlernim.timelinevisualizer.videos.VideoLibraryViewModel
 import dev.mahlernim.timelinevisualizer.videos.VideoStore
+import dev.mahlernim.timelinevisualizer.videos.VideoDataSource
+import dev.mahlernim.timelinevisualizer.trips.SuggestionConfidence
+import dev.mahlernim.timelinevisualizer.trips.TripDetector
+import dev.mahlernim.timelinevisualizer.trips.TripDetectionRequest
+import dev.mahlernim.timelinevisualizer.trips.TripKind
+import dev.mahlernim.timelinevisualizer.trips.TripProject
+import dev.mahlernim.timelinevisualizer.trips.TripSuggestion
+import dev.mahlernim.timelinevisualizer.trips.TripsStore
+import dev.mahlernim.timelinevisualizer.trips.OfflineDestinationNameResolver
+import dev.mahlernim.timelinevisualizer.trips.TripCoverage
+import dev.mahlernim.timelinevisualizer.trips.TripCoverageCalculator
+import dev.mahlernim.timelinevisualizer.trips.ProjectTitleMode
+import dev.mahlernim.timelinevisualizer.trips.RecapPeriodRules
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -130,6 +160,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.time.temporal.ChronoUnit
 import androidx.core.util.Pair as AndroidPair
 import kotlin.math.ceil
 
@@ -164,12 +195,14 @@ class MainActivity : AppCompatActivity() {
     private var selectedEndDate: LocalDate? = null
     private val titleHandler = Handler(Looper.getMainLooper())
     private val monthNames by lazy { DateFormatSymbols.getInstance().months.take(12) }
+    private val shortMonthNames by lazy { DateFormatSymbols.getInstance().shortMonths.take(12) }
     private val preferences by lazy { getSharedPreferences("display", MODE_PRIVATE) }
     private val videoMedia by lazy { VideoMedia(applicationContext) }
     private val generatedMedia by lazy { GeneratedMediaRepository(applicationContext) }
     private val timelineLoader by lazy { CachedTimelineLoader(applicationContext) }
     private val timelineSourceStore by lazy { TimelineSourceStore(applicationContext) }
     private val presetRepository by lazy { PresetRepository(applicationContext) }
+    private val tripsStore by lazy { TripsStore(applicationContext) }
     private val settingsViewModel by viewModels<SettingsViewModel> {
         viewModelFactory {
             initializer {
@@ -195,6 +228,7 @@ class MainActivity : AppCompatActivity() {
     private var routeDurationSeconds = VideoDuration.DEFAULT_SECONDS
     private val applyTitleChanges = Runnable { commitTitlePreferences() }
     private var videoRenderJob: Job? = null
+    private val videoCardJobs = mutableListOf<Job>()
     private var videosExpanded = false
     private var currentScreen = Screen.VIDEOS
     private var rememberedTimelineLoaded = false
@@ -210,7 +244,33 @@ class MainActivity : AppCompatActivity() {
     private var exportingVideo = false
     private var pendingImportCompletionUri: Uri? = null
     private var activePresetId: String? = null
+    private var presetOriginId: String? = null
+    private var modifiedBuiltInId: String? = null
     private var presetsConfigured = false
+    private var tripSuggestions: List<TripSuggestion> = emptyList()
+    private var suggestionsExpanded = false
+    private var activeProjectId: String? = null
+    private var activeProjectKind = TripKind.TRIP
+    private var activeStartDate: LocalDate? = null
+    private var activeEndDate: LocalDate? = null
+    private var activeSuggestionId: String? = null
+    private var currentCreateStep = CreateStep.TYPE
+    private var videoTitleUserEdited = false
+    private var updatingVideoTitle = false
+    private var activeProjectTitleMode = ProjectTitleMode.CUSTOM
+    private var updatingProjectTitle = false
+    private var endPeriodEnabled = false
+    private var editingProjectOnly = false
+    private var detectionStartDate: LocalDate? = null
+    private var detectionEndDate: LocalDate? = null
+    private var selectedDetectionYear: Int? = null
+    private var detectionYears: List<Int> = emptyList()
+    private var tripDiscoveryRequested = false
+    private var settingsReturnToCreate = false
+    private var customizationOriginalCamera: CameraSettings? = null
+    private var customizationOriginalPresetId: String? = null
+    private var customizationOriginalModifiedBuiltInId: String? = null
+    private var rawProjectRangeConflict = false
 
     private val openTimeline = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importTimeline(uri)
@@ -241,10 +301,6 @@ class MainActivity : AppCompatActivity() {
     private val requestNotificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { openExportDestination() }
-
-    private val addExistingVideos = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) importExistingVideos(uris)
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -281,8 +337,8 @@ class MainActivity : AppCompatActivity() {
             if (syncingBottomNavigation) return@setOnItemSelectedListener true
             when (item.itemId) {
                 R.id.navigationVideos -> showVideos(acknowledgeCompletion = true)
-                R.id.navigationCreate -> showNewVideo(loadRemembered = true)
-                R.id.navigationSettings -> showSettings()
+                R.id.navigationCreate -> openCreateTab()
+                R.id.navigationSettings -> showSettings(fromCreate = false)
                 else -> return@setOnItemSelectedListener false
             }
             true
@@ -300,6 +356,12 @@ class MainActivity : AppCompatActivity() {
         editor.doneButton.setOnClickListener {
             videoExportViewModel.clear()
             editor.videoReadyGroup.visibility = View.GONE
+            resetCreateEntry()
+            showVideos()
+        }
+        editor.viewInTripButton.setOnClickListener {
+            videoExportViewModel.clear()
+            editor.videoReadyGroup.visibility = View.GONE
             showVideos()
         }
         editor.saveAsButton.setOnClickListener { lastVideoUri?.let(::chooseVideoCopyDestination) }
@@ -313,15 +375,62 @@ class MainActivity : AppCompatActivity() {
         editor.shareOverviewButton.setOnClickListener { lastVideoUri?.let(::shareOverviewImage) }
         editor.watchVideoButton.setOnClickListener { lastVideoUri?.let(::watchVideo) }
         editor.createAnotherButton.setOnClickListener { prepareAnotherVideo() }
-        home.addExistingVideoButton.setOnClickListener { addExistingVideos.launch(arrayOf("video/mp4")) }
+        editor.saveTripButton.setOnClickListener {
+            if (saveActiveProject(asNew = false) != null && editingProjectOnly) {
+                editingProjectOnly = false
+                Snackbar.make(binding.root, R.string.project_changes_saved, Snackbar.LENGTH_SHORT).show()
+                showVideos()
+            }
+        }
+        editor.saveAsNewTripButton.setOnClickListener { saveActiveProject(asNew = true) }
+        editor.wizardBackButton.setOnClickListener { moveCreateStep(-1) }
+        editor.wizardContinueButton.setOnClickListener { moveCreateStep(1) }
+        editor.customizeSettingsButton.setOnClickListener { showAdvancedVideoSettingsSheet() }
+        editor.useAvailableRawRangeButton.setOnClickListener { useAvailableRawRange() }
+        editor.tripVideoChoice.setOnClickListener {
+            currentCreateStep = CreateStep.TRIP_SOURCE
+            renderCreateStep()
+        }
+        editor.recapVideoChoice.setOnClickListener { chooseRecapKind() }
+        editor.customRecapChoice.setOnClickListener { startManualProject(TripKind.CUSTOM_RECAP) }
+        editor.rawDataChoice.setOnClickListener {
+            if (renderRawSignalsTimeline != null) startManualProject(TripKind.RAW_DATA)
+        }
+        editor.addEndPeriodButton.setOnClickListener {
+            endPeriodEnabled = !endPeriodEnabled
+            if (!endPeriodEnabled) {
+                selectedEndYear = selectedStartYear
+                selectedEndMonth = selectedStartMonth
+            }
+            updateProjectPeriodControls()
+            onProjectPeriodChanged()
+        }
+        editor.resetSuggestedTitleButton.setOnClickListener {
+            activeProjectTitleMode = ProjectTitleMode.AUTOMATIC
+            updateSuggestedProjectTitle(force = true)
+        }
+        editor.findTripsButton.setOnClickListener { showTripDiscovery() }
+        editor.createTripButton.setOnClickListener { startManualProject(TripKind.TRIP) }
+        editor.runTripDetectionButton.setOnClickListener { runTripDetection() }
+        editor.detectionCustomRangeButton.setOnClickListener { chooseDetectionRange() }
+        editor.showAllSuggestionsButton.setOnClickListener {
+            suggestionsExpanded = !suggestionsExpanded
+            renderTrips()
+        }
         home.showAllVideosButton.setOnClickListener {
             videosExpanded = !videosExpanded
             renderVideos()
         }
-        home.deleteAllVideosButton.setOnClickListener { confirmDeleteAllVideos() }
+        home.deleteAllVideosButton.setOnClickListener { confirmDeleteAllLibraryContent() }
         settingsScreen.privacyPolicyButton.setOnClickListener { openPrivacyPolicy() }
         settingsScreen.githubProjectButton.setOnClickListener { openWebPage(PROJECT_URL, R.string.web_page_unavailable) }
         settingsScreen.checkUpdatesButton.setOnClickListener { openUpdates() }
+        settingsScreen.managePresetsButton.setOnClickListener { showPresetManager() }
+        settingsScreen.cancelCustomizeButton.setOnClickListener { finishVideoCustomization(apply = false) }
+        settingsScreen.applyCustomizeButton.setOnClickListener { finishVideoCustomization(apply = true) }
+        settingsScreen.settingsImportTimelineButton.setOnClickListener { requestTimelineImport() }
+        settingsScreen.settingsTimelineHelpButton.setOnClickListener { showExportHelp() }
+        settingsScreen.settingsTimelineRestoreButton.setOnClickListener { openRestoreGuide() }
         settingsScreen.versionText.text = installedVersionLabel()
         playerScreen.playerBackButton.setOnClickListener { showVideos(acknowledgeCompletion = true) }
         playerScreen.playerShareButton.setOnClickListener { playerUri?.let(::shareVideo) }
@@ -332,7 +441,15 @@ class MainActivity : AppCompatActivity() {
         }
         playerScreen.playerExternalButton.setOnClickListener { playerUri?.let(::openExternalVideoPlayer) }
         onBackPressedDispatcher.addCallback(this) {
-            if (currentScreen == Screen.VIDEOS) finish() else showVideos(acknowledgeCompletion = true)
+            if (currentScreen == Screen.NEW_VIDEO) {
+                if (currentCreateStep == CreateStep.TYPE) showVideos(acknowledgeCompletion = true) else moveCreateStep(-1)
+            } else if (currentScreen == Screen.SETTINGS && settingsReturnToCreate) {
+                finishVideoCustomization(apply = false)
+            } else if (currentScreen == Screen.VIDEOS) {
+                finish()
+            } else {
+                showVideos(acknowledgeCompletion = true)
+            }
         }
         editor.timelineSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -346,12 +463,29 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
         })
 
-        editor.ownerInput.setText(preferences.getString("owner_name", null) ?: deviceName())
+        editor.ownerInput.setText(preferences.getString("owner_name", null).orEmpty())
         editor.titleInput.setText(
             preferences.getString("title_template", null) ?: getString(R.string.default_title_template),
         )
-        editor.ownerInput.doAfterTextChanged { scheduleTitleUpdate() }
-        editor.titleInput.doAfterTextChanged { scheduleTitleUpdate() }
+        editor.ownerInput.doAfterTextChanged {
+            if (!videoTitleUserEdited) {
+                setAutomaticVideoTitle(editor.projectTitleInput.text?.toString().orEmpty())
+            }
+            scheduleTitleUpdate()
+        }
+        editor.titleInput.doAfterTextChanged {
+            if (!updatingVideoTitle) videoTitleUserEdited = true
+            scheduleTitleUpdate()
+        }
+        editor.projectTitleInput.doAfterTextChanged { value ->
+            if (!updatingProjectTitle) {
+                activeProjectTitleMode = ProjectTitleMode.CUSTOM
+                editor.resetSuggestedTitleButton.visibility = if (activeProjectKind == TripKind.TRIP) View.GONE else View.VISIBLE
+            }
+            if (!videoTitleUserEdited) {
+                setAutomaticVideoTitle(value?.toString().orEmpty())
+            }
+        }
         editor.ownerInput.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commitTitlePreferences() }
         editor.titleInput.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commitTitlePreferences() }
 
@@ -378,6 +512,34 @@ class MainActivity : AppCompatActivity() {
         configureCameraPreparation()
         configureMonthDropdowns()
         configureExactDates()
+        configureTripDiscovery()
+        activeProjectId = savedInstanceState?.getString(STATE_ACTIVE_PROJECT_ID)
+        activeSuggestionId = savedInstanceState?.getString(STATE_ACTIVE_SUGGESTION_ID)
+        activeProjectKind = savedInstanceState?.getString(STATE_ACTIVE_PROJECT_KIND)
+            ?.let { runCatching { TripKind.valueOf(it) }.getOrNull() }
+            ?: TripKind.TRIP
+        activeProjectTitleMode = savedInstanceState?.getString(STATE_ACTIVE_TITLE_MODE)
+            ?.let { runCatching { ProjectTitleMode.valueOf(it) }.getOrNull() }
+            ?: activeProjectId?.let { id -> tripsStore.list().firstOrNull { it.id == id }?.titleMode }
+            ?: ProjectTitleMode.CUSTOM
+        endPeriodEnabled = savedInstanceState?.getBoolean(STATE_END_PERIOD_ENABLED) ?: false
+        editingProjectOnly = savedInstanceState?.getBoolean(STATE_EDITING_PROJECT_ONLY) ?: false
+        activeStartDate = savedInstanceState?.getString(STATE_ACTIVE_START_DATE)
+            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        activeEndDate = savedInstanceState?.getString(STATE_ACTIVE_END_DATE)
+            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        modifiedBuiltInId = savedInstanceState?.getString(STATE_MODIFIED_BUILT_IN_ID)
+        presetOriginId = savedInstanceState?.getString(STATE_PRESET_ORIGIN_ID)
+        currentCreateStep = savedInstanceState?.getString(STATE_CREATE_STEP)
+            ?.let { runCatching { CreateStep.valueOf(it) }.getOrNull() }
+            ?: CreateStep.TYPE
+        settingsReturnToCreate = savedInstanceState?.getBoolean(STATE_SETTINGS_RETURN_TO_CREATE) ?: false
+        customizationOriginalCamera = restoreCustomizationCamera(savedInstanceState)
+        customizationOriginalPresetId = savedInstanceState?.getString(STATE_CUSTOMIZATION_PRESET_ID)
+        customizationOriginalModifiedBuiltInId = savedInstanceState?.getString(STATE_CUSTOMIZATION_MODIFIED_ID)
+        videoTitleUserEdited = savedInstanceState?.getBoolean(STATE_VIDEO_TITLE_EDITED) ?: false
+        savedInstanceState?.getInt(STATE_DRAFT_DURATION, VideoDuration.DEFAULT_SECONDS)?.let(::applyDuration)
+        renderCreateStep()
         renderVideos()
         lifecycleScope.launch(Dispatchers.IO) { videoMedia.pruneOverviewCache() }
         observeVideoExport()
@@ -403,19 +565,14 @@ class MainActivity : AppCompatActivity() {
         } else when (savedInstanceState?.getString(STATE_SCREEN)) {
             Screen.NEW_VIDEO.name -> showNewVideo(loadRemembered = true)
             Screen.VIDEOS.name -> showVideos()
-            Screen.SETTINGS.name -> showSettings()
+            Screen.SETTINGS.name -> showSettings(fromCreate = settingsReturnToCreate)
             Screen.PLAYER.name -> playerUri?.let { showVideoPlayer(it, resetPosition = false) } ?: showVideos()
             else -> showDefaultLaunchScreen()
         }
     }
 
     private fun showDefaultLaunchScreen() {
-        val exportInProgress = videoExportViewModel.current.status == VideoExportStatus.RUNNING
-        if (videoLibraryViewModel.records.value.isEmpty() && !exportInProgress) {
-            showNewVideo(loadRemembered = true)
-        } else {
-            showVideos()
-        }
+        showVideos()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -438,6 +595,29 @@ class MainActivity : AppCompatActivity() {
         outState.putString(STATE_DRAFT_TRIP_DETECTION, cameraSettings.tripDetection.name)
         outState.putString(STATE_DRAFT_LOCAL_FRAMING, cameraSettings.localFraming.name)
         outState.putString(STATE_ACTIVE_PRESET_ID, activePresetId)
+        outState.putString(STATE_MODIFIED_BUILT_IN_ID, modifiedBuiltInId)
+        outState.putString(STATE_PRESET_ORIGIN_ID, presetOriginId)
+        outState.putString(STATE_CREATE_STEP, currentCreateStep.name)
+        outState.putBoolean(STATE_VIDEO_TITLE_EDITED, videoTitleUserEdited)
+        outState.putInt(STATE_DRAFT_DURATION, routeDurationSeconds)
+        outState.putBoolean(STATE_SETTINGS_RETURN_TO_CREATE, settingsReturnToCreate)
+        customizationOriginalCamera?.let { original ->
+            outState.putString(STATE_CUSTOMIZATION_CAMERA, original.cameraMovement.name)
+            outState.putString(STATE_CUSTOMIZATION_PACING, original.longTripCompression.name)
+            outState.putString(STATE_CUSTOMIZATION_QUALITY, original.videoQuality.name)
+            outState.putString(STATE_CUSTOMIZATION_TRIP_DETECTION, original.tripDetection.name)
+            outState.putString(STATE_CUSTOMIZATION_LOCAL_FRAMING, original.localFraming.name)
+        }
+        outState.putString(STATE_CUSTOMIZATION_PRESET_ID, customizationOriginalPresetId)
+        outState.putString(STATE_CUSTOMIZATION_MODIFIED_ID, customizationOriginalModifiedBuiltInId)
+        outState.putString(STATE_ACTIVE_PROJECT_ID, activeProjectId)
+        outState.putString(STATE_ACTIVE_SUGGESTION_ID, activeSuggestionId)
+        outState.putString(STATE_ACTIVE_PROJECT_KIND, activeProjectKind.name)
+        outState.putString(STATE_ACTIVE_TITLE_MODE, activeProjectTitleMode.name)
+        outState.putBoolean(STATE_END_PERIOD_ENABLED, endPeriodEnabled)
+        outState.putBoolean(STATE_EDITING_PROJECT_ONLY, editingProjectOnly)
+        outState.putString(STATE_ACTIVE_START_DATE, activeStartDate?.toString())
+        outState.putString(STATE_ACTIVE_END_DATE, activeEndDate?.toString())
         super.onSaveInstanceState(outState)
     }
 
@@ -481,6 +661,40 @@ class MainActivity : AppCompatActivity() {
             syncingBottomNavigation = false
         }
         renderVideos()
+        renderTrips()
+        if (!rememberedTimelineLoaded && timeline == null && preferences.getBoolean(MAP_PRIVACY_ACCEPTED, false)) {
+            rememberedTimelineLoaded = true
+            timelineSourceStore.load()?.let { importTimeline(it, remembered = true) }
+        }
+    }
+
+    private fun openCreateTab() {
+        if (currentScreen == Screen.VIDEOS || currentScreen == Screen.PLAYER) resetCreateEntry()
+        showNewVideo(loadRemembered = true)
+    }
+
+    private fun resetCreateEntry() {
+        currentCreateStep = CreateStep.TYPE
+        activeProjectId = null
+        activeSuggestionId = null
+        activeProjectKind = TripKind.TRIP
+        activeProjectTitleMode = ProjectTitleMode.CUSTOM
+        activeStartDate = null
+        activeEndDate = null
+        selectedStartDate = null
+        selectedEndDate = null
+        endPeriodEnabled = false
+        editingProjectOnly = false
+        videoTitleUserEdited = false
+        updatingVideoTitle = true
+        editor.titleInput.setText(preferences.getString("title_template", null) ?: getString(R.string.default_title_template))
+        updatingVideoTitle = false
+        activePresetId = null
+        presetOriginId = null
+        modifiedBuiltInId = null
+        rawProjectRangeConflict = false
+        applyDuration(VideoDuration.DEFAULT_SECONDS)
+        renderPresetSelection()
     }
 
     private fun showNewVideo(loadRemembered: Boolean) {
@@ -496,6 +710,8 @@ class MainActivity : AppCompatActivity() {
             binding.bottomNavigation.selectedItemId = R.id.navigationCreate
             syncingBottomNavigation = false
         }
+        editor.saveTripButton.isEnabled = activeProjectId != null
+        renderCreateStep()
         if (loadRemembered && interruptedTimelineRecovered) {
             interruptedTimelineRecovered = false
             editor.statusText.setText(R.string.timeline_file_unavailable)
@@ -509,19 +725,310 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showSettings() {
+    private fun showSettings(fromCreate: Boolean = false) {
         releaseVideoPlayer()
+        settingsReturnToCreate = fromCreate
         currentScreen = Screen.SETTINGS
         home.root.visibility = View.GONE
         editor.root.visibility = View.GONE
         settingsScreen.root.visibility = View.VISIBLE
         playerScreen.root.visibility = View.GONE
-        binding.bottomNavigation.visibility = View.VISIBLE
-        if (binding.bottomNavigation.selectedItemId != R.id.navigationSettings) {
+        binding.bottomNavigation.visibility = if (fromCreate) View.GONE else View.VISIBLE
+        settingsScreen.customizeSettingsActions.visibility = if (fromCreate) View.VISIBLE else View.GONE
+        settingsScreen.timelineDataCard.visibility = if (fromCreate) View.GONE else View.VISIBLE
+        settingsScreen.settingsTitle.setText(if (fromCreate) R.string.customize_video else R.string.settings)
+        settingsScreen.settingsSummary.setText(if (fromCreate) R.string.customize_video_summary else R.string.settings_summary)
+        if (!fromCreate && binding.bottomNavigation.selectedItemId != R.id.navigationSettings) {
             syncingBottomNavigation = true
             binding.bottomNavigation.selectedItemId = R.id.navigationSettings
             syncingBottomNavigation = false
         }
+        if (!fromCreate) updateTimelineSettingsCard()
+    }
+
+    private fun showVideoCustomization() {
+        customizationOriginalCamera = cameraSettings
+        customizationOriginalPresetId = activePresetId
+        customizationOriginalModifiedBuiltInId = modifiedBuiltInId
+        showSettings(fromCreate = true)
+    }
+
+    private fun showAdvancedVideoSettingsSheet() {
+        val sheet = SheetAdvancedVideoSettingsBinding.inflate(layoutInflater)
+        val dialog = BottomSheetDialog(this)
+        dialog.setContentView(sheet.root)
+        var working = cameraSettings
+
+        val aspectLabels = listOf(R.string.aspect_square, R.string.aspect_portrait, R.string.aspect_landscape).map(::getString)
+        val cameraLabels = listOf(R.string.camera_fixed, R.string.camera_steady, R.string.camera_dynamic, R.string.camera_close_up).map(::getString)
+        val detectionLabels = listOf(R.string.trip_detection_conservative, R.string.trip_detection_balanced, R.string.trip_detection_sensitive).map(::getString)
+        val framingLabels = listOf(R.string.local_framing_off, R.string.local_framing_balanced, R.string.local_framing_close).map(::getString)
+        val pacingLabels = listOf(R.string.compression_off, R.string.compression_balanced, R.string.compression_strong, R.string.compression_stronger).map(::getString)
+        val resolutionLabels = listOf(
+            R.string.resolution_480,
+            R.string.resolution_720,
+            R.string.resolution_1080,
+            R.string.resolution_1440,
+            R.string.resolution_2160,
+        ).map(::getString).toMutableList()
+        val currentResolutionIndex = ExportResolution.entries.indexOfFirst {
+            it.shortEdge == working.effectiveExportFormat.shortEdge && !working.effectiveExportFormat.customResolution
+        }
+        if (currentResolutionIndex < 0) {
+            val format = working.activeVideoFormat
+            resolutionLabels += getString(R.string.custom_resolution_selected, format.width, format.height)
+        }
+
+        listOf(
+            sheet.aspectRatioDropdown to aspectLabels,
+            sheet.cameraMovementDropdown to cameraLabels,
+            sheet.tripDetectionDropdown to detectionLabels,
+            sheet.localFramingDropdown to framingLabels,
+            sheet.longTripDropdown to pacingLabels,
+            sheet.videoQualityDropdown to resolutionLabels,
+        ).forEach { (dropdown, labels) ->
+            dropdown.setAdapter(SelectionArrayAdapter(this, labels))
+            makeDropdownOpenReliably(dropdown)
+        }
+        sheet.aspectRatioDropdown.setText(aspectLabels[working.videoQuality.aspectRatioOption.ordinal], false)
+        sheet.cameraMovementDropdown.setText(cameraLabels[working.cameraMovement.ordinal], false)
+        sheet.tripDetectionDropdown.setText(detectionLabels[working.tripDetection.ordinal], false)
+        sheet.localFramingDropdown.setText(framingLabels[working.localFraming.ordinal], false)
+        sheet.longTripDropdown.setText(pacingLabels[working.longTripCompression.ordinal], false)
+        sheet.videoQualityDropdown.setText(
+            resolutionLabels[currentResolutionIndex.takeIf { it >= 0 } ?: resolutionLabels.lastIndex],
+            false,
+        )
+
+        sheet.aspectRatioDropdown.setOnItemClickListener { _, _, position, _ ->
+            working = working.copy(videoQuality = working.videoQuality.withAspectRatio(VideoAspectRatio.entries[position]))
+        }
+        sheet.cameraMovementDropdown.setOnItemClickListener { _, _, position, _ ->
+            working = working.copy(cameraMovement = CameraMovement.entries[position])
+        }
+        sheet.tripDetectionDropdown.setOnItemClickListener { _, _, position, _ ->
+            working = working.copy(tripDetection = TripDetection.entries[position])
+        }
+        sheet.localFramingDropdown.setOnItemClickListener { _, _, position, _ ->
+            working = working.copy(localFraming = LocalFraming.entries[position])
+        }
+        sheet.longTripDropdown.setOnItemClickListener { _, _, position, _ ->
+            working = working.copy(longTripCompression = LongTripCompression.entries[position])
+        }
+        sheet.videoQualityDropdown.setOnItemClickListener { _, _, position, _ ->
+            ExportResolution.entries.getOrNull(position)?.let { resolution ->
+                working = working.copy(
+                    exportFormat = working.effectiveExportFormat.copy(
+                        shortEdge = resolution.shortEdge,
+                        customResolution = false,
+                    ),
+                )
+            }
+        }
+        sheet.cancelButton.setOnClickListener { dialog.dismiss() }
+        sheet.applyButton.setOnClickListener {
+            applyAdvancedSettings(working)
+            syncPresetMatch()
+            renderCreateStep()
+            dialog.dismiss()
+        }
+        dialog.setOnShowListener {
+            dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+            dialog.behavior.skipCollapsed = true
+        }
+        dialog.show()
+    }
+
+    private fun finishVideoCustomization(apply: Boolean) {
+        if (!settingsReturnToCreate) return
+        if (!apply) {
+            customizationOriginalCamera?.let { original ->
+                applyAdvancedSettings(original)
+            }
+            activePresetId = customizationOriginalPresetId
+            modifiedBuiltInId = customizationOriginalModifiedBuiltInId
+            renderPresetSelection()
+        }
+        customizationOriginalCamera = null
+        customizationOriginalPresetId = null
+        customizationOriginalModifiedBuiltInId = null
+        settingsReturnToCreate = false
+        currentCreateStep = CreateStep.STYLE
+        showNewVideo(loadRemembered = true)
+    }
+
+    private fun renderCreateStep() {
+        if (!::editor.isInitialized) return
+        val isType = currentCreateStep == CreateStep.TYPE
+        val isTripSource = currentCreateStep == CreateStep.TRIP_SOURCE
+        val isDiscovery = currentCreateStep == CreateStep.DISCOVERY
+        val isProject = currentCreateStep == CreateStep.PROJECT
+        val isStyle = currentCreateStep == CreateStep.STYLE
+        val isPreview = currentCreateStep == CreateStep.PREVIEW
+        val hasTimeline = timeline != null
+        editor.createTypeStepGroup.visibility = if (isType && hasTimeline) View.VISIBLE else View.GONE
+        editor.tripSourceStepGroup.visibility = if (isTripSource) View.VISIBLE else View.GONE
+        editor.tripDiscoveryStepGroup.visibility = if (isDiscovery) View.VISIBLE else View.GONE
+        editor.projectStepGroup.visibility = if (isProject) View.VISIBLE else View.GONE
+        editor.timelineSourceGroup.visibility = if (isType && !hasTimeline) View.VISIBLE else View.GONE
+        editor.periodStepGroup.visibility = if (isProject) View.VISIBLE else View.GONE
+        editor.styleStepGroup.visibility = if (isStyle) View.VISIBLE else View.GONE
+        editor.videoDetailsGroup.visibility = if (isStyle) View.VISIBLE else View.GONE
+        editor.previewStepGroup.visibility = if (isPreview) View.VISIBLE else View.GONE
+        editor.createStepText.setText(
+            when (currentCreateStep) {
+                CreateStep.TYPE -> R.string.create_step_type
+                CreateStep.TRIP_SOURCE -> R.string.create_step_trip_source
+                CreateStep.DISCOVERY -> R.string.create_step_discovery
+                CreateStep.PROJECT -> R.string.create_step_project
+                CreateStep.STYLE -> R.string.create_step_style
+                CreateStep.PREVIEW -> R.string.create_step_preview
+            },
+        )
+        renderCreateStepper()
+        editor.wizardNavigationGroup.visibility = if (isType) View.GONE else View.VISIBLE
+        editor.wizardBackButton.isEnabled = true
+        editor.wizardContinueButton.visibility = if (isProject || isStyle) View.VISIBLE else View.GONE
+        editor.wizardContinueButton.setText(
+            if (isProject && editingProjectOnly) R.string.save_trip else R.string.continue_label,
+        )
+        editor.wizardContinueButton.isEnabled = !(isProject && rawProjectRangeConflict)
+        if (isType && hasTimeline) updateCreateTypeAvailability()
+        // The wizard's primary action saves the project. Keeping the older inline save
+        // actions here creates two competing paths through the same step.
+        editor.saveTripButton.visibility = View.GONE
+        editor.saveAsNewTripButton.visibility = View.GONE
+        if (isTripSource) renderCreateTripSources()
+        if (isDiscovery) renderTripSuggestions()
+        if (isProject) updateProjectDateLabel()
+        updateRawDataAvailability()
+        if (isPreview) editor.previewSettingsSummary.text = currentVideoSettingsSummary()
+    }
+
+    private fun renderCreateStepper() {
+        val stage = when (currentCreateStep) {
+            CreateStep.TYPE, CreateStep.TRIP_SOURCE, CreateStep.DISCOVERY, CreateStep.PROJECT -> 0
+            CreateStep.STYLE -> 1
+            CreateStep.PREVIEW -> 2
+        }
+        val labels = listOf(
+            getString(R.string.create_step_details_label),
+            getString(R.string.create_step_style_label),
+            getString(R.string.create_step_create_label),
+        )
+        val views = listOf(editor.createStepDetails, editor.createStepStyle, editor.createStepCreate)
+        views.forEachIndexed { index, view ->
+            val status = when {
+                index < stage -> R.string.step_status_completed
+                index == stage -> R.string.step_status_current
+                else -> R.string.step_status_upcoming
+            }
+            view.text = if (index < stage) "✓ ${labels[index]}" else "${index + 1} ${labels[index]}"
+            view.alpha = if (index > stage) 0.55f else 1f
+            view.setTypeface(null, if (index == stage) Typeface.BOLD else Typeface.NORMAL)
+            view.setTextColor(ContextCompat.getColor(this, if (index <= stage) R.color.interactive else R.color.on_surface_variant))
+            view.contentDescription = getString(R.string.step_accessibility, index + 1, views.size, labels[index], getString(status))
+        }
+    }
+
+    private fun updateCreateTypeAvailability() {
+        val semanticAvailable = semanticDateBounds() != null
+        val rawAvailable = rawDateBounds() != null
+        listOf(editor.tripVideoChoice, editor.recapVideoChoice, editor.customRecapChoice).forEach { card ->
+            card.isEnabled = semanticAvailable
+            card.isClickable = semanticAvailable
+            card.alpha = if (semanticAvailable) 1f else 0.55f
+        }
+        editor.rawDataChoice.isEnabled = rawAvailable
+        editor.rawDataChoice.isClickable = rawAvailable
+        editor.rawDataChoice.alpha = if (rawAvailable) 1f else 0.55f
+        editor.rawDataChoiceSummary.setText(
+            if (rawAvailable) R.string.raw_data_video_summary else R.string.raw_data_unavailable,
+        )
+        editor.semanticUnavailableText.visibility = if (semanticAvailable) View.GONE else View.VISIBLE
+    }
+
+    private fun moveCreateStep(delta: Int) {
+        if (delta < 0) {
+            if (currentCreateStep == CreateStep.PROJECT && editingProjectOnly) {
+                editingProjectOnly = false
+                showVideos()
+                return
+            }
+            currentCreateStep = when (currentCreateStep) {
+                CreateStep.TYPE -> CreateStep.TYPE
+                CreateStep.TRIP_SOURCE -> CreateStep.TYPE
+                CreateStep.DISCOVERY -> CreateStep.TRIP_SOURCE
+                CreateStep.PROJECT -> if (activeProjectKind == TripKind.TRIP) CreateStep.TRIP_SOURCE else CreateStep.TYPE
+                CreateStep.STYLE -> CreateStep.PROJECT
+                CreateStep.PREVIEW -> CreateStep.STYLE
+            }
+            renderCreateStep()
+            return
+        }
+        currentCreateStep = when (currentCreateStep) {
+            CreateStep.PROJECT -> {
+                if (timeline == null) {
+                    Snackbar.make(binding.root, R.string.choose_timeline_again, Snackbar.LENGTH_LONG).show()
+                    return
+                }
+                if (saveActiveProject(asNew = activeProjectId == null) == null) return
+                if (editingProjectOnly) {
+                    editingProjectOnly = false
+                    Snackbar.make(binding.root, R.string.project_changes_saved, Snackbar.LENGTH_SHORT).show()
+                    showVideos()
+                    return
+                }
+                applyRecommendedPresetIfNeeded()
+                CreateStep.STYLE
+            }
+            CreateStep.STYLE -> CreateStep.PREVIEW
+            else -> currentCreateStep
+        }
+        renderCreateStep()
+    }
+
+    private fun renderCreateTripSources() {
+        val savedTrips = tripsStore.list().filter { it.kind == TripKind.TRIP }
+        editor.findTripsButton.isEnabled = timeline != null && !rawOnlyImport
+        editor.emptySavedTripsText.visibility = if (savedTrips.isEmpty()) View.VISIBLE else View.GONE
+        editor.savedTripsList.removeAllViews()
+        savedTrips.forEach { project ->
+            val card = ItemTripBinding.inflate(layoutInflater, editor.savedTripsList, false)
+            card.tripBadge.setText(R.string.trip_badge)
+            card.tripTitle.text = project.title
+            card.tripDetails.text = projectDisplayRange(project)
+            showTripCoverage(card, coverageFor(project.startDate, project.endDate))
+            card.tripPrimaryButton.setText(R.string.use_trip)
+            card.tripPrimaryButton.setOnClickListener { openProject(project) }
+            card.root.setOnClickListener { openProject(project) }
+            editor.savedTripsList.addView(card.root)
+        }
+    }
+
+    private fun setAutomaticVideoTitle(value: String) {
+        val projectTitle = value.trim()
+        val owner = editor.ownerInput.text?.toString()?.trim().orEmpty()
+        val automaticTitle = if (activeProjectKind != TripKind.TRIP && owner.isNotEmpty() && projectTitle.isNotEmpty()) {
+            getString(R.string.named_video_title, projectTitle).replace("{name}", owner, ignoreCase = true)
+        } else {
+            projectTitle
+        }
+        updatingVideoTitle = true
+        editor.titleInput.setText(automaticTitle)
+        updatingVideoTitle = false
+    }
+
+    private fun applyRecommendedPresetIfNeeded() {
+        val current = selectedPreset()
+        if (current != null) return
+        val recommendedId = if (activeProjectKind == TripKind.TRIP) {
+            PresetRepository.TRIP_CLOSE_UP_ID
+        } else {
+            PresetRepository.RECAP_PORTRAIT_ID
+        }
+        presetRepository.presets().firstOrNull { it.id == recommendedId }?.let(::applyPreset)
     }
 
     private fun showVideoPlayer(uri: Uri, resetPosition: Boolean = true) {
@@ -607,7 +1114,9 @@ class MainActivity : AppCompatActivity() {
         titleHandler.removeCallbacks(applyTitleChanges)
         preferences.edit {
             putString("owner_name", editor.ownerInput.text?.toString().orEmpty())
-            putString("title_template", editor.titleInput.text?.toString().orEmpty())
+            if (activeProjectKind != TripKind.TRIP || activeStartDate == null) {
+                putString("title_template", editor.titleInput.text?.toString().orEmpty())
+            }
         }
         updateResolvedTitle()
     }
@@ -618,15 +1127,18 @@ class MainActivity : AppCompatActivity() {
         editor.timelineView.videoTitle = resolvedTitle(period)
     }
 
-    private fun resolvedTitle(period: TimelinePeriod): String = TitleTemplate.resolve(
-        template = editor.titleInput.text?.toString().orEmpty(),
-        yearLabel = period.yearLabel,
-        name = editor.ownerInput.text?.toString().orEmpty().ifBlank { getString(R.string.traveler) },
-        fallback = getString(R.string.default_title),
-    )
+    internal fun resolvedTitle(period: TimelinePeriod): String {
+        return TitleTemplate.resolve(
+            template = editor.titleInput.text?.toString().orEmpty(),
+            yearLabel = period.yearLabel,
+            name = editor.ownerInput.text?.toString().orEmpty(),
+            fallback = getString(R.string.default_title),
+        )
+    }
 
     internal fun importTimeline(uri: Uri, remembered: Boolean = false) {
         if (importJob?.isActive == true) return
+        if (!remembered && currentScreen == Screen.VIDEOS) showNewVideo(loadRemembered = false)
         if (!remembered) interruptedTimelineRecovered = false
         timelineSourceStore.beginImport(uri)
         pendingImportCompletionUri = null
@@ -652,13 +1164,20 @@ class MainActivity : AppCompatActivity() {
                 renderTimeline = prepared.render
                 rawSignalPoints = parsed.rawSignals
                 rawOnlyImport = false
-                editor.rawAccuracyInput.setText(RawSignalProcessor.DEFAULT_MAXIMUM_ACCURACY_METERS.toInt().toString())
                 rebuildRawSignalsTimeline()
                 pendingImportCompletionUri = uri
                 configureYears(loaded, prepared.initialJourney, prepared.ignoredCount)
+                applyActiveProjectDates()
+                tripSuggestions = refreshRequestedTripSuggestions(prepared.source)
                 editor.editorGroup.visibility = View.VISIBLE
                 updateCameraPreparationUi()
                 if (!remembered) rememberTimelineSource(uri)
+                updateTimelineSourceMetadata(uri, refreshed = !remembered)
+                renderTrips()
+                renderCreateStep()
+                updateTimelineSettingsCard()
+                timelineSourceStore.completeImport(uri)
+                pendingImportCompletionUri = null
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: TimelineParseException) {
@@ -677,6 +1196,8 @@ class MainActivity : AppCompatActivity() {
                     editor.statusText.setText(timelineParseMessage(error.reason))
                     Snackbar.make(binding.root, R.string.import_failed, Snackbar.LENGTH_LONG).show()
                 }
+                renderCreateStep()
+                updateTimelineSettingsCard()
             } catch (error: Throwable) {
                 Log.e(TAG, "Timeline import failed", error)
                 timelineSourceStore.completeImport(uri)
@@ -693,6 +1214,8 @@ class MainActivity : AppCompatActivity() {
                     editor.statusText.setText(R.string.import_failed_detail)
                     Snackbar.make(binding.root, R.string.import_failed, Snackbar.LENGTH_LONG).show()
                 }
+                renderCreateStep()
+                updateTimelineSettingsCard()
             } finally {
                 setTimelineLoading(false)
                 importJob = null
@@ -723,7 +1246,6 @@ class MainActivity : AppCompatActivity() {
                 rawSignalPoints = points
                 rawOnlyImport = true
                 rawSignalsEnabled = true
-                editor.rawAccuracyInput.setText(RawSignalProcessor.DEFAULT_MAXIMUM_ACCURACY_METERS.toInt().toString())
                 val result = withContext(Dispatchers.Default) {
                     RawSignalProcessor.process(points)
                 }
@@ -737,6 +1259,7 @@ class MainActivity : AppCompatActivity() {
                     )
                 timeline = loaded
                 renderTimeline = loaded
+                tripSuggestions = refreshRequestedTripSuggestions(loaded)
                 val period = rawSignalsPeriod() ?: TimelinePeriod.sameYear(loaded.years.first())
                 pendingImportCompletionUri = uri
                 configureYears(
@@ -748,6 +1271,11 @@ class MainActivity : AppCompatActivity() {
                 editor.editorGroup.visibility = View.VISIBLE
                 updateCameraPreparationUi()
                 if (!remembered) rememberTimelineSource(uri)
+                updateTimelineSourceMetadata(uri, refreshed = !remembered)
+                renderCreateStep()
+                updateTimelineSettingsCard()
+                timelineSourceStore.completeImport(uri)
+                pendingImportCompletionUri = null
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
@@ -800,6 +1328,10 @@ class MainActivity : AppCompatActivity() {
         if (loading) editor.loadingStageText.setText(stage)
         editor.importButton.isEnabled = !loading
         editor.exportHelpButton.isEnabled = !loading
+        if (::settingsScreen.isInitialized) {
+            settingsScreen.settingsImportTimelineButton.isEnabled = !loading
+            settingsScreen.settingsTimelineHelpButton.isEnabled = !loading
+        }
     }
 
     private fun rememberTimelineSource(uri: Uri) {
@@ -811,6 +1343,82 @@ class MainActivity : AppCompatActivity() {
             releaseUriAccess(uri)
         }
     }
+
+    private fun updateTimelineSourceMetadata(uri: Uri, refreshed: Boolean) {
+        val existing = timelineSourceStore.metadata()
+        val semantic = semanticDateBounds()
+        val raw = rawDateBounds()
+        timelineSourceStore.updateMetadata(
+            TimelineSourceMetadata(
+                fileName = timelineDisplayName(uri),
+                importedAtMillis = if (refreshed || existing == null) System.currentTimeMillis() else existing.importedAtMillis,
+                semanticStart = semantic?.first,
+                semanticEnd = semantic?.second,
+                rawStart = raw?.first,
+                rawEnd = raw?.second,
+                fileSizeBytes = timelineFileSize(uri),
+            ),
+        )
+    }
+
+    private fun timelineDisplayName(uri: Uri): String {
+        val queried = runCatching {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        }.getOrNull()
+        return queried?.takeIf { it.isNotBlank() }
+            ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+            ?: "Timeline.json"
+    }
+
+    private fun timelineFileSize(uri: Uri): Long? = runCatching {
+        contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                cursor.getColumnIndex(OpenableColumns.SIZE)
+                    .takeIf { it >= 0 && !cursor.isNull(it) }
+                    ?.let(cursor::getLong)
+            } else null
+        }
+    }.getOrNull()?.takeIf { it >= 0L }
+
+    private fun updateTimelineSettingsCard() {
+        if (!::settingsScreen.isInitialized) return
+        var metadata = timelineSourceStore.metadata()
+        if (metadata?.fileSizeBytes == null) {
+            timelineSourceStore.load()?.let(::timelineFileSize)?.let { size ->
+                metadata = metadata?.copy(fileSizeBytes = size)?.also(timelineSourceStore::updateMetadata)
+            }
+        }
+        settingsScreen.timelineDataStatus.text = if (metadata == null) {
+            getString(R.string.timeline_not_imported)
+        } else {
+            val imported = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(
+                Date(metadata.importedAtMillis),
+            )
+            val fileLabel = metadata.fileSizeBytes?.let { size ->
+                getString(
+                    R.string.timeline_file_name_size,
+                    metadata.fileName.ifBlank { "Timeline.json" },
+                    Formatter.formatShortFileSize(this, size),
+                )
+            } ?: metadata.fileName.ifBlank { "Timeline.json" }
+            getString(
+                R.string.timeline_file_status,
+                fileLabel,
+                imported,
+                formatTimelineRange(metadata.semanticStart, metadata.semanticEnd),
+                formatTimelineRange(metadata.rawStart, metadata.rawEnd),
+            )
+        }
+    }
+
+    private fun formatTimelineRange(start: LocalDate?, end: LocalDate?): String =
+        if (start == null || end == null) {
+            getString(R.string.timeline_range_unavailable)
+        } else {
+            getString(R.string.timeline_raw_points_available, formatExactDate(start), formatExactDate(end))
+        }
 
     private fun prepareTimeline(loaded: Timeline): PreparedTimeline {
         val filtered = LocationOutlierFilter.filter(loaded.points, locationFilterMode)
@@ -865,7 +1473,11 @@ class MainActivity : AppCompatActivity() {
     private fun selectRange() {
         if (rawSignalsEnabled) {
             val period = rawSignalsPeriod() ?: return
-            val selected = renderRawSignalsTimeline?.forRange(period) ?: Journey.from(emptyList(), period)
+            val selected = if (exactDateRangeEnabled && selectedStartDate != null && selectedEndDate != null) {
+                renderRawSignalsTimeline?.forDateRange(selectedStartDate!!, selectedEndDate!!)
+            } else {
+                renderRawSignalsTimeline?.forRange(period)
+            } ?: Journey.from(emptyList(), period)
             applySelectedJourney(selected, rawSignalProcessing?.rejectedCount ?: 0)
             return
         }
@@ -997,6 +1609,7 @@ class MainActivity : AppCompatActivity() {
             updateExactDateControls()
             updateResolvedTitle()
             selectRange()
+            if (currentCreateStep == CreateStep.PROJECT) updateProjectDateLabel()
         }
         editor.exactDateRangeButton.setOnClickListener { showExactDatePicker() }
         editor.rawSignalsSwitch.setOnCheckedChangeListener { _, checked ->
@@ -1005,12 +1618,6 @@ class MainActivity : AppCompatActivity() {
             updateRawSignalsControls()
             selectRange()
             updateResolvedTitle()
-        }
-        editor.rawAccuracyInput.doAfterTextChanged {
-            if (rawSignalsEnabled) {
-                rebuildRawSignalsTimeline()
-                selectRange()
-            }
         }
         updateExactDateControls()
         updateRawSignalsControls()
@@ -1021,26 +1628,32 @@ class MainActivity : AppCompatActivity() {
         editor.exactDateSwitch.visibility = if (rawSignalsEnabled) View.GONE else View.VISIBLE
         editor.exactDateRangeButton.visibility = if (!rawSignalsEnabled && exactDateRangeEnabled) View.VISIBLE else View.GONE
         editor.rawSignalsDescription.visibility = if (rawSignalsEnabled) View.VISIBLE else View.GONE
-        editor.rawAccuracyLayout.visibility = if (rawSignalsEnabled) View.VISIBLE else View.GONE
     }
 
     private fun rebuildRawSignalsTimeline(): RawSignalProcessingResult? {
-        val rawLimit = editor.rawAccuracyInput.text?.toString()?.trim().orEmpty()
-        val maximumAccuracy = if (rawLimit.isEmpty()) {
-            null
-        } else {
-            rawLimit.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
-        }
-        if (rawLimit.isNotEmpty() && maximumAccuracy == null) {
-            editor.rawAccuracyLayout.error = getString(R.string.raw_accuracy_invalid)
-            rawSignalProcessing = null
-            renderRawSignalsTimeline = null
-            return null
-        }
-        editor.rawAccuracyLayout.error = null
-        val result = RawSignalProcessor.process(rawSignalPoints, maximumAccuracy)
+        val result = RawSignalProcessor.process(
+            rawSignalPoints,
+            RawSignalProcessor.DEFAULT_MAXIMUM_ACCURACY_METERS,
+        )
         rawSignalProcessing = result
         renderRawSignalsTimeline = result.points.takeIf { it.isNotEmpty() }?.let(::Timeline)
+        if (activeProjectKind == TripKind.RAW_DATA) {
+            rawDateBounds()?.let { (first, last) ->
+                val requestedStart = selectedStartDate ?: first
+                val requestedEnd = selectedEndDate ?: last
+                rawProjectRangeConflict = activeProjectId != null &&
+                    (requestedStart.isBefore(first) || requestedEnd.isAfter(last) || requestedEnd.isBefore(requestedStart))
+                if (!rawProjectRangeConflict) {
+                    selectedStartDate = requestedStart.coerceIn(first, last)
+                    selectedEndDate = requestedEnd.coerceIn(selectedStartDate!!, last)
+                    activeStartDate = selectedStartDate
+                    activeEndDate = selectedEndDate
+                }
+                updateExactDateControls()
+                updateSuggestedProjectTitle()
+                updateRawDataAvailability()
+            }
+        }
         return result
     }
 
@@ -1057,25 +1670,33 @@ class MainActivity : AppCompatActivity() {
     private fun showExactDatePicker() {
         val start = selectedStartDate ?: currentPeriod()?.start?.atDay(1) ?: return
         val end = selectedEndDate ?: currentPeriod()?.endInclusive?.atEndOfMonth() ?: return
+        val bounds = activeDateBounds()
+        val initialStart = start.coerceIn(bounds.first, bounds.second)
+        val initialEnd = end.coerceIn(initialStart, bounds.second)
+        val constraints = CalendarConstraints.Builder()
+            .setStart(datePickerMillis(bounds.first))
+            .setEnd(datePickerMillis(bounds.second))
+            .setOpenAt(datePickerMillis(initialStart))
+            .setValidator(
+                CompositeDateValidator.allOf(
+                    listOf(
+                        DateValidatorPointForward.from(datePickerMillis(bounds.first)),
+                        DateValidatorPointBackward.before(datePickerMillis(bounds.second) + DAY_MILLIS),
+                    ),
+                ),
+            )
+            .build()
         val picker = MaterialDatePicker.Builder.dateRangePicker()
             .setTitleText(R.string.choose_exact_dates)
-            .setSelection(AndroidPair(datePickerMillis(start), datePickerMillis(end)))
+            .setCalendarConstraints(constraints)
+            .setSelection(AndroidPair(datePickerMillis(initialStart), datePickerMillis(initialEnd)))
             .build()
         picker.addOnPositiveButtonClickListener { range ->
             val pickedStart = Instant.ofEpochMilli(range.first).atZone(ZoneOffset.UTC).toLocalDate()
             val pickedEnd = Instant.ofEpochMilli(range.second).atZone(ZoneOffset.UTC).toLocalDate()
-            selectedStartDate = pickedStart
-            selectedEndDate = pickedEnd
-            selectedStartYear = pickedStart.year
-            selectedEndYear = pickedEnd.year
-            selectedStartMonth = pickedStart.monthValue
-            selectedEndMonth = pickedEnd.monthValue
-            updateYearDropdowns()
-            editor.startMonthDropdown.setText(monthNames[selectedStartMonth - 1], false)
-            editor.endMonthDropdown.setText(monthNames[selectedEndMonth - 1], false)
-            updateExactDateControls()
-            updateResolvedTitle()
-            selectRange()
+            if (!applyExactDateRange(pickedStart, pickedEnd)) {
+                Snackbar.make(binding.root, R.string.raw_data_range_conflict, Snackbar.LENGTH_LONG).show()
+            }
         }
         picker.show(supportFragmentManager, "exact-date-range")
     }
@@ -1097,6 +1718,36 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateRawDataAvailability() {
+        if (!::editor.isInitialized) return
+        val visible = currentCreateStep == CreateStep.PROJECT && activeProjectKind == TripKind.RAW_DATA
+        editor.rawDataAvailabilityGroup.visibility = if (visible) View.VISIBLE else View.GONE
+        if (!visible) return
+        rawDateBounds()?.let { (first, last) ->
+            editor.rawDataAvailabilityText.text = getString(
+                R.string.raw_data_available_range,
+                formatExactDate(first),
+                formatExactDate(last),
+            )
+        }
+        editor.rawDataRangeConflictGroup.visibility = if (rawProjectRangeConflict) View.VISIBLE else View.GONE
+        editor.wizardContinueButton.isEnabled = !rawProjectRangeConflict
+    }
+
+    private fun useAvailableRawRange() {
+        val (first, last) = rawDateBounds() ?: return
+        rawProjectRangeConflict = false
+        selectedStartDate = first
+        selectedEndDate = last
+        activeStartDate = first
+        activeEndDate = last
+        updateExactDateControls()
+        updateSuggestedProjectTitle(force = true)
+        updateProjectDateLabel()
+        updateRawDataAvailability()
+        selectRange()
+    }
+
     private fun formatExactDate(date: LocalDate): String = DateTimeFormatter
         .ofLocalizedDate(FormatStyle.MEDIUM)
         .withLocale(resources.configuration.locales[0])
@@ -1112,7 +1763,15 @@ class MainActivity : AppCompatActivity() {
         val endYear = selectedEndYear ?: return
         val start = YearMonth.of(startYear, selectedStartMonth)
         val end = YearMonth.of(endYear, selectedEndMonth)
-        if (start > end) {
+        if (!endPeriodEnabled && activeProjectKind in setOf(TripKind.MONTHLY_RECAP, TripKind.YEARLY_RECAP)) {
+            selectedEndYear = start.year
+            if (activeProjectKind == TripKind.YEARLY_RECAP) {
+                selectedStartMonth = 1
+                selectedEndMonth = 12
+            } else {
+                selectedEndMonth = start.monthValue
+            }
+        } else if (start > end) {
             if (changedStart) {
                 selectedEndYear = start.year
                 selectedEndMonth = start.monthValue
@@ -1130,6 +1789,7 @@ class MainActivity : AppCompatActivity() {
         }
         updateResolvedTitle()
         selectRange()
+        if (currentCreateStep == CreateStep.PROJECT) onProjectPeriodChanged(updateSelection = false)
     }
 
     private fun updateYearDropdowns() {
@@ -1141,6 +1801,9 @@ class MainActivity : AppCompatActivity() {
     private fun currentPeriod(): TimelinePeriod? {
         val startYear = selectedStartYear ?: return null
         val endYear = selectedEndYear ?: return null
+        if (activeProjectKind == TripKind.YEARLY_RECAP) {
+            return RecapPeriodRules.yearlyTimelinePeriod(startYear, endYear)
+        }
         return TimelinePeriod(
             start = YearMonth.of(startYear, selectedStartMonth),
             endInclusive = YearMonth.of(endYear, selectedEndMonth),
@@ -1297,10 +1960,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
         settingsScreen.resetAdvancedSettingsButton.setOnClickListener {
-            markPresetCustom(clearDefault = true)
-            settingsViewModel.resetVideoDefaults()
-            val state = settingsViewModel.state.value
-            applyAdvancedSettings(state.camera)
+            markPresetCustom(clearDefault = !settingsReturnToCreate)
+            if (settingsReturnToCreate) {
+                applyAdvancedSettings(settingsViewModel.state.value.camera)
+            } else {
+                settingsViewModel.resetVideoDefaults()
+                applyAdvancedSettings(settingsViewModel.state.value.camera)
+            }
             Snackbar.make(binding.root, R.string.video_defaults_restored, Snackbar.LENGTH_SHORT).show()
         }
         applyAdvancedSettings(settingsViewModel.state.value.camera)
@@ -1310,11 +1976,12 @@ class MainActivity : AppCompatActivity() {
         presetsConfigured = true
         val defaultId = presetRepository.defaultPresetId()
         activePresetId = presetRepository.presets().firstOrNull {
-            it.id == defaultId && it.values == PresetValues.from(cameraSettings)
+            it.id == defaultId && it.values == currentPresetValues()
         }?.id
+        presetOriginId = activePresetId
         editor.presetDropdown.setOnItemClickListener { _, _, position, _ ->
             if (position == 0) {
-                markPresetCustom()
+                markPresetCustom(preserveBuiltIn = false)
             } else {
                 presetRepository.presets().getOrNull(position - 1)?.let(::applyPreset)
             }
@@ -1340,10 +2007,24 @@ class MainActivity : AppCompatActivity() {
         }.getOrNull() ?: return
         val restoredPresetId = savedState.getString(STATE_ACTIVE_PRESET_ID)
         activePresetId = presetRepository.presets().firstOrNull {
-            it.id == restoredPresetId && it.values == PresetValues.from(restored)
+            it.id == restoredPresetId && it.values == PresetValues.from(restored, routeDurationSeconds)
         }?.id
+        presetOriginId = savedState.getString(STATE_PRESET_ORIGIN_ID) ?: activePresetId
         applyAdvancedSettings(restored)
         renderPresetSelection()
+    }
+
+    private fun restoreCustomizationCamera(savedState: Bundle?): CameraSettings? {
+        savedState ?: return null
+        return runCatching {
+            CameraSettings(
+                cameraMovement = CameraMovement.valueOf(savedState.getString(STATE_CUSTOMIZATION_CAMERA)!!),
+                longTripCompression = LongTripCompression.valueOf(savedState.getString(STATE_CUSTOMIZATION_PACING)!!),
+                videoQuality = VideoQuality.valueOf(savedState.getString(STATE_CUSTOMIZATION_QUALITY)!!),
+                tripDetection = TripDetection.valueOf(savedState.getString(STATE_CUSTOMIZATION_TRIP_DETECTION)!!),
+                localFraming = LocalFraming.valueOf(savedState.getString(STATE_CUSTOMIZATION_LOCAL_FRAMING)!!),
+            )
+        }.getOrNull()
     }
 
     private fun restoredExportFormat(savedState: Bundle): ExportFormatSettings? = runCatching {
@@ -1360,18 +2041,30 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyPreset(preset: VideoPreset) {
+        modifiedBuiltInId = null
         activePresetId = preset.id
+        presetOriginId = preset.id
         applyAdvancedSettings(preset.values.applyTo(cameraSettings))
+        applyDuration(preset.values.durationSeconds)
         renderPresetSelection()
     }
 
     private fun applySharedPreset(values: PresetValues, savedId: String? = null) {
+        modifiedBuiltInId = null
         activePresetId = savedId
+        presetOriginId = savedId
         applyAdvancedSettings(values.applyTo(cameraSettings))
+        applyDuration(values.durationSeconds)
         renderPresetSelection()
     }
 
-    private fun markPresetCustom(clearDefault: Boolean = false) {
+    private fun markPresetCustom(clearDefault: Boolean = false, preserveBuiltIn: Boolean = true) {
+        if (preserveBuiltIn) {
+            selectedPreset()?.takeIf(VideoPreset::builtIn)?.let { modifiedBuiltInId = it.id }
+        } else {
+            modifiedBuiltInId = null
+            presetOriginId = null
+        }
         activePresetId = null
         if (clearDefault) presetRepository.setDefaultPresetId(null)
         if (presetsConfigured) renderPresetSelection()
@@ -1382,30 +2075,76 @@ class MainActivity : AppCompatActivity() {
         val labels = listOf(getString(R.string.preset_custom)) + presets.map(VideoPreset::name)
         editor.presetDropdown.setAdapter(SelectionArrayAdapter(this, labels))
         val selected = selectedPreset()
-        editor.presetDropdown.setText(selected?.name ?: getString(R.string.preset_custom), false)
-        editor.presetSummaryText.setText(
-            if (selected == null) R.string.preset_custom_summary else R.string.preset_applied_summary,
+        val modifiedBuiltIn = modifiedBuiltInId?.let { id -> presets.firstOrNull { it.id == id && it.builtIn } }
+        val modifiedOrigin = if (selected == null) presetOriginId?.let { id -> presets.firstOrNull { it.id == id } } else null
+        editor.presetDropdown.setText(
+            selected?.name ?: (modifiedBuiltIn ?: modifiedOrigin)?.let { getString(R.string.preset_modified, it.name) }
+            ?: getString(R.string.preset_custom),
+            false,
         )
+        editor.presetSummaryText.text = draftStyleSummary(selected, modifiedBuiltIn ?: modifiedOrigin)
         editor.presetShareButton.isEnabled = selected != null && !exportingVideo
-        editor.presetMoreButton.isEnabled = selected != null && !exportingVideo
-        editor.presetSaveButton.isEnabled = !exportingVideo
+        editor.presetMoreButton.isEnabled = selected != null && !selected.builtIn && !exportingVideo
+        editor.presetSaveButton.isEnabled = selected == null && !exportingVideo
         editor.presetDropdown.isEnabled = !exportingVideo
     }
 
     private fun saveCurrentPreset() {
-        if (presetRepository.presets().size >= PresetRepository.MAX_PRESETS) {
+        val values = currentPresetValues()
+        presetRepository.exactMatch(values)?.let { existing ->
+            modifiedBuiltInId = null
+            activePresetId = existing.id
+            presetOriginId = existing.id
+            renderPresetSelection()
+            Snackbar.make(binding.root, getString(R.string.preset_already_exists, existing.name), Snackbar.LENGTH_LONG).show()
+            return
+        }
+        val origin = presetOriginId?.let { id -> presetRepository.presets().firstOrNull { it.id == id } }
+        if (origin != null && !origin.builtIn) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.save_preset_choice_title)
+                .setItems(
+                    arrayOf(
+                        getString(R.string.overwrite_preset, origin.name),
+                        getString(R.string.save_as_new_preset),
+                    ),
+                ) { _, position ->
+                    if (position == 0) overwritePreset(origin, values) else saveNewPreset(values)
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        } else {
+            saveNewPreset(values)
+        }
+    }
+
+    private fun overwritePreset(origin: VideoPreset, values: PresetValues) {
+        presetRepository.replace(origin.id, values)?.let { updated ->
+            modifiedBuiltInId = null
+            activePresetId = updated.id
+            presetOriginId = updated.id
+            renderPresetSelection()
+            Snackbar.make(binding.root, R.string.preset_overwritten, Snackbar.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun saveNewPreset(values: PresetValues) {
+        if (presetRepository.presets().count { !it.builtIn } >= PresetRepository.MAX_PRESETS) {
             Snackbar.make(binding.root, R.string.preset_limit_reached, Snackbar.LENGTH_LONG).show()
             return
         }
         showPresetNameDialog { name ->
-            val preset = presetRepository.add(name, PresetValues.from(cameraSettings))
+            val preset = presetRepository.add(name, values)
+            modifiedBuiltInId = null
             activePresetId = preset.id
+            presetOriginId = preset.id
             renderPresetSelection()
             Snackbar.make(binding.root, R.string.preset_saved, Snackbar.LENGTH_SHORT).show()
         }
     }
 
     private fun showPresetActions(preset: VideoPreset) {
+        if (preset.builtIn) return
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.preset_actions)
             .setItems(
@@ -1433,6 +2172,25 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showPresetManager() {
+        val presets = presetRepository.presets().filterNot(VideoPreset::builtIn)
+        if (presets.isEmpty()) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.manage_presets)
+                .setMessage(R.string.no_user_presets)
+                .setPositiveButton(R.string.done, null)
+                .show()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.manage_presets)
+            .setItems(presets.map(VideoPreset::name).toTypedArray()) { _, position ->
+                showPresetActions(presets[position])
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
     private fun confirmDeletePreset(preset: VideoPreset) {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.delete_preset_title)
@@ -1441,6 +2199,7 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(R.string.delete_preset) { _, _ ->
                 if (presetRepository.delete(preset.id)) {
                     if (activePresetId == preset.id) activePresetId = null
+                    if (presetOriginId == preset.id) presetOriginId = null
                     renderPresetSelection()
                     Snackbar.make(binding.root, R.string.preset_deleted, Snackbar.LENGTH_SHORT).show()
                 }
@@ -1510,7 +2269,15 @@ class MainActivity : AppCompatActivity() {
                     .setMessage(message)
                     .setNegativeButton(R.string.cancel, null)
                     .setNeutralButton(R.string.save_and_use_preset) { _, _ ->
-                        if (presetRepository.presets().size >= PresetRepository.MAX_PRESETS) {
+                        val existing = presetRepository.exactMatch(decoded.values)
+                        if (existing != null) {
+                            applyPreset(existing)
+                            Snackbar.make(
+                                binding.root,
+                                getString(R.string.preset_already_exists, existing.name),
+                                Snackbar.LENGTH_LONG,
+                            ).show()
+                        } else if (presetRepository.presets().count { !it.builtIn } >= PresetRepository.MAX_PRESETS) {
                             Snackbar.make(binding.root, R.string.preset_limit_reached, Snackbar.LENGTH_LONG).show()
                         } else {
                             showPresetNameDialog { name ->
@@ -1534,6 +2301,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun presetValueSummary(values: PresetValues): String = listOf(
+        R.string.duration to resources.getQuantityString(
+            R.plurals.duration_seconds,
+            values.durationSeconds,
+            values.durationSeconds,
+        ),
         R.string.aspect_ratio to listOf(
             R.string.aspect_square,
             R.string.aspect_portrait,
@@ -1562,7 +2334,34 @@ class MainActivity : AppCompatActivity() {
             R.string.compression_stronger,
         )[values.longTripCompression.ordinal],
     ).joinToString("\n") { (label, value) ->
-        getString(R.string.preset_value_format, getString(label), getString(value))
+        getString(R.string.preset_value_format, getString(label), if (value is Int) getString(value) else value)
+    }
+
+    private fun currentPresetValues(): PresetValues = PresetValues.from(cameraSettings, routeDurationSeconds)
+
+    private fun draftStyleSummary(selected: VideoPreset? = selectedPreset(), modified: VideoPreset? = null): String {
+        val presetLabel = selected?.name
+            ?: modified?.let { getString(R.string.preset_modified, it.name) }
+            ?: getString(R.string.preset_custom)
+        return listOf(
+            presetLabel,
+            aspectRatioLabel(cameraSettings.videoQuality.aspectRatioOption),
+            resources.getQuantityString(R.plurals.duration_seconds, routeDurationSeconds, routeDurationSeconds),
+        ).joinToString(" · ")
+    }
+
+    private fun syncPresetMatch() {
+        val previous = selectedPreset()
+        val match = presetRepository.exactMatch(currentPresetValues())
+        if (match != null) {
+            activePresetId = match.id
+            presetOriginId = match.id
+            modifiedBuiltInId = null
+        } else {
+            previous?.takeIf(VideoPreset::builtIn)?.let { modifiedBuiltInId = it.id }
+            activePresetId = null
+        }
+        if (presetsConfigured) renderPresetSelection()
     }
 
     private fun configureLocationFiltering() {
@@ -1662,7 +2461,10 @@ class MainActivity : AppCompatActivity() {
     private fun configureCameraPreparation() {
         editor.timelineView.onCameraPreparationChanged = { ready ->
             if (ready) {
-                editor.timelineView.runAfterNextFrameRendered {
+                if (editor.timelineView.isShown) editor.timelineView.runAfterNextFrameRendered {
+                    pendingImportCompletionUri?.let(timelineSourceStore::completeImport)
+                    pendingImportCompletionUri = null
+                } else {
                     pendingImportCompletionUri?.let(timelineSourceStore::completeImport)
                     pendingImportCompletionUri = null
                 }
@@ -1705,9 +2507,10 @@ class MainActivity : AppCompatActivity() {
         settings: CameraSettings,
         presetRelevantChange: Boolean = true,
     ) {
-        if (presetRelevantChange) markPresetCustom(clearDefault = true)
-        settingsViewModel.updateCamera(settings)
+        if (presetRelevantChange) markPresetCustom(clearDefault = !settingsReturnToCreate)
+        if (!settingsReturnToCreate) settingsViewModel.updateCamera(settings)
         applyAdvancedSettings(settings)
+        if (presetRelevantChange) syncPresetMatch()
     }
 
     private fun applyAdvancedSettings(settings: CameraSettings) {
@@ -1935,6 +2738,7 @@ class MainActivity : AppCompatActivity() {
         animation?.cancel()
         editor.timelineView.journeyDurationSeconds = seconds
         showProgress(editor.timelineSeek.progress / 1000f)
+        if (presetsConfigured) syncPresetMatch()
     }
 
     private fun showCustomDurationDialog() {
@@ -2017,6 +2821,7 @@ class MainActivity : AppCompatActivity() {
         val selected = journey ?: return
         animation?.cancel()
         commitTitlePreferences()
+        val project = ensureActiveProject()
         val title = resolvedTitle(selected.period)
         pendingExport = VideoExportRequest(
             outputUri = "",
@@ -2025,6 +2830,9 @@ class MainActivity : AppCompatActivity() {
             durationSeconds = selectedDurationSeconds(),
             renderText = currentRenderText(),
             cameraSettings = cameraSettings,
+            projectId = project?.id,
+            presetName = selectedPreset()?.name,
+            dataSource = if (rawSignalsEnabled) VideoDataSource.RAW else VideoDataSource.SEMANTIC,
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val request = pendingExport ?: return
@@ -2274,7 +3082,6 @@ class MainActivity : AppCompatActivity() {
         editor.endMonthDropdown.isEnabled = !exporting
         editor.exactDateSwitch.isEnabled = !exporting
         editor.rawSignalsSwitch.isEnabled = !exporting
-        editor.rawAccuracyInput.isEnabled = !exporting
         editor.exactDateRangeButton.isEnabled = !exporting
         editor.ownerInput.isEnabled = !exporting
         editor.titleInput.isEnabled = !exporting
@@ -2292,62 +3099,738 @@ class MainActivity : AppCompatActivity() {
         if (!exporting) updateCameraPreparationUi()
     }
 
-    private fun prepareAnotherVideo() {
+    internal fun prepareAnotherVideo() {
         videoExportViewModel.clear()
         editor.videoReadyGroup.visibility = View.GONE
         editor.timelineSeek.progress = 0
         showProgress(0f)
-        journey?.let { editor.periodSummaryText.text = selectedPeriodSummary(it) }
+        journey = null
+        animation?.cancel()
+        resetCreateEntry()
+        showNewVideo(loadRemembered = true)
     }
 
-    private fun importExistingVideos(uris: List<Uri>) {
-        home.addExistingVideoButton.isEnabled = false
-        home.addExistingVideoButton.setText(R.string.adding_videos)
-        lifecycleScope.launch {
-            var imported = 0
-            var failed = 0
-            uris.forEachIndexed { index, uri ->
-                persistUriAccess(uri, includeWrite = true)
-                val result = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val metadata = videoMedia.inspect(uri)
-                        runCatching { videoMedia.createThumbnail(uri)?.recycle() }
-                        VideoRecord(
-                            uri = uri.toString(),
-                            title = metadata.fileName.substringBeforeLast('.').ifBlank { getString(R.string.default_title) },
-                            fileName = metadata.fileName,
-                            createdAtMillis = metadata.lastModifiedMillis.takeIf { it > 0 }
-                                ?: System.currentTimeMillis() - index,
-                            durationSeconds = metadata.durationSeconds,
-                        )
-                    }
-                }
-                result.onSuccess { record ->
-                    videoLibraryViewModel.upsert(record)
-                    imported += 1
-                }.onFailure { failed += 1 }
+    private fun configureTripDiscovery() {
+        editor.detectionRangeDropdown.setOnItemClickListener { _, _, position, _ ->
+            if (position < detectionYears.size) {
+                val year = detectionYears[position]
+                selectedDetectionYear = year
+                detectionStartDate = LocalDate.of(year, 1, 1)
+                detectionEndDate = LocalDate.of(year, 12, 31)
+                editor.detectionCustomRangeButton.visibility = View.GONE
+            } else {
+                selectedDetectionYear = null
+                editor.detectionCustomRangeButton.visibility = View.VISIBLE
             }
-            home.addExistingVideoButton.isEnabled = true
-            home.addExistingVideoButton.setText(R.string.add_videos)
-            renderVideos()
-            if (imported > 0) {
-                Snackbar.make(
-                    binding.root,
-                    resources.getQuantityString(R.plurals.videos_added, imported, imported),
-                    Snackbar.LENGTH_LONG,
-                ).show()
-            }
-            if (failed > 0) Snackbar.make(binding.root, R.string.video_import_failed, Snackbar.LENGTH_LONG).show()
         }
+        makeDropdownOpenReliably(editor.detectionRangeDropdown)
+    }
+
+    private fun refreshDetectionRanges() {
+        detectionYears = timeline?.years.orEmpty().sortedDescending()
+        val labels = detectionYears.map(Int::toString) + getString(R.string.custom_range)
+        editor.detectionRangeDropdown.setAdapter(SelectionArrayAdapter(this, labels))
+        if (selectedDetectionYear == null && detectionStartDate != null && detectionEndDate != null) {
+            editor.detectionRangeDropdown.setText(getString(R.string.custom_range), false)
+            editor.detectionCustomRangeButton.visibility = View.VISIBLE
+            editor.detectionCustomRangeButton.text = projectDateRange(
+                requireNotNull(detectionStartDate),
+                requireNotNull(detectionEndDate),
+            )
+            return
+        }
+        val year = selectedDetectionYear?.takeIf { it in detectionYears } ?: detectionYears.firstOrNull()
+        if (year != null) {
+            selectedDetectionYear = year
+            detectionStartDate = LocalDate.of(year, 1, 1)
+            detectionEndDate = LocalDate.of(year, 12, 31)
+            editor.detectionRangeDropdown.setText(year.toString(), false)
+            editor.detectionCustomRangeButton.visibility = View.GONE
+        } else {
+            editor.detectionRangeDropdown.setText(getString(R.string.custom_range), false)
+            editor.detectionCustomRangeButton.visibility = View.VISIBLE
+        }
+    }
+
+    private fun showTripDiscovery() {
+        if (timeline == null) {
+            showNewVideo(loadRemembered = false)
+            requestTimelineImport()
+            return
+        }
+        currentCreateStep = CreateStep.DISCOVERY
+        refreshDetectionRanges()
+        renderCreateStep()
+    }
+
+    private fun chooseDetectionRange() {
+        val start = detectionStartDate ?: timeline?.points?.firstOrNull()?.instant
+            ?.atZone(ZoneId.systemDefault())?.toLocalDate() ?: return
+        val end = detectionEndDate ?: timeline?.points?.lastOrNull()?.instant
+            ?.atZone(ZoneId.systemDefault())?.toLocalDate() ?: start
+        val picker = MaterialDatePicker.Builder.dateRangePicker()
+            .setTitleText(R.string.detection_range)
+            .setSelection(AndroidPair(datePickerMillis(start), datePickerMillis(end)))
+            .build()
+        picker.addOnPositiveButtonClickListener { range ->
+            detectionStartDate = Instant.ofEpochMilli(range.first).atZone(ZoneOffset.UTC).toLocalDate()
+            detectionEndDate = Instant.ofEpochMilli(range.second).atZone(ZoneOffset.UTC).toLocalDate()
+            selectedDetectionYear = null
+            editor.detectionCustomRangeButton.text = projectDateRange(
+                requireNotNull(detectionStartDate),
+                requireNotNull(detectionEndDate),
+            )
+        }
+        picker.show(supportFragmentManager, "trip-detection-range")
+    }
+
+    private fun runTripDetection() {
+        val loaded = timeline ?: return
+        val start = detectionStartDate ?: return
+        val end = detectionEndDate ?: return
+        tripDiscoveryRequested = true
+        editor.runTripDetectionButton.isEnabled = false
+        editor.runTripDetectionButton.setText(R.string.detecting_trips)
+        lifecycleScope.launch {
+            tripSuggestions = detectTrips(loaded, start, end)
+            suggestionsExpanded = false
+            editor.runTripDetectionButton.isEnabled = true
+            editor.runTripDetectionButton.setText(R.string.recommend_trips)
+            renderTrips()
+        }
+    }
+
+    private suspend fun refreshRequestedTripSuggestions(loaded: Timeline): List<TripSuggestion> {
+        if (!tripDiscoveryRequested) return emptyList()
+        val start = detectionStartDate ?: return emptyList()
+        val end = detectionEndDate ?: return emptyList()
+        return detectTrips(loaded, start, end)
+    }
+
+    private suspend fun detectTrips(
+        loaded: Timeline,
+        start: LocalDate,
+        end: LocalDate,
+    ): List<TripSuggestion> = withContext(Dispatchers.Default) {
+        val dismissed = tripsStore.dismissedSuggestionIds()
+        TripDetector.detect(
+            timeline = loaded,
+            request = TripDetectionRequest(start, end),
+            nameResolver = OfflineDestinationNameResolver(applicationContext),
+        ).filterNot { it.id in dismissed }
+    }
+
+    private fun startManualProject(kind: TripKind) {
+        val zone = ZoneId.systemDefault()
+        val bounds = if (kind == TripKind.RAW_DATA) rawDateBounds() else semanticDateBounds()
+        if (bounds == null) return
+        val latest = bounds.second
+        activeProjectId = null
+        activeSuggestionId = null
+        activeProjectKind = kind
+        rawProjectRangeConflict = false
+        activeProjectTitleMode = if (kind == TripKind.TRIP) ProjectTitleMode.CUSTOM else ProjectTitleMode.AUTOMATIC
+        editingProjectOnly = false
+        endPeriodEnabled = false
+        activeStartDate = when (kind) {
+            TripKind.TRIP -> latest.minusDays(6).coerceAtLeast(bounds.first)
+            TripKind.MONTHLY_RECAP -> latest.withDayOfMonth(1)
+            TripKind.YEARLY_RECAP -> LocalDate.of(latest.year, 1, 1)
+            TripKind.CUSTOM_RECAP -> RecapPeriodRules.customDefault(bounds.first, bounds.second, LocalDate.now(zone)).first
+            TripKind.RAW_DATA -> bounds.first
+        }
+        activeEndDate = when (kind) {
+            TripKind.TRIP -> latest
+            TripKind.MONTHLY_RECAP -> latest.withDayOfMonth(1).plusMonths(1).minusDays(1)
+            TripKind.YEARLY_RECAP -> LocalDate.of(latest.year, 12, 31)
+            TripKind.CUSTOM_RECAP, TripKind.RAW_DATA -> bounds.second
+        }
+        setProjectTitle(
+            if (kind == TripKind.TRIP) getString(R.string.new_trip) else suggestedProjectTitle(kind, activeStartDate!!, activeEndDate!!),
+        )
+        videoTitleUserEdited = false
+        setAutomaticVideoTitle(editor.projectTitleInput.text?.toString().orEmpty())
+        currentCreateStep = CreateStep.PROJECT
+        showNewVideo(loadRemembered = true)
+        applyActiveProjectDates()
+    }
+
+    private fun chooseRecapKind() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.create_recap)
+            .setItems(arrayOf(getString(R.string.monthly_recap_badge), getString(R.string.yearly_recap_badge))) { _, which ->
+                startManualProject(if (which == 0) TripKind.MONTHLY_RECAP else TripKind.YEARLY_RECAP)
+            }
+            .show()
+    }
+
+    private fun renderTrips() {
+        val projects = tripsStore.list()
+        val videos = videoLibraryViewModel.records.value
+        home.emptyLibraryText.visibility = if (projects.isEmpty() && videos.isEmpty()) View.VISIBLE else View.GONE
+        home.deleteAllVideosButton.visibility = if (projects.isEmpty() && videos.isEmpty()) View.GONE else View.VISIBLE
+        home.tripsHeading.visibility = if (projects.any { it.kind == TripKind.TRIP }) View.VISIBLE else View.GONE
+        home.recapsHeading.visibility = if (projects.any { it.kind != TripKind.TRIP }) View.VISIBLE else View.GONE
+        if (currentCreateStep == CreateStep.TRIP_SOURCE) renderCreateTripSources()
+        if (currentCreateStep == CreateStep.DISCOVERY) renderTripSuggestions()
+
+        home.tripsList.removeAllViews()
+        home.recapsList.removeAllViews()
+        projects.forEach { project ->
+            val parent = if (project.kind == TripKind.TRIP) home.tripsList else home.recapsList
+            addProjectCard(parent, project, videos.filter { it.projectId == project.id })
+        }
+    }
+
+    private fun renderTripSuggestions() {
+        val confirmedDates = tripsStore.list().map { it.startDate to it.endDate }.toSet()
+        val suggestions = tripSuggestions.filterNot { it.startDate to it.endDate in confirmedDates }
+        editor.emptySuggestionsText.visibility = if (suggestions.isEmpty()) View.VISIBLE else View.GONE
+        editor.showAllSuggestionsButton.visibility = if (suggestions.size > COLLAPSED_CREATION_COUNT) View.VISIBLE else View.GONE
+        editor.showAllSuggestionsButton.text = if (suggestionsExpanded) {
+            getString(R.string.show_fewer_suggestions)
+        } else {
+            getString(R.string.show_all_suggestions, suggestions.size)
+        }
+        editor.suggestionsList.removeAllViews()
+        (if (suggestionsExpanded) suggestions else suggestions.take(COLLAPSED_CREATION_COUNT)).forEach { suggestion ->
+            val card = ItemTripBinding.inflate(layoutInflater, editor.suggestionsList, false)
+            card.tripBadge.setText(if (suggestion.confidence == SuggestionConfidence.STRONG) R.string.strong_match else R.string.possible_match)
+            card.tripTitle.text = tripSuggestionTitle(suggestion)
+            val dayCount = suggestion.endDate.toEpochDay() - suggestion.startDate.toEpochDay() + 1
+            card.tripDetails.text = getString(
+                R.string.trip_suggestion_details,
+                projectDateRange(suggestion.startDate, suggestion.endDate),
+                dayCount,
+            )
+            showTripCoverage(card, coverageFor(suggestion.startDate, suggestion.endDate))
+            card.tripPrimaryButton.setText(R.string.confirm_and_create)
+            card.tripPrimaryButton.setOnClickListener { confirmSuggestion(suggestion) }
+            card.tripSecondaryButton.visibility = View.VISIBLE
+            card.tripSecondaryButton.setText(R.string.dismiss_suggestion)
+            card.tripSecondaryButton.setOnClickListener {
+                tripsStore.dismissSuggestion(suggestion.id)
+                tripSuggestions = tripSuggestions.filterNot { it.id == suggestion.id }
+                renderTripSuggestions()
+            }
+            editor.suggestionsList.addView(card.root)
+        }
+    }
+
+    private fun addProjectCard(parent: android.widget.LinearLayout, project: TripProject, videos: List<VideoRecord>) {
+        val card = ItemTripBinding.inflate(layoutInflater, parent, false)
+        card.tripBadge.setText(when (project.kind) {
+            TripKind.TRIP -> R.string.trip_badge
+            TripKind.MONTHLY_RECAP -> R.string.monthly_recap_badge
+            TripKind.YEARLY_RECAP -> R.string.yearly_recap_badge
+            TripKind.CUSTOM_RECAP -> R.string.custom_recap_badge
+            TripKind.RAW_DATA -> R.string.raw_data_badge
+        })
+        card.tripTitle.text = project.title
+        card.tripDetails.text = "${projectDisplayRange(project)} · ${getString(R.string.videos_count, videos.size)}"
+        if (project.kind == TripKind.TRIP) showTripCoverage(card, coverageFor(project.startDate, project.endDate))
+        card.tripPrimaryButton.setText(R.string.create_video_for_trip)
+        card.tripPrimaryButton.setOnClickListener { openProject(project) }
+        card.tripMenuButton.visibility = View.VISIBLE
+        card.tripMenuButton.setOnClickListener { anchor -> showProjectActions(anchor, project, videos) }
+        videos.forEach { record ->
+            val item = ItemVideoBinding.inflate(layoutInflater, card.tripVideosList, false)
+            bindLibraryVideoCard(item, record) { available ->
+                compactVideoSettings(record) + if (available) "" else "\n${getString(R.string.file_unavailable)}"
+            }
+            card.tripVideosList.addView(item.root)
+        }
+        card.root.setOnClickListener { openProject(project) }
+        parent.addView(card.root)
+    }
+
+    private fun showProjectActions(anchor: View, project: TripProject, videos: List<VideoRecord>) {
+        PopupMenu(this, anchor).apply {
+            menu.add(0, PROJECT_ACTION_EDIT, 0, R.string.edit_project)
+            menu.add(0, PROJECT_ACTION_DELETE, 1, R.string.delete_project)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    PROJECT_ACTION_EDIT -> {
+                        openProject(project)
+                        editingProjectOnly = true
+                        renderCreateStep()
+                        true
+                    }
+                    PROJECT_ACTION_DELETE -> {
+                        confirmDeleteProject(project, videos)
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }.show()
+    }
+
+    private fun confirmDeleteProject(project: TripProject, videos: List<VideoRecord>) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.delete_project_title, project.title))
+            .setMessage(getString(R.string.delete_project_message, videos.size))
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.delete_project) { _, _ -> deleteProject(project, videos) }
+            .show()
+    }
+
+    private fun deleteProject(project: TripProject, videos: List<VideoRecord>) {
+        lifecycleScope.launch {
+            val deleted = deleteMediaRecords(videos)
+            videoLibraryViewModel.removeAll(deleted)
+            releaseDeletedMedia(deleted)
+            val failed = videos.filterNot { it in deleted }
+            if (failed.isEmpty()) tripsStore.remove(project.id)
+            renderVideos()
+            renderTrips()
+            Snackbar.make(
+                binding.root,
+                if (failed.isEmpty()) {
+                    getString(R.string.project_deleted, deleted.size)
+                } else {
+                    getString(R.string.project_delete_partial, deleted.size, failed.size)
+                },
+                Snackbar.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    private suspend fun deleteMediaRecords(records: List<VideoRecord>): List<VideoRecord> = withContext(Dispatchers.IO) {
+        records.filter { record ->
+            val uri = record.uri.toUri()
+            val removed = videoMedia.delete(uri)
+            if (removed) {
+                videoMedia.deleteThumbnail(uri)
+                videoMedia.deleteOverview(uri)
+            }
+            removed
+        }
+    }
+
+    private fun releaseDeletedMedia(records: List<VideoRecord>) {
+        records.forEach { record ->
+            val uri = record.uri.toUri()
+            releaseUriAccess(uri)
+            if (lastVideoUri == uri) lastVideoUri = null
+        }
+    }
+
+    private fun coverageFor(start: LocalDate, end: LocalDate): TripCoverage? =
+        (renderTimeline ?: timeline)?.let { TripCoverageCalculator.calculate(it, start, end) }
+
+    private fun showTripCoverage(card: ItemTripBinding, coverage: TripCoverage?) {
+        if (coverage == null) {
+            card.tripCoverage.setText(R.string.trip_coverage_unavailable)
+            card.tripCoverage.visibility = View.VISIBLE
+            return
+        }
+        val number = NumberFormat.getNumberInstance().apply { maximumFractionDigits = 0 }
+        val unit = resolvedDistanceUnit()
+        val metrics = getString(
+            R.string.trip_coverage_format,
+            number.format(unit.fromKilometers(coverage.recordedMovementKm)),
+            unit.symbol,
+            number.format(coverage.usablePointCount),
+            number.format(coverage.activeDayCount),
+        )
+        val quality = getString(if (coverage.limited) R.string.trip_coverage_limited else R.string.trip_coverage_good)
+        card.tripCoverage.text = "$metrics\n$quality"
+        card.tripCoverage.visibility = View.VISIBLE
+    }
+
+    private fun addRecapCandidates(projects: List<TripProject>) {
+        val loaded = timeline ?: return
+        val zone = ZoneId.systemDefault()
+        val latestAvailableMonth = loaded.points.maxOfOrNull { YearMonth.from(it.instant.atZone(zone)) } ?: return
+        val currentMonth = YearMonth.now(zone)
+        val latestMonth = if (latestAvailableMonth >= currentMonth) currentMonth.minusMonths(1) else latestAvailableMonth
+        val monthlyStart = latestMonth.atDay(1)
+        val monthlyEnd = latestMonth.atEndOfMonth()
+        val monthlyHasData = loaded.forRange(TimelinePeriod(latestMonth, latestMonth)).points.isNotEmpty()
+        if (monthlyHasData && projects.none { it.kind == TripKind.MONTHLY_RECAP && it.startDate == monthlyStart }) {
+            addRecapCandidate(
+                title = suggestedProjectTitle(TripKind.MONTHLY_RECAP, monthlyStart, monthlyEnd),
+                start = monthlyStart,
+                end = monthlyEnd,
+                kind = TripKind.MONTHLY_RECAP,
+            )
+        }
+        loaded.years.take(2).forEach { year ->
+            val start = LocalDate.of(year, 1, 1)
+            if (projects.none { it.kind == TripKind.YEARLY_RECAP && it.startDate == start }) {
+                addRecapCandidate(
+                    title = getString(R.string.year_recap_title, year),
+                    start = start,
+                    end = LocalDate.of(year, 12, 31),
+                    kind = TripKind.YEARLY_RECAP,
+                )
+            }
+        }
+    }
+
+    private fun addRecapCandidate(title: String, start: LocalDate, end: LocalDate, kind: TripKind) {
+        val card = ItemTripBinding.inflate(layoutInflater, home.recapsList, false)
+        card.tripBadge.setText(if (kind == TripKind.MONTHLY_RECAP) R.string.monthly_recap_badge else R.string.yearly_recap_badge)
+        card.tripTitle.text = title
+        card.tripDetails.text = projectDateRange(start, end)
+        card.tripPrimaryButton.setText(R.string.create_video_for_trip)
+        card.tripPrimaryButton.setOnClickListener {
+            openProject(tripsStore.create(title, start, end, kind, ProjectTitleMode.AUTOMATIC))
+        }
+        home.recapsList.addView(card.root)
+    }
+
+    private fun confirmSuggestion(suggestion: TripSuggestion) {
+        activeProjectId = null
+        activeSuggestionId = suggestion.id
+        activeProjectKind = TripKind.TRIP
+        activeProjectTitleMode = ProjectTitleMode.AUTOMATIC
+        activeStartDate = suggestion.startDate
+        activeEndDate = suggestion.endDate
+        val title = tripSuggestionTitle(suggestion)
+        setProjectTitle(title)
+        videoTitleUserEdited = false
+        setAutomaticVideoTitle(title)
+        currentCreateStep = CreateStep.PROJECT
+        showNewVideo(loadRemembered = true)
+        applyActiveProjectDates()
+    }
+
+    internal fun tripSuggestionTitle(suggestion: TripSuggestion): String = suggestion.destinationName
+        ?.takeIf(String::isNotBlank)
+        ?.let { getString(R.string.trip_to_destination, it) }
+        ?: getString(R.string.suggested_trip_title)
+
+    private fun openProject(project: TripProject) {
+        activeProjectId = project.id
+        activeSuggestionId = null
+        activeProjectKind = project.kind
+        activeProjectTitleMode = project.titleMode
+        activeStartDate = project.startDate
+        activeEndDate = project.endDate
+        setProjectTitle(project.title)
+        videoTitleUserEdited = false
+        setAutomaticVideoTitle(project.title)
+        currentCreateStep = CreateStep.PROJECT
+        modifiedBuiltInId = null
+        activePresetId = null
+        applyRecommendedPresetIfNeeded()
+        editor.saveTripButton.isEnabled = true
+        showNewVideo(loadRemembered = true)
+        applyActiveProjectDates()
+    }
+
+    private fun applyActiveProjectDates() {
+        val start = activeStartDate ?: return
+        val end = activeEndDate ?: return
+        val years = timeline?.years ?: return
+        if (start.year !in years || end.year !in years) return
+        rawSignalsEnabled = activeProjectKind == TripKind.RAW_DATA
+        if (!rawSignalsEnabled) rawProjectRangeConflict = false
+        if (rawSignalsEnabled) rebuildRawSignalsTimeline()
+        exactDateRangeEnabled = activeProjectKind in setOf(TripKind.TRIP, TripKind.CUSTOM_RECAP, TripKind.RAW_DATA)
+        selectedStartDate = start
+        selectedEndDate = end
+        selectedStartYear = start.year
+        selectedEndYear = end.year
+        selectedStartMonth = start.monthValue
+        selectedEndMonth = end.monthValue
+        endPeriodEnabled = when (activeProjectKind) {
+            TripKind.YEARLY_RECAP -> start.year != end.year
+            TripKind.MONTHLY_RECAP -> YearMonth.from(start) != YearMonth.from(end)
+            else -> false
+        }
+        editor.exactDateSwitch.isChecked = exactDateRangeEnabled
+        editor.rawSignalsSwitch.isChecked = rawSignalsEnabled
+        updateYearDropdowns()
+        editor.startMonthDropdown.setText(monthNames[selectedStartMonth - 1], false)
+        editor.endMonthDropdown.setText(monthNames[selectedEndMonth - 1], false)
+        updateExactDateControls()
+        updateProjectPeriodControls()
+        selectRange()
+        updateProjectDateLabel()
+        updateSuggestedProjectTitle()
+    }
+
+    private fun updateProjectDateLabel() {
+        val dates = currentProjectDates()
+        val start = dates?.first ?: activeStartDate
+        val end = dates?.second ?: activeEndDate
+        editor.projectDateText.text = if (start != null && end != null) {
+            projectDisplayRange(activeProjectKind, start, end)
+        } else {
+            ""
+        }
+        if (activeProjectKind == TripKind.TRIP && start != null && end != null) {
+            val coverage = coverageFor(start, end)
+            if (coverage == null) {
+                editor.projectCoverageText.setText(R.string.trip_coverage_unavailable)
+                editor.projectCoverageText.visibility = View.VISIBLE
+                return
+            }
+            val number = NumberFormat.getNumberInstance().apply { maximumFractionDigits = 0 }
+            val unit = resolvedDistanceUnit()
+            val metrics = getString(
+                R.string.trip_coverage_format,
+                number.format(unit.fromKilometers(coverage.recordedMovementKm)),
+                unit.symbol,
+                number.format(coverage.usablePointCount),
+                number.format(coverage.activeDayCount),
+            )
+            editor.projectCoverageText.text = if (coverage.limited) {
+                "$metrics\n${getString(R.string.trip_coverage_warning)}"
+            } else {
+                "$metrics\n${getString(R.string.trip_coverage_good)}"
+            }
+            editor.projectCoverageText.visibility = View.VISIBLE
+        } else {
+            editor.projectCoverageText.visibility = View.GONE
+        }
+    }
+
+    private fun onProjectPeriodChanged(updateSelection: Boolean = true) {
+        currentProjectDates()?.let { (start, end) ->
+            activeStartDate = start
+            activeEndDate = end
+        }
+        updateSuggestedProjectTitle()
+        updateProjectDateLabel()
+        updateProjectPeriodControls()
+        if (updateSelection) selectRange()
+    }
+
+    private fun setProjectTitle(value: String) {
+        updatingProjectTitle = true
+        editor.projectTitleInput.setText(value)
+        updatingProjectTitle = false
+        editor.resetSuggestedTitleButton.visibility =
+            if (activeProjectKind != TripKind.TRIP && activeProjectTitleMode == ProjectTitleMode.CUSTOM) View.VISIBLE else View.GONE
+    }
+
+    private fun updateSuggestedProjectTitle(force: Boolean = false) {
+        if (!force && activeProjectTitleMode != ProjectTitleMode.AUTOMATIC) return
+        val (start, end) = currentProjectDates() ?: return
+        activeProjectTitleMode = ProjectTitleMode.AUTOMATIC
+        val title = suggestedProjectTitle(activeProjectKind, start, end)
+        setProjectTitle(title)
+        editor.resetSuggestedTitleButton.visibility = View.GONE
+        if (!videoTitleUserEdited) setAutomaticVideoTitle(title)
+    }
+
+    internal fun suggestedProjectTitle(kind: TripKind, start: LocalDate, end: LocalDate): String = when (kind) {
+        TripKind.TRIP -> editor.projectTitleInput.text?.toString().orEmpty().ifBlank { getString(R.string.new_trip) }
+        TripKind.YEARLY_RECAP -> if (start.year == end.year) {
+            getString(R.string.year_recap_title, start.year)
+        } else {
+            getString(R.string.year_recap_range_title, start.year, end.year)
+        }
+        TripKind.MONTHLY_RECAP -> when {
+            YearMonth.from(start) == YearMonth.from(end) ->
+                getString(R.string.month_recap_title, shortMonthNames[start.monthValue - 1], start.year)
+            start.year == end.year -> getString(
+                R.string.month_recap_same_year_title,
+                shortMonthNames[start.monthValue - 1],
+                shortMonthNames[end.monthValue - 1],
+                start.year,
+            )
+            else -> getString(
+                R.string.month_recap_cross_year_title,
+                shortMonthNames[start.monthValue - 1],
+                start.year,
+                shortMonthNames[end.monthValue - 1],
+                end.year,
+            )
+        }
+        TripKind.CUSTOM_RECAP -> getString(
+            R.string.custom_recap_title,
+            formatExactDate(start),
+            formatExactDate(end),
+        )
+        TripKind.RAW_DATA -> {
+            val days = (ChronoUnit.DAYS.between(start, end) + 1L).coerceAtLeast(1L).toInt()
+            resources.getQuantityString(R.plurals.recent_day_recap, days, days)
+        }
+    }
+
+    internal fun isDateRangeWithinBounds(
+        start: LocalDate,
+        end: LocalDate,
+        bounds: Pair<LocalDate, LocalDate>,
+    ): Boolean = !start.isBefore(bounds.first) && !end.isAfter(bounds.second) && !end.isBefore(start)
+
+    internal fun applyExactDateRange(start: LocalDate, end: LocalDate): Boolean {
+        if (!isDateRangeWithinBounds(start, end, activeDateBounds())) return false
+        rawProjectRangeConflict = false
+        selectedStartDate = start
+        selectedEndDate = end
+        selectedStartYear = start.year
+        selectedEndYear = end.year
+        selectedStartMonth = start.monthValue
+        selectedEndMonth = end.monthValue
+        updateYearDropdowns()
+        editor.startMonthDropdown.setText(monthNames[selectedStartMonth - 1], false)
+        editor.endMonthDropdown.setText(monthNames[selectedEndMonth - 1], false)
+        updateExactDateControls()
+        updateResolvedTitle()
+        selectRange()
+        if (currentCreateStep == CreateStep.PROJECT) onProjectPeriodChanged()
+        updateRawDataAvailability()
+        return true
+    }
+
+    private fun updateProjectPeriodControls() {
+        val monthly = activeProjectKind == TripKind.MONTHLY_RECAP
+        val yearly = activeProjectKind == TripKind.YEARLY_RECAP
+        val periodBased = monthly || yearly
+        editor.periodDateControlsGroup.visibility = if (periodBased) View.VISIBLE else View.GONE
+        editor.startYearLayout.visibility = if (periodBased) View.VISIBLE else View.GONE
+        editor.startMonthLayout.visibility = if (monthly) View.VISIBLE else View.GONE
+        editor.endYearLayout.visibility = if (periodBased && endPeriodEnabled) View.VISIBLE else View.GONE
+        editor.endMonthLayout.visibility = if (monthly && endPeriodEnabled) View.VISIBLE else View.GONE
+        editor.addEndPeriodButton.visibility = if (periodBased) View.VISIBLE else View.GONE
+        editor.addEndPeriodButton.setText(
+            when {
+                endPeriodEnabled -> R.string.remove_end_period
+                yearly -> R.string.add_end_year
+                else -> R.string.add_end_month
+            },
+        )
+        editor.exactDateSwitch.visibility = View.GONE
+        editor.exactDateRangeButton.visibility = if (!periodBased) View.VISIBLE else View.GONE
+        editor.rawSignalsSwitch.visibility = View.GONE
+        editor.rawSignalsDescription.visibility = if (activeProjectKind == TripKind.RAW_DATA) View.VISIBLE else View.GONE
+        updateExactDateControls()
+        if (periodBased) editor.exactDateRangeButton.visibility = View.GONE
+        updateRawDataAvailability()
+    }
+
+    private fun semanticDateBounds(): Pair<LocalDate, LocalDate>? {
+        if (rawOnlyImport) return null
+        val points = timeline?.points.orEmpty()
+        if (points.isEmpty()) return null
+        val zone = ZoneId.systemDefault()
+        return points.minOf { it.instant }.atZone(zone).toLocalDate() to
+            points.maxOf { it.instant }.atZone(zone).toLocalDate()
+    }
+
+    private fun rawDateBounds(): Pair<LocalDate, LocalDate>? {
+        val points = renderRawSignalsTimeline?.points.orEmpty()
+        if (points.isEmpty()) return null
+        val zone = ZoneId.systemDefault()
+        return points.minOf { it.instant }.atZone(zone).toLocalDate() to
+            points.maxOf { it.instant }.atZone(zone).toLocalDate()
+    }
+
+    private fun activeDateBounds(): Pair<LocalDate, LocalDate> =
+        (if (activeProjectKind == TripKind.RAW_DATA) rawDateBounds() else semanticDateBounds())
+            ?: ((selectedStartDate ?: LocalDate.now()) to (selectedEndDate ?: LocalDate.now()))
+
+    private fun saveActiveProject(asNew: Boolean): TripProject? {
+        val (start, end) = currentProjectDates() ?: return null
+        val title = editor.projectTitleInput.text?.toString().orEmpty()
+        val existing = if (!asNew) activeProjectId?.let { id -> tripsStore.list().firstOrNull { it.id == id } } else null
+        val saved = if (existing == null) {
+            tripsStore.create(title, start, end, activeProjectKind, activeProjectTitleMode)
+        } else {
+            existing.copy(
+                title = title.trim().ifBlank { existing.title },
+                startDate = start,
+                endDate = end,
+                titleMode = activeProjectTitleMode,
+            ).also(tripsStore::upsert)
+        }
+        activeProjectId = saved.id
+        activeStartDate = saved.startDate
+        activeEndDate = saved.endDate
+        editor.projectTitleInput.setText(saved.title)
+        editor.saveTripButton.isEnabled = true
+        updateProjectDateLabel()
+        activeSuggestionId?.let { suggestionId ->
+            tripSuggestions = tripSuggestions.filterNot { it.id == suggestionId }
+            activeSuggestionId = null
+        }
+        if (!videoTitleUserEdited) setAutomaticVideoTitle(saved.title)
+        renderTrips()
+        Snackbar.make(binding.root, R.string.trip_saved, Snackbar.LENGTH_SHORT).show()
+        return saved
+    }
+
+    private fun ensureActiveProject(): TripProject? {
+        val existing = activeProjectId?.let { id -> tripsStore.list().firstOrNull { it.id == id } }
+        return if (existing == null) saveActiveProject(asNew = true) else saveActiveProject(asNew = false)
+    }
+
+    private fun currentProjectDates(): Pair<LocalDate, LocalDate>? {
+        if (activeProjectKind == TripKind.YEARLY_RECAP) {
+            val start = selectedStartYear ?: return null
+            val end = if (endPeriodEnabled) selectedEndYear ?: start else start
+            return RecapPeriodRules.yearly(start, end)
+        }
+        if (activeProjectKind == TripKind.MONTHLY_RECAP) {
+            val start = YearMonth.of(selectedStartYear ?: return null, selectedStartMonth)
+            val end = if (endPeriodEnabled) {
+                YearMonth.of(selectedEndYear ?: start.year, selectedEndMonth)
+            } else {
+                start
+            }
+            return RecapPeriodRules.monthly(start, end)
+        }
+        if (exactDateRangeEnabled) {
+            val start = selectedStartDate ?: return null
+            val end = selectedEndDate ?: return null
+            return start to end
+        }
+        val period = currentPeriod() ?: return null
+        return period.start.atDay(1) to period.endInclusive.atEndOfMonth()
+    }
+
+    private fun projectDateRange(start: LocalDate, end: LocalDate): String = getString(
+        R.string.exact_date_range,
+        formatExactDate(start),
+        formatExactDate(end),
+    )
+
+    private fun projectDisplayRange(project: TripProject): String =
+        projectDisplayRange(project.kind, project.startDate, project.endDate)
+
+    private fun projectDisplayRange(kind: TripKind, start: LocalDate, end: LocalDate): String = when {
+        kind == TripKind.TRIP -> projectDateRange(start, end)
+        kind == TripKind.CUSTOM_RECAP || kind == TripKind.RAW_DATA -> projectDateRange(start, end)
+        kind == TripKind.YEARLY_RECAP && start.year != end.year -> "${start.year}–${end.year}"
+        kind == TripKind.MONTHLY_RECAP && YearMonth.from(start) != YearMonth.from(end) && start.year == end.year ->
+            getString(
+                R.string.period_same_year,
+                monthNames[start.monthValue - 1],
+                monthNames[end.monthValue - 1],
+                start.year,
+            )
+        kind == TripKind.MONTHLY_RECAP && YearMonth.from(start) != YearMonth.from(end) -> getString(
+            R.string.period_cross_year,
+            monthNames[start.monthValue - 1],
+            start.year,
+            monthNames[end.monthValue - 1],
+            end.year,
+        )
+        start.dayOfMonth == 1 && YearMonth.from(start) == YearMonth.from(end) && end == YearMonth.from(end).atEndOfMonth() ->
+            "${monthNames[start.monthValue - 1]} ${start.year}"
+        start == LocalDate.of(start.year, 1, 1) && end == LocalDate.of(start.year, 12, 31) ->
+            NumberFormat.getIntegerInstance().apply { isGroupingUsed = false }.format(start.year)
+        else -> projectDateRange(start, end)
     }
 
     private fun renderVideos() {
         videoLibraryViewModel.refresh()
-        val records = videoLibraryViewModel.records.value
+        val allRecords = videoLibraryViewModel.records.value
+        val records = allRecords.filter { it.projectId == null }
         videoRenderJob?.cancel()
-        home.emptyVideosText.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
+        videoCardJobs.forEach(Job::cancel)
+        videoCardJobs.clear()
+        home.unassignedVideosHeading.visibility = if (records.isEmpty()) View.GONE else View.VISIBLE
+        home.emptyVideosText.visibility = View.GONE
         home.showAllVideosButton.visibility = if (records.size > COLLAPSED_CREATION_COUNT) View.VISIBLE else View.GONE
-        home.deleteAllVideosButton.visibility = if (records.isEmpty()) View.GONE else View.VISIBLE
+        home.deleteAllVideosButton.visibility =
+            if (allRecords.isEmpty() && tripsStore.list().isEmpty()) View.GONE else View.VISIBLE
         home.showAllVideosButton.text = if (videosExpanded) {
             getString(R.string.show_fewer_videos)
         } else {
@@ -2358,44 +3841,49 @@ class MainActivity : AppCompatActivity() {
         videoRenderJob = lifecycleScope.launch {
             visibleRecords.forEach { record ->
                 val item = ItemVideoBinding.inflate(layoutInflater, home.videosList, false)
-                val uri = record.uri.toUri()
-                item.root.tag = record.uri
-                item.videoTitle.text = record.title
-                item.videoDetails.text = videoDetails(record, available = true)
-                item.videoWatchButton.isEnabled = false
-                item.videoShareButton.isEnabled = false
-                item.root.isClickable = false
-                item.videoWatchButton.setOnClickListener { watchVideo(uri) }
-                item.videoShareButton.setOnClickListener { shareVideo(uri) }
-                item.videoMoreButton.setOnClickListener { showVideoActions(record) }
-                item.root.setOnClickListener { watchVideo(uri) }
+                bindLibraryVideoCard(item, record) { available -> videoDetails(record, available) }
                 home.videosList.addView(item.root)
+            }
+        }
+    }
 
-                launch {
-                    var thumbnail: android.graphics.Bitmap? = null
-                    var applied = false
-                    try {
-                        val available = withContext(Dispatchers.IO) {
-                            videoMedia.isAvailable(uri).also { mediaAvailable ->
-                                if (mediaAvailable) {
-                                    thumbnail = runCatching { videoMedia.createThumbnail(uri) }.getOrNull()
-                                }
-                            }
-                        }
-                        if (item.root.tag != record.uri) return@launch
-                        item.videoDetails.text = videoDetails(record, available)
-                        item.videoWatchButton.isEnabled = available
-                        item.videoShareButton.isEnabled = available
-                        item.root.isClickable = available
-                        thumbnail?.let { bitmap ->
-                            item.videoThumbnail.setPadding(0, 0, 0, 0)
-                            item.videoThumbnail.setImageBitmap(bitmap)
-                        }
-                        applied = true
-                    } finally {
-                        if (!applied) thumbnail?.recycle()
+    private fun bindLibraryVideoCard(
+        item: ItemVideoBinding,
+        record: VideoRecord,
+        details: (Boolean) -> String,
+    ) {
+        val uri = record.uri.toUri()
+        item.root.tag = record.uri
+        item.videoTitle.text = record.title
+        item.videoDetails.text = details(true)
+        item.videoWatchButton.isEnabled = false
+        item.videoShareButton.isEnabled = false
+        item.root.isClickable = false
+        item.videoWatchButton.setOnClickListener { watchVideo(uri) }
+        item.videoShareButton.setOnClickListener { shareVideo(uri) }
+        item.videoMoreButton.setOnClickListener { showVideoActions(record) }
+        item.root.setOnClickListener { watchVideo(uri) }
+        videoCardJobs += lifecycleScope.launch {
+            var thumbnail: android.graphics.Bitmap? = null
+            var applied = false
+            try {
+                val available = withContext(Dispatchers.IO) {
+                    videoMedia.isAvailable(uri).also { mediaAvailable ->
+                        if (mediaAvailable) thumbnail = runCatching { videoMedia.createThumbnail(uri) }.getOrNull()
                     }
                 }
+                if (item.root.tag != record.uri) return@launch
+                item.videoDetails.text = details(available)
+                item.videoWatchButton.isEnabled = available
+                item.videoShareButton.isEnabled = available
+                item.root.isClickable = available
+                thumbnail?.let { bitmap ->
+                    item.videoThumbnail.setPadding(0, 0, 0, 0)
+                    item.videoThumbnail.setImageBitmap(bitmap)
+                }
+                applied = true
+            } finally {
+                if (!applied) thumbnail?.recycle()
             }
         }
     }
@@ -2428,8 +3916,6 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
-        parts += if (record.durationSeconds > 0) formatVideoDuration(record.durationSeconds)
-        else getString(R.string.unknown_duration)
         parts += DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(record.createdAtMillis))
         if (!available) parts += getString(R.string.file_unavailable)
         return parts.joinToString(" · ")
@@ -2446,11 +3932,130 @@ class MainActivity : AppCompatActivity() {
     private fun showVideoActions(record: VideoRecord) {
         MaterialAlertDialogBuilder(this)
             .setTitle(record.title)
-            .setItems(arrayOf(getString(R.string.remove_from_list), getString(R.string.delete_video))) { _, which ->
-                if (which == 0) removeVideo(record) else confirmDeleteVideo(record)
+            .setItems(
+                arrayOf(
+                    getString(R.string.watch),
+                    getString(R.string.share),
+                    getString(R.string.settings_details),
+                    getString(R.string.delete_video),
+                ),
+            ) { _, which ->
+                when (which) {
+                    0 -> watchVideo(record.uri.toUri())
+                    1 -> shareVideo(record.uri.toUri())
+                    2 -> showVideoSettingsDetails(record)
+                    3 -> confirmDeleteVideo(record)
+                }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun compactVideoSettings(record: VideoRecord): String {
+        val snapshot = record.settingsSnapshot
+            ?: return listOfNotNull(
+                record.presetName,
+                DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(record.createdAtMillis)),
+            ).joinToString(" · ")
+        val firstLine = listOfNotNull(
+            snapshot.presetName ?: getString(R.string.preset_custom),
+            aspectRatioLabel(snapshot.aspectRatio),
+            resources.getQuantityString(
+                R.plurals.duration_seconds,
+                snapshot.requestedDurationSeconds,
+                snapshot.requestedDurationSeconds,
+            ),
+        ).joinToString(" · ")
+        return firstLine
+    }
+
+    private fun showVideoSettingsDetails(record: VideoRecord) {
+        val snapshot = record.settingsSnapshot
+        val message = if (snapshot == null) {
+            record.presetName ?: getString(R.string.settings_unavailable)
+        } else {
+            presetValueSummary(
+                PresetValues(
+                    snapshot.aspectRatio,
+                    snapshot.cameraMovement,
+                    snapshot.tripDetection,
+                    snapshot.localFraming,
+                    snapshot.longTripCompression,
+                    snapshot.requestedDurationSeconds,
+                ),
+            ) + "\n" + getString(
+                R.string.preset_value_format,
+                getString(R.string.resolution),
+                snapshotResolutionLabel(snapshot),
+            )
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.settings_details)
+            .setMessage(message)
+            .setPositiveButton(R.string.done, null)
+            .show()
+    }
+
+    internal fun currentVideoSettingsSummary(): String = compactVideoSettings(
+        VideoRecord(
+            uri = "",
+            title = "",
+            fileName = "",
+            createdAtMillis = System.currentTimeMillis(),
+            durationSeconds = 0,
+            presetName = selectedPreset()?.name,
+            settingsSnapshot = VideoSettingsSnapshot(
+                presetName = selectedPreset()?.name,
+                requestedDurationSeconds = routeDurationSeconds,
+                aspectRatio = cameraSettings.videoQuality.aspectRatioOption,
+                cameraMovement = cameraSettings.cameraMovement,
+                tripDetection = cameraSettings.tripDetection,
+                localFraming = cameraSettings.localFraming,
+                longTripCompression = cameraSettings.longTripCompression,
+                resolution = cameraSettings.videoQuality.resolution,
+                dataSource = if (rawSignalsEnabled) VideoDataSource.RAW else VideoDataSource.SEMANTIC,
+                exportShortEdge = cameraSettings.effectiveExportFormat.shortEdge,
+                exportFrameRate = cameraSettings.effectiveExportFormat.frameRate,
+            ),
+        ),
+    )
+
+    private fun aspectRatioLabel(value: VideoAspectRatio): String = getString(
+        listOf(R.string.aspect_square, R.string.aspect_portrait, R.string.aspect_landscape)[value.ordinal],
+    )
+
+    private fun cameraMovementLabel(value: CameraMovement): String = getString(
+        listOf(R.string.camera_fixed, R.string.camera_steady, R.string.camera_dynamic, R.string.camera_close_up)[value.ordinal],
+    )
+
+    private fun tripDetectionLabel(value: TripDetection): String = getString(
+        listOf(R.string.trip_detection_conservative, R.string.trip_detection_balanced, R.string.trip_detection_sensitive)[value.ordinal],
+    )
+
+    private fun localFramingLabel(value: LocalFraming): String = getString(
+        listOf(R.string.local_framing_off, R.string.local_framing_balanced, R.string.local_framing_close)[value.ordinal],
+    )
+
+    private fun compressionLabel(value: LongTripCompression): String = getString(
+        listOf(R.string.compression_off, R.string.compression_balanced, R.string.compression_strong, R.string.compression_stronger)[value.ordinal],
+    )
+
+    private fun resolutionLabel(value: VideoResolution): String = getString(
+        listOf(R.string.resolution_480, R.string.resolution_720, R.string.resolution_1080)[value.ordinal],
+    )
+
+    private fun snapshotResolutionLabel(snapshot: VideoSettingsSnapshot): String {
+        val shortEdge = snapshot.exportShortEdge ?: return resolutionLabel(snapshot.resolution)
+        val frameRate = snapshot.exportFrameRate ?: ExportFormatSettings.DEFAULT_FRAME_RATE
+        val format = ExportFormatSettings(shortEdge, frameRate).format(snapshot.aspectRatio)
+        val dimensions = if (ExportResolution.entries.any { it.shortEdge == shortEdge }) {
+            getString(R.string.preset_resolution_selected, shortEdge, format.width, format.height)
+        } else {
+            getString(R.string.custom_resolution_selected, format.width, format.height)
+        }
+        return snapshot.exportFrameRate?.let {
+            "$dimensions · ${getString(R.string.frame_rate_value, it)}"
+        } ?: dimensions
     }
 
     private fun removeVideo(record: VideoRecord) {
@@ -2458,12 +4063,14 @@ class MainActivity : AppCompatActivity() {
         videoLibraryViewModel.remove(record)
         videoMedia.deleteThumbnail(uri)
         renderVideos()
+        renderTrips()
         var restored = false
         Snackbar.make(binding.root, R.string.video_removed, Snackbar.LENGTH_LONG)
             .setAction(R.string.undo) {
                 restored = true
                 videoLibraryViewModel.upsert(record)
                 renderVideos()
+                renderTrips()
             }
             .addCallback(object : Snackbar.Callback() {
                 override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
@@ -2482,45 +4089,50 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun confirmDeleteAllVideos() {
+    private fun confirmDeleteAllLibraryContent() {
         val records = videoLibraryViewModel.records.value
-        if (records.isEmpty()) return
+        val projects = tripsStore.list()
+        if (records.isEmpty() && projects.isEmpty()) return
+        val projectCount = resources.getQuantityString(
+            R.plurals.library_project_count,
+            projects.size,
+            projects.size,
+        )
+        val videoCount = resources.getQuantityString(
+            R.plurals.library_video_count,
+            records.size,
+            records.size,
+        )
         MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.delete_all_videos_title)
-            .setMessage(R.string.delete_all_videos_message)
+            .setTitle(R.string.delete_all_library_title)
+            .setMessage(getString(R.string.delete_all_library_message, projectCount, videoCount))
             .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.delete_all_videos) { _, _ -> deleteAllVideos(records) }
+            .setPositiveButton(R.string.delete_all_library_content) { _, _ ->
+                deleteAllLibraryContent(projects, records)
+            }
             .show()
     }
 
-    private fun deleteAllVideos(records: List<VideoRecord>) {
+    private fun deleteAllLibraryContent(projects: List<TripProject>, records: List<VideoRecord>) {
         home.deleteAllVideosButton.isEnabled = false
         lifecycleScope.launch {
-            val deleted = withContext(Dispatchers.IO) {
-                records.filter { record ->
-                    val uri = record.uri.toUri()
-                    val removed = videoMedia.delete(uri)
-                    if (removed) {
-                        videoMedia.deleteThumbnail(uri)
-                        videoMedia.deleteOverview(uri)
-                    }
-                    removed
-                }
-            }
+            val deleted = deleteMediaRecords(records)
             videoLibraryViewModel.removeAll(deleted)
-            deleted.forEach { record ->
-                releaseUriAccess(record.uri.toUri())
-                if (lastVideoUri?.toString() == record.uri) lastVideoUri = null
-            }
+            releaseDeletedMedia(deleted)
+            val failed = records.filterNot { it in deleted }
+            val failedProjectIds = failed.mapNotNullTo(mutableSetOf(), VideoRecord::projectId)
+            tripsStore.removeAll(projects.mapNotNullTo(mutableSetOf()) { project ->
+                project.id.takeIf { it !in failedProjectIds }
+            })
             renderVideos()
+            renderTrips()
             home.deleteAllVideosButton.isEnabled = true
-            val failed = records.size - deleted.size
             Snackbar.make(
                 binding.root,
-                if (failed == 0) {
-                    getString(R.string.all_videos_deleted)
+                if (failed.isEmpty()) {
+                    getString(R.string.library_deleted)
                 } else {
-                    getString(R.string.some_videos_not_deleted, deleted.size, failed)
+                    getString(R.string.library_delete_partial, deleted.size, failed.size)
                 },
                 Snackbar.LENGTH_LONG,
             ).show()
@@ -2541,6 +4153,7 @@ class MainActivity : AppCompatActivity() {
                     editor.videoReadyGroup.visibility = View.GONE
                 }
                 renderVideos()
+                renderTrips()
                 Snackbar.make(binding.root, R.string.video_deleted, Snackbar.LENGTH_LONG).show()
             } else {
                 Snackbar.make(binding.root, R.string.delete_video_failed, Snackbar.LENGTH_LONG).show()
@@ -2796,19 +4409,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun deviceName(): String {
-        val name = Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)
-            ?.replace('_', ' ')
-            ?.replace(Regex("\\s+"), " ")
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-        return name?.takeUnless {
-            it.startsWith("sdk ", ignoreCase = true) ||
-                it.startsWith("generic", ignoreCase = true) ||
-                it.equals("Android", ignoreCase = true)
-        } ?: getString(R.string.traveler)
-    }
-
     internal fun selectedDurationSeconds(): Int = routeDurationSeconds
 
     internal fun pendingExportDurationSeconds(): Int? = pendingExport?.durationSeconds
@@ -2829,6 +4429,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private enum class Screen { VIDEOS, NEW_VIDEO, SETTINGS, PLAYER }
+    private enum class CreateStep { TYPE, TRIP_SOURCE, DISCOVERY, PROJECT, STYLE, PREVIEW }
 
     private data class PreparedTimeline(
         val source: Timeline,
@@ -2859,6 +4460,29 @@ class MainActivity : AppCompatActivity() {
         private const val STATE_DRAFT_TRIP_DETECTION = "draft_trip_detection_v1"
         private const val STATE_DRAFT_LOCAL_FRAMING = "draft_local_framing_v1"
         private const val STATE_ACTIVE_PRESET_ID = "active_preset_id_v1"
+        private const val STATE_PRESET_ORIGIN_ID = "preset_origin_id_v5"
+        private const val STATE_MODIFIED_BUILT_IN_ID = "modified_built_in_id_v2"
+        private const val STATE_CREATE_STEP = "create_step_v2"
+        private const val STATE_ACTIVE_PROJECT_ID = "active_project_id_v2"
+        private const val STATE_ACTIVE_SUGGESTION_ID = "active_suggestion_id_v2"
+        private const val STATE_ACTIVE_PROJECT_KIND = "active_project_kind_v2"
+        private const val STATE_ACTIVE_START_DATE = "active_start_date_v2"
+        private const val STATE_ACTIVE_END_DATE = "active_end_date_v2"
+        private const val STATE_ACTIVE_TITLE_MODE = "active_title_mode_v4"
+        private const val STATE_END_PERIOD_ENABLED = "end_period_enabled_v4"
+        private const val STATE_EDITING_PROJECT_ONLY = "editing_project_only_v4"
+        private const val PROJECT_ACTION_EDIT = 1
+        private const val PROJECT_ACTION_DELETE = 2
+        private const val STATE_VIDEO_TITLE_EDITED = "video_title_edited_v2"
+        private const val STATE_DRAFT_DURATION = "draft_duration_v2"
+        private const val STATE_SETTINGS_RETURN_TO_CREATE = "settings_return_to_create_v3"
+        private const val STATE_CUSTOMIZATION_CAMERA = "customization_camera_v3"
+        private const val STATE_CUSTOMIZATION_PACING = "customization_pacing_v3"
+        private const val STATE_CUSTOMIZATION_QUALITY = "customization_quality_v3"
+        private const val STATE_CUSTOMIZATION_TRIP_DETECTION = "customization_trip_detection_v3"
+        private const val STATE_CUSTOMIZATION_LOCAL_FRAMING = "customization_local_framing_v3"
+        private const val STATE_CUSTOMIZATION_PRESET_ID = "customization_preset_id_v3"
+        private const val STATE_CUSTOMIZATION_MODIFIED_ID = "customization_modified_id_v3"
         internal const val ACTION_WATCH_VIDEO = "dev.mahlernim.timelinevisualizer.action.WATCH_VIDEO"
         internal const val ACTION_SHARE_VIDEO = "dev.mahlernim.timelinevisualizer.action.SHARE_VIDEO"
         private const val PROJECT_URL = "https://github.com/mahlernim/google-timeline-visualizer"
@@ -2875,6 +4499,7 @@ class MainActivity : AppCompatActivity() {
         private const val RESTORE_GUIDE_URL_JA =
             "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/restore-google-maps-timeline.ja.md"
         private const val TAG = "TimelineVisualizer"
+        private const val DAY_MILLIS = 24L * 60L * 60L * 1_000L
 
         internal fun playbackIntent(context: Context, uri: Uri): Intent =
             Intent(context, MainActivity::class.java).apply {

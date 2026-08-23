@@ -3,6 +3,12 @@ package dev.mahlernim.timelinevisualizer.videos
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.core.content.edit
+import dev.mahlernim.timelinevisualizer.render.CameraMovement
+import dev.mahlernim.timelinevisualizer.render.LocalFraming
+import dev.mahlernim.timelinevisualizer.render.LongTripCompression
+import dev.mahlernim.timelinevisualizer.render.TripDetection
+import dev.mahlernim.timelinevisualizer.render.VideoAspectRatio
+import dev.mahlernim.timelinevisualizer.render.VideoResolution
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -28,6 +34,8 @@ class VideoStoreTest {
                 startMonth = 12,
                 endYear = 2026,
                 endMonth = 1,
+                projectId = "trip-123",
+                presetName = "Cinematic",
             ),
         )
 
@@ -37,6 +45,8 @@ class VideoStoreTest {
         assertEquals(12, restored.first().startMonth)
         assertEquals(2026, restored.first().endYear)
         assertEquals(1, restored.first().endMonth)
+        assertEquals("trip-123", restored.first().projectId)
+        assertEquals("Cinematic", restored.first().presetName)
     }
 
     @Test
@@ -76,6 +86,26 @@ class VideoStoreTest {
         assertEquals(2, restored.startMonth)
         assertEquals(2024, restored.endYear)
         assertEquals(10, restored.endMonth)
+        assertEquals(null, restored.settingsSnapshot)
+    }
+
+    @Test
+    fun savesOptionalEffectiveSettingsSnapshot() {
+        val snapshot = VideoSettingsSnapshot(
+            presetName = "Trip Close-up",
+            requestedDurationSeconds = 20,
+            aspectRatio = VideoAspectRatio.SQUARE,
+            cameraMovement = CameraMovement.CLOSE_UP,
+            tripDetection = TripDetection.SENSITIVE,
+            localFraming = LocalFraming.CLOSE,
+            longTripCompression = LongTripCompression.STRONGER,
+            resolution = VideoResolution.HIGH,
+            exportShortEdge = 1440,
+            exportFrameRate = 60,
+        )
+        store.upsert(record("content://trip", "Tokyo", 300L).copy(settingsSnapshot = snapshot))
+
+        assertEquals(snapshot, VideoStore(context).list().single().settingsSnapshot)
     }
 
     private fun record(uri: String, title: String, createdAt: Long) = VideoRecord(
