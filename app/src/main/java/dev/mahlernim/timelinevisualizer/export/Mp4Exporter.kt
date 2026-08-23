@@ -64,8 +64,7 @@ class Mp4Exporter(
         val overviewWidth = overviewWidth(videoFormat)
         val overviewHeight = overviewHeight(videoFormat)
         val painter = TimelinePainter()
-        val journeyFrameCount = durationSeconds * fps
-        val outroFrameCount = (TimelineAnimation.OUTRO_SECONDS * fps).toInt()
+        val (journeyFrameCount, outroFrameCount) = videoFrameCounts(durationSeconds, fps)
         val frameCount = journeyFrameCount + outroFrameCount
 
         val requiredTiles = requiredTilesForExport(
@@ -305,6 +304,15 @@ class Mp4Exporter(
         private const val PREPARING_PROGRESS_WEIGHT = 0.10f
         private const val JOURNEY_PROGRESS_WEIGHT = 0.80f
         private const val FINISHING_PROGRESS_WEIGHT = 0.10f
+
+        internal fun videoFrameCounts(durationSeconds: Int, fps: Int): Pair<Int, Int> {
+            val frameCount = durationSeconds.coerceAtLeast(1) * fps.coerceAtLeast(1)
+            val outroFrameCount = minOf(
+                (TimelineAnimation.OUTRO_SECONDS * fps).toInt(),
+                frameCount - 1,
+            )
+            return frameCount - outroFrameCount to outroFrameCount
+        }
 
         internal fun overviewWidth(format: dev.mahlernim.timelinevisualizer.render.VideoQuality): Int =
             if (format.width >= format.height) {
