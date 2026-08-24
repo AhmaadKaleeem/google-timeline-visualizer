@@ -44,11 +44,23 @@ data class JournalImport(
 )
 
 sealed interface JournalImportResult {
+    enum class ChangeKind {
+        INITIAL,
+        ADVANCED,
+        BACKFILL,
+        OVERLAP,
+    }
+
     data class Committed(
         val batchId: String,
         val insertedObservationCount: Int,
         val duplicateObservationCount: Int,
         val semanticSegmentCount: Int,
+        val changeKind: ChangeKind,
+        val changedStartEpochMillis: Long?,
+        val changedEndEpochMillis: Long?,
+        val activeSemanticChanged: Boolean,
+        val needsRouteRefresh: Boolean,
     ) : JournalImportResult
 
     data class AlreadyImported(val batchId: String) : JournalImportResult
@@ -160,6 +172,40 @@ class JournalRepository(
             val detailedEnd = input.detailedObservations.maxOfOrNull { it.instantEpochMillis }
             val semanticStart = input.semanticSegments.minOfOrNull { it.startEpochMillis }
             val semanticEnd = input.semanticSegments.maxOfOrNull { it.endEpochMillis }
+            val previousDetailedEnd = journal.detailedCapturedThroughEpochMillis
+            val changeKind = when {
+                previousDetailedEnd == null && journal.semanticEndEpochMillis == null ->
+                    JournalImportResult.ChangeKind.INITIAL
+                detailedEnd != null && previousDetailedEnd != null && detailedEnd < previousDetailedEnd ->
+                    JournalImportResult.ChangeKind.BACKFILL
+                detailedEnd != null && (previousDetailedEnd == null || detailedEnd > previousDetailedEnd) ->
+                    JournalImportResult.ChangeKind.ADVANCED
+                else -> JournalImportResult.ChangeKind.OVERLAP
+            }
+            val existingSemanticRows = if (
+                changeKind == JournalImportResult.ChangeKind.BACKFILL &&
+                semanticStart != null && semanticEnd != null
+            ) {
+                dao.activeSemanticSegmentsNewestFirst(journalId, semanticStart, incrementSafely(semanticEnd))
+            } else {
+                emptyList()
+            }
+            val preferredSemanticRows = if (
+                input.semanticSegments.isNotEmpty() && changeKind != JournalImportResult.ChangeKind.BACKFILL
+            ) {
+                dao.latestPreferredSemanticSegments(journalId)
+            } else {
+                emptyList()
+            }
+            val semanticChangeBounds = when {
+                input.semanticSegments.isEmpty() -> null
+                changeKind != JournalImportResult.ChangeKind.BACKFILL && preferredSemanticRows.isEmpty() ->
+                    semanticStart!! to semanticEnd!!
+                changeKind != JournalImportResult.ChangeKind.BACKFILL ->
+                    semanticDifferenceBounds(input.semanticSegments, preferredSemanticRows)
+                else -> uncoveredSemanticBounds(input.semanticSegments, existingSemanticRows)
+            }
+            val shouldStoreSemanticSnapshot = input.semanticSegments.isNotEmpty() && semanticChangeBounds != null
             val staging = ImportBatchEntity(
                 id = batchId,
                 journalId = journalId,
@@ -182,6 +228,10 @@ class JournalRepository(
 
             input.detailedObservations.forEach(::validate)
             var insertedCount = 0
+            var insertedStart: Long? = null
+            var insertedEnd: Long? = null
+            var improvedAccuracyStart: Long? = null
+            var improvedAccuracyEnd: Long? = null
             var processedCount = 0
             val totalRecordCount = input.detailedObservations.size + input.semanticSegments.size
             onProgress(0, totalRecordCount)
@@ -206,16 +256,34 @@ class JournalRepository(
                     .chunked(SQLITE_BIND_CHUNK_SIZE)
                     .flatMap { keys -> dao.observationIds(journalId, keys) }
                     .associate { it.observationKey to it.id }
-                val provenance = insertedIds.mapIndexed { index, insertedId ->
+                val bestCommittedAccuracy = duplicateIds.values
+                    .distinct()
+                    .chunked(SQLITE_BIND_CHUNK_SIZE)
+                    .flatMap { ids -> dao.committedBestAccuracy(journalId, ids) }
+                    .associate { it.observationId to it.accuracyMeters }
+                val provenance = insertedIds.mapIndexedNotNull { index, insertedId ->
                     val observationId = if (insertedId == -1L) {
                         requireNotNull(duplicateIds[entities[index].observationKey]) {
                             "An ignored observation could not be resolved"
                         }
                     } else {
                         insertedCount += 1
+                        insertedStart = minOfNullable(insertedStart, candidates[index].instantEpochMillis)
+                        insertedEnd = maxOfNullable(insertedEnd, candidates[index].instantEpochMillis)
                         insertedId
                     }
                     val candidate = candidates[index]
+                    if (insertedId == -1L && existingMetadataDominates(candidate, bestCommittedAccuracy[observationId])) {
+                        return@mapIndexedNotNull null
+                    }
+                    if (
+                        insertedId == -1L && candidate.accuracyMeters != null &&
+                        (bestCommittedAccuracy[observationId] == null ||
+                            candidate.accuracyMeters < requireNotNull(bestCommittedAccuracy[observationId]))
+                    ) {
+                        improvedAccuracyStart = minOfNullable(improvedAccuracyStart, candidate.instantEpochMillis)
+                        improvedAccuracyEnd = maxOfNullable(improvedAccuracyEnd, candidate.instantEpochMillis)
+                    }
                     ObservationImportEntity(
                         importBatchId = batchId,
                         observationId = observationId,
@@ -230,13 +298,22 @@ class JournalRepository(
                 onProgress(processedCount, totalRecordCount)
             }
 
-            if (input.semanticSegments.isNotEmpty()) {
+            if (shouldStoreSemanticSnapshot) {
                 val snapshotId = idFactory()
+                val sourceCapture = maxOfNullable(detailedEnd, semanticEnd) ?: input.importedAtEpochMillis
+                val latestCapture = dao.latestCommittedSemanticCapture(journalId)
+                val snapshotCapture = when {
+                    latestCapture == null -> sourceCapture
+                    changeKind == JournalImportResult.ChangeKind.BACKFILL ->
+                        minOf(sourceCapture, decrementSafely(latestCapture))
+                    else -> maxOf(sourceCapture, incrementSafely(latestCapture))
+                }
                 dao.insertSemanticSnapshot(
                     SemanticSnapshotEntity(
                         id = snapshotId,
                         importBatchId = batchId,
-                        capturedAtEpochMillis = input.importedAtEpochMillis,
+                        // Backfills are ranked below committed coverage even when imported later.
+                        capturedAtEpochMillis = snapshotCapture,
                         startEpochMillis = semanticStart,
                         endEpochMillis = semanticEnd,
                     ),
@@ -262,6 +339,9 @@ class JournalRepository(
                     processedCount += segments.size
                     onProgress(processedCount, totalRecordCount)
                 }
+            } else if (input.semanticSegments.isNotEmpty()) {
+                processedCount += input.semanticSegments.size
+                onProgress(processedCount, totalRecordCount)
             }
 
             val duplicateCount = input.detailedObservations.size - insertedCount
@@ -287,9 +367,124 @@ class JournalRepository(
                 batchId = batchId,
                 insertedObservationCount = insertedCount,
                 duplicateObservationCount = duplicateCount,
-                semanticSegmentCount = input.semanticSegments.size,
+                semanticSegmentCount = if (shouldStoreSemanticSnapshot) input.semanticSegments.size else 0,
+                changeKind = changeKind,
+                changedStartEpochMillis = minOfNullable(
+                    minOfNullable(insertedStart, improvedAccuracyStart),
+                    semanticChangeBounds?.first,
+                ),
+                changedEndEpochMillis = maxOfNullable(
+                    maxOfNullable(insertedEnd, improvedAccuracyEnd),
+                    semanticChangeBounds?.second,
+                ),
+                activeSemanticChanged = semanticChangeBounds != null,
+                needsRouteRefresh = insertedCount > 0 || improvedAccuracyStart != null || semanticChangeBounds != null,
             )
         }
+
+    /** Returns only the portion where an older snapshot can fill currently absent coverage. */
+    private fun uncoveredSemanticBounds(
+        incoming: List<SemanticSegmentInput>,
+        existing: List<ActiveSemanticSegment>,
+    ): Pair<Long, Long>? {
+        val covered = existing
+            .map { it.startEpochMillis to it.endEpochMillis }
+            .sortedBy { it.first }
+            .fold(mutableListOf<Pair<Long, Long>>()) { merged, interval ->
+                val last = merged.lastOrNull()
+                if (last == null || interval.first > last.second) {
+                    merged += interval
+                } else if (interval.second > last.second) {
+                    merged[merged.lastIndex] = last.first to interval.second
+                }
+                merged
+            }
+        var changedStart: Long? = null
+        var changedEnd: Long? = null
+        for (segment in incoming) {
+            var cursor = segment.startEpochMillis
+            for (interval in covered) {
+                if (interval.second < cursor || interval.first > segment.endEpochMillis) continue
+                if (interval.first > cursor) {
+                    changedStart = minOfNullable(changedStart, cursor)
+                    changedEnd = maxOfNullable(changedEnd, minOf(segment.endEpochMillis, interval.first))
+                }
+                cursor = maxOf(cursor, interval.second)
+            }
+            if (cursor < segment.endEpochMillis || (cursor == segment.endEpochMillis && covered.none {
+                    cursor in it.first..it.second
+                })
+            ) {
+                changedStart = minOfNullable(changedStart, cursor)
+                changedEnd = maxOfNullable(changedEnd, segment.endEpochMillis)
+            }
+        }
+        return changedStart?.let { it to requireNotNull(changedEnd) }
+    }
+
+    /** Bounds the symmetric difference between an incoming semantic export and the preferred one. */
+    private fun semanticDifferenceBounds(
+        incoming: List<SemanticSegmentInput>,
+        preferred: List<SemanticSegmentEntity>,
+    ): Pair<Long, Long>? {
+        val incomingCounts = incoming.groupingBy(::semanticKey).eachCount()
+        val preferredCounts = preferred.groupingBy(::semanticKey).eachCount()
+        if (incomingCounts == preferredCounts) return null
+        var changedStart: Long? = null
+        var changedEnd: Long? = null
+        incoming.forEach { segment ->
+            val key = semanticKey(segment)
+            if (incomingCounts.getValue(key) != preferredCounts[key]) {
+                changedStart = minOfNullable(changedStart, segment.startEpochMillis)
+                changedEnd = maxOfNullable(changedEnd, segment.endEpochMillis)
+            }
+        }
+        preferred.forEach { segment ->
+            val key = semanticKey(segment)
+            if (preferredCounts.getValue(key) != incomingCounts[key]) {
+                changedStart = minOfNullable(changedStart, segment.startEpochMillis)
+                changedEnd = maxOfNullable(changedEnd, segment.endEpochMillis)
+            }
+        }
+        return changedStart?.let { it to requireNotNull(changedEnd) }
+    }
+
+    private fun semanticKey(segment: SemanticSegmentInput) = SemanticKey(
+        segment.startEpochMillis,
+        segment.endEpochMillis,
+        segment.kind,
+        segment.activityType,
+        segment.placeId,
+        segment.geometryJson,
+    )
+
+    private fun semanticKey(segment: SemanticSegmentEntity) = SemanticKey(
+        segment.startEpochMillis,
+        segment.endEpochMillis,
+        segment.kind,
+        segment.activityType,
+        segment.placeId,
+        segment.geometryJson,
+    )
+
+    private fun incrementSafely(value: Long): Long = if (value == Long.MAX_VALUE) value else value + 1
+
+    private fun decrementSafely(value: Long): Long = if (value == Long.MIN_VALUE) value else value - 1
+
+    /**
+     * A duplicate row is redundant only when it cannot improve route accuracy and carries no
+     * additional metadata. Conservative retention keeps altitude, speed, and provider provenance.
+     */
+    private fun existingMetadataDominates(
+        candidate: DetailedObservationInput,
+        committedAccuracy: Double?,
+    ): Boolean {
+        if (candidate.altitudeMeters != null || candidate.speedMetersPerSecond != null || candidate.provider != null) {
+            return false
+        }
+        return candidate.accuracyMeters == null ||
+            (committedAccuracy != null && committedAccuracy <= candidate.accuracyMeters)
+    }
 
     private fun validate(observation: DetailedObservationInput) {
         require(observation.latitude in -90.0..90.0) { "Latitude is outside the supported range" }
@@ -333,4 +528,13 @@ class JournalRepository(
         const val SQLITE_BIND_CHUNK_SIZE = 900
         const val IDENTITY_SAMPLE_SIZE = 32
     }
+
+    private data class SemanticKey(
+        val startEpochMillis: Long,
+        val endEpochMillis: Long,
+        val kind: String,
+        val activityType: String?,
+        val placeId: String?,
+        val geometryJson: String?,
+    )
 }

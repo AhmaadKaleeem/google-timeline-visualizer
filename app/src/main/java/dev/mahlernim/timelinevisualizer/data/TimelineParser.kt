@@ -112,19 +112,47 @@ class TimelineParser {
 
     private fun normalizeRawSignals(points: MutableList<RawSignalPoint>): List<RawSignalPoint> {
         points.sortWith(compareBy { it.point.instant })
-        val unique = LinkedHashMap<RawSignalKey, RawSignalPoint>(points.size)
-        points.forEach { candidate ->
-            val key = RawSignalKey(
-                candidate.point.instant.toEpochMilli(),
-                candidate.point.latitude.toBits(),
-                candidate.point.longitude.toBits(),
-            )
-            val previous = unique[key]
-            if (previous == null || candidate.accuracyMeters < previous.accuracyMeters) {
-                unique[key] = candidate
+        var writeIndex = 0
+        var groupStart = 0
+        while (groupStart < points.size) {
+            val epochMillis = points[groupStart].point.instant.toEpochMilli()
+            var groupEnd = groupStart + 1
+            while (
+                groupEnd < points.size &&
+                points[groupEnd].point.instant.toEpochMilli() == epochMillis
+            ) {
+                groupEnd += 1
             }
+
+            // The old LinkedHashMap retained the position of the first coordinate occurrence
+            // in each millisecond and replaced its value when a more accurate point appeared.
+            // Compact that same result into the parser-owned list so a large export does not
+            // allocate one key object and one hash-table entry for every detailed observation.
+            val keptGroupStart = writeIndex
+            for (readIndex in groupStart until groupEnd) {
+                val candidate = points[readIndex]
+                var duplicateIndex = -1
+                for (keptIndex in keptGroupStart until writeIndex) {
+                    val kept = points[keptIndex]
+                    if (
+                        kept.point.latitude.toBits() == candidate.point.latitude.toBits() &&
+                        kept.point.longitude.toBits() == candidate.point.longitude.toBits()
+                    ) {
+                        duplicateIndex = keptIndex
+                        break
+                    }
+                }
+                if (duplicateIndex < 0) {
+                    points[writeIndex] = candidate
+                    writeIndex += 1
+                } else if (candidate.accuracyMeters < points[duplicateIndex].accuracyMeters) {
+                    points[duplicateIndex] = candidate
+                }
+            }
+            groupStart = groupEnd
         }
-        return unique.values.toList()
+        if (writeIndex < points.size) points.subList(writeIndex, points.size).clear()
+        return points
     }
 
     private fun reconcileStandalonePaths(
@@ -667,11 +695,6 @@ class TimelineParser {
         val foundLegacyFormat: Boolean = false,
     )
 
-    private data class RawSignalKey(
-        val epochMillis: Long,
-        val latitudeBits: Long,
-        val longitudeBits: Long,
-    )
 }
 
 data class ParsedTimeline(

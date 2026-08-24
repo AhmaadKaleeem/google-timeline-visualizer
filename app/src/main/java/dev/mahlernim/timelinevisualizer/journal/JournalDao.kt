@@ -41,6 +41,24 @@ interface JournalDao {
         observationKeys: List<String>,
     ): List<ObservationKeyId>
 
+    @Query(
+        """
+        SELECT observation_imports.observationId AS observationId,
+               MIN(observation_imports.accuracyMeters) AS accuracyMeters
+        FROM observation_imports
+        INNER JOIN import_batches
+            ON import_batches.id = observation_imports.importBatchId
+        WHERE import_batches.journalId = :journalId
+          AND import_batches.status = 'COMMITTED'
+          AND observation_imports.observationId IN (:observationIds)
+        GROUP BY observation_imports.observationId
+        """,
+    )
+    suspend fun committedBestAccuracy(
+        journalId: String,
+        observationIds: List<Long>,
+    ): List<CommittedObservationAccuracy>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertObservationImports(provenance: List<ObservationImportEntity>)
 
@@ -59,8 +77,31 @@ interface JournalDao {
     @Query("SELECT COUNT(*) FROM semantic_snapshots INNER JOIN import_batches ON import_batches.id = semantic_snapshots.importBatchId WHERE import_batches.journalId = :journalId AND import_batches.status = 'COMMITTED'")
     suspend fun committedSnapshotCount(journalId: String): Int
 
+    @Query("SELECT MAX(semantic_snapshots.capturedAtEpochMillis) FROM semantic_snapshots INNER JOIN import_batches ON import_batches.id = semantic_snapshots.importBatchId WHERE import_batches.journalId = :journalId AND import_batches.status = 'COMMITTED'")
+    suspend fun latestCommittedSemanticCapture(journalId: String): Long?
+
     @Query("SELECT semantic_segments.* FROM semantic_segments INNER JOIN semantic_snapshots ON semantic_snapshots.id = semantic_segments.snapshotId INNER JOIN import_batches ON import_batches.id = semantic_snapshots.importBatchId WHERE import_batches.journalId = :journalId AND import_batches.status = 'COMMITTED' ORDER BY semantic_snapshots.capturedAtEpochMillis DESC, semantic_segments.sourceOrdinal ASC")
     suspend fun committedSemanticSegmentsNewestFirst(journalId: String): List<SemanticSegmentEntity>
+
+    @Query(
+        """
+        SELECT semantic_segments.*
+        FROM semantic_segments
+        WHERE semantic_segments.snapshotId = (
+            SELECT semantic_snapshots.id
+            FROM semantic_snapshots
+            INNER JOIN import_batches
+                ON import_batches.id = semantic_snapshots.importBatchId
+            WHERE import_batches.journalId = :journalId
+              AND import_batches.status = 'COMMITTED'
+            ORDER BY semantic_snapshots.capturedAtEpochMillis DESC,
+                     semantic_snapshots.id DESC
+            LIMIT 1
+        )
+        ORDER BY semantic_segments.sourceOrdinal ASC
+        """,
+    )
+    suspend fun latestPreferredSemanticSegments(journalId: String): List<SemanticSegmentEntity>
 
     @Query(
         """

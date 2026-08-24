@@ -16,6 +16,12 @@ data class CommittedDetailedBounds(
     val endEpochMillis: Long?,
 )
 
+/** The best committed accuracy already available for one detailed observation. */
+data class CommittedObservationAccuracy(
+    val observationId: Long,
+    val accuracyMeters: Double?,
+)
+
 /** A compact lookup result for resolving ignored bulk inserts without per-row queries. */
 data class ObservationKeyId(
     val observationKey: String,

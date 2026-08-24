@@ -97,13 +97,17 @@ import dev.mahlernim.timelinevisualizer.journal.JournalEntity
 import dev.mahlernim.timelinevisualizer.journal.JournalImportResult
 import dev.mahlernim.timelinevisualizer.journal.JournalMatchClassification
 import dev.mahlernim.timelinevisualizer.journal.JournalRepository
+import dev.mahlernim.timelinevisualizer.journal.JournalEntryDestination
+import dev.mahlernim.timelinevisualizer.journal.JournalSetupNavigation
 import dev.mahlernim.timelinevisualizer.journal.importer.TimelineJournalImportAdapter
 import dev.mahlernim.timelinevisualizer.journal.route.JournalRoute
 import dev.mahlernim.timelinevisualizer.journal.route.JournalRouteService
 import dev.mahlernim.timelinevisualizer.journal.route.RouteSource
 import dev.mahlernim.timelinevisualizer.journal.route.connectedTimelines
+import dev.mahlernim.timelinevisualizer.journal.route.expandedRefreshWindow
 import dev.mahlernim.timelinevisualizer.journal.route.journeyForDateRange
 import dev.mahlernim.timelinevisualizer.journal.route.journeyForRange
+import dev.mahlernim.timelinevisualizer.journal.route.replacingWindow
 import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.Timeline
@@ -286,6 +290,8 @@ class MainActivity : AppCompatActivity() {
     private var detectionYears: List<Int> = emptyList()
     private var tripDiscoveryRequested = false
     private var settingsReturnToCreate = false
+    private var journalSetupMode = false
+    private var journalSetupReturnToCreate = false
     private var customizationOriginalCamera: CameraSettings? = null
     private var customizationOriginalPresetId: String? = null
     private var customizationOriginalModifiedBuiltInId: String? = null
@@ -390,7 +396,9 @@ class MainActivity : AppCompatActivity() {
             showVideos()
         }
         editor.saveAsButton.setOnClickListener { lastVideoUri?.let(::chooseVideoCopyDestination) }
-        editor.importButton.setOnClickListener { requestTimelineImport() }
+        editor.importButton.setOnClickListener {
+            if (BuildConfig.IS_JOURNAL_LAB) showJournalSetup(returnToCreate = true) else requestTimelineImport()
+        }
         editor.exportHelpButton.setOnClickListener { showExportHelp() }
         editor.restoreTimelineHelpLink.setOnClickListener { openRestoreGuide() }
         editor.playButton.setOnClickListener { togglePreview() }
@@ -470,6 +478,10 @@ class MainActivity : AppCompatActivity() {
                 if (currentCreateStep == CreateStep.TYPE) showVideos(acknowledgeCompletion = true) else moveCreateStep(-1)
             } else if (currentScreen == Screen.SETTINGS && settingsReturnToCreate) {
                 finishVideoCustomization(apply = false)
+            } else if (currentScreen == Screen.SETTINGS && journalSetupMode) {
+                journalSetupMode = false
+                journalSetupReturnToCreate = false
+                showVideos(acknowledgeCompletion = true)
             } else if (currentScreen == Screen.VIDEOS) {
                 finish()
             } else {
@@ -559,6 +571,8 @@ class MainActivity : AppCompatActivity() {
             ?.let { runCatching { CreateStep.valueOf(it) }.getOrNull() }
             ?: CreateStep.TYPE
         settingsReturnToCreate = savedInstanceState?.getBoolean(STATE_SETTINGS_RETURN_TO_CREATE) ?: false
+        journalSetupMode = savedInstanceState?.getBoolean(STATE_JOURNAL_SETUP_MODE) ?: false
+        journalSetupReturnToCreate = savedInstanceState?.getBoolean(STATE_JOURNAL_SETUP_RETURN_TO_CREATE) ?: false
         customizationOriginalCamera = restoreCustomizationCamera(savedInstanceState)
         customizationOriginalPresetId = savedInstanceState?.getString(STATE_CUSTOMIZATION_PRESET_ID)
         customizationOriginalModifiedBuiltInId = savedInstanceState?.getString(STATE_CUSTOMIZATION_MODIFIED_ID)
@@ -590,14 +604,20 @@ class MainActivity : AppCompatActivity() {
         } else when (savedInstanceState?.getString(STATE_SCREEN)) {
             Screen.NEW_VIDEO.name -> showNewVideo(loadRemembered = true)
             Screen.VIDEOS.name -> showVideos()
-            Screen.SETTINGS.name -> showSettings(fromCreate = settingsReturnToCreate)
+            Screen.SETTINGS.name -> when {
+                journalSetupMode -> showJournalSetup(journalSetupReturnToCreate)
+                else -> showSettings(fromCreate = settingsReturnToCreate)
+            }
             Screen.PLAYER.name -> playerUri?.let { showVideoPlayer(it, resetPosition = false) } ?: showVideos()
             else -> showDefaultLaunchScreen()
         }
     }
 
     private fun showDefaultLaunchScreen() {
-        showVideos()
+        when (JournalSetupNavigation.defaultDestination(BuildConfig.IS_JOURNAL_LAB, timeline != null)) {
+            JournalEntryDestination.JOURNAL_SETUP -> showJournalSetup(returnToCreate = false)
+            else -> showVideos()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -626,6 +646,8 @@ class MainActivity : AppCompatActivity() {
         outState.putBoolean(STATE_VIDEO_TITLE_EDITED, videoTitleUserEdited)
         outState.putInt(STATE_DRAFT_DURATION, routeDurationSeconds)
         outState.putBoolean(STATE_SETTINGS_RETURN_TO_CREATE, settingsReturnToCreate)
+        outState.putBoolean(STATE_JOURNAL_SETUP_MODE, journalSetupMode)
+        outState.putBoolean(STATE_JOURNAL_SETUP_RETURN_TO_CREATE, journalSetupReturnToCreate)
         customizationOriginalCamera?.let { original ->
             outState.putString(STATE_CUSTOMIZATION_CAMERA, original.cameraMovement.name)
             outState.putString(STATE_CUSTOMIZATION_PACING, original.longTripCompression.name)
@@ -699,7 +721,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun openCreateTab() {
         if (currentScreen == Screen.VIDEOS || currentScreen == Screen.PLAYER) resetCreateEntry()
-        showNewVideo(loadRemembered = true)
+        when (JournalSetupNavigation.createDestination(BuildConfig.IS_JOURNAL_LAB, timeline != null)) {
+            JournalEntryDestination.JOURNAL_SETUP -> showJournalSetup(returnToCreate = true)
+            else -> showNewVideo(loadRemembered = true)
+        }
     }
 
     private fun resetCreateEntry() {
@@ -760,6 +785,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSettings(fromCreate: Boolean = false) {
         releaseVideoPlayer()
+        journalSetupMode = false
+        journalSetupReturnToCreate = false
         settingsReturnToCreate = fromCreate
         currentScreen = Screen.SETTINGS
         home.root.visibility = View.GONE
@@ -769,6 +796,8 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNavigation.visibility = if (fromCreate) View.GONE else View.VISIBLE
         settingsScreen.customizeSettingsActions.visibility = if (fromCreate) View.VISIBLE else View.GONE
         settingsScreen.timelineDataCard.visibility = if (fromCreate) View.GONE else View.VISIBLE
+        settingsScreen.journalSetupIntro.visibility = View.GONE
+        settingsScreen.timelineDataTitle.setText(R.string.timeline_data)
         settingsScreen.settingsTitle.setText(if (fromCreate) R.string.customize_video else R.string.settings)
         settingsScreen.settingsSummary.setText(if (fromCreate) R.string.customize_video_summary else R.string.settings_summary)
         if (!fromCreate && binding.bottomNavigation.selectedItemId != R.id.navigationSettings) {
@@ -777,6 +806,32 @@ class MainActivity : AppCompatActivity() {
             syncingBottomNavigation = false
         }
         if (!fromCreate) updateTimelineSettingsCard()
+    }
+
+    private fun showJournalSetup(returnToCreate: Boolean) {
+        releaseVideoPlayer()
+        settingsReturnToCreate = false
+        journalSetupMode = true
+        journalSetupReturnToCreate = returnToCreate
+        currentScreen = Screen.SETTINGS
+        home.root.visibility = View.GONE
+        editor.root.visibility = View.GONE
+        settingsScreen.root.visibility = View.VISIBLE
+        playerScreen.root.visibility = View.GONE
+        binding.bottomNavigation.visibility = View.VISIBLE
+        settingsScreen.customizeSettingsActions.visibility = View.GONE
+        settingsScreen.timelineDataCard.visibility = View.VISIBLE
+        settingsScreen.journalSetupIntro.visibility = View.VISIBLE
+        settingsScreen.timelineDataTitle.setText(R.string.travel_journal)
+        settingsScreen.settingsTitle.setText(R.string.journal_setup_title)
+        settingsScreen.settingsSummary.setText(R.string.journal_setup_summary)
+        if (binding.bottomNavigation.selectedItemId != R.id.navigationSettings) {
+            syncingBottomNavigation = true
+            binding.bottomNavigation.selectedItemId = R.id.navigationSettings
+            syncingBottomNavigation = false
+        }
+        updateTimelineSettingsCard()
+        loadJournalIfNeeded()
     }
 
     private fun showVideoCustomization() {
@@ -904,7 +959,11 @@ class MainActivity : AppCompatActivity() {
         editor.tripSourceStepGroup.visibility = if (isTripSource) View.VISIBLE else View.GONE
         editor.tripDiscoveryStepGroup.visibility = if (isDiscovery) View.VISIBLE else View.GONE
         editor.projectStepGroup.visibility = if (isProject) View.VISIBLE else View.GONE
-        editor.timelineSourceGroup.visibility = if (isType && !hasTimeline) View.VISIBLE else View.GONE
+        editor.timelineSourceGroup.visibility = if (!BuildConfig.IS_JOURNAL_LAB && isType && !hasTimeline) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         editor.periodStepGroup.visibility = if (isProject) View.VISIBLE else View.GONE
         editor.styleStepGroup.visibility = if (isStyle) View.VISIBLE else View.GONE
         editor.videoDetailsGroup.visibility = if (isStyle) View.VISIBLE else View.GONE
@@ -1339,18 +1398,19 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 showJournalImportStage(R.string.journal_import_updating)
-                loadJournal(journal.id, force = true)
+                refreshJournalAfterImport(journal.id, result)
                 when (result) {
                     is JournalImportResult.Committed -> Snackbar.make(
                         binding.root,
-                        if (result.insertedObservationCount == 0 && result.semanticSegmentCount > 0) {
-                            getString(R.string.journal_import_added_timeline)
-                        } else {
-                            resources.getQuantityString(
-                                R.plurals.journal_import_added,
-                                result.insertedObservationCount,
-                                result.insertedObservationCount,
-                            )
+                        when {
+                            !result.needsRouteRefresh -> getString(R.string.journal_import_no_changes)
+                            result.insertedObservationCount == 0 && result.semanticSegmentCount > 0 ->
+                                getString(R.string.journal_import_added_timeline)
+                            else -> resources.getQuantityString(
+                                    R.plurals.journal_import_added,
+                                    result.insertedObservationCount,
+                                    result.insertedObservationCount,
+                                )
                         },
                         Snackbar.LENGTH_LONG,
                     ).show()
@@ -1359,6 +1419,11 @@ class MainActivity : AppCompatActivity() {
                         R.string.journal_import_duplicate,
                         Snackbar.LENGTH_LONG,
                     ).show()
+                }
+                if (journalSetupMode && timeline != null) {
+                    journalSetupMode = false
+                    journalSetupReturnToCreate = false
+                    showNewVideo(loadRemembered = true)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -1385,7 +1450,14 @@ class MainActivity : AppCompatActivity() {
         journalLoadJob = lifecycleScope.launch {
             try {
                 val journal = withContext(Dispatchers.IO) { journalRepository.primaryJournal() }
-                if (journal != null) loadJournal(journal.id, force = false)
+                if (journal != null) {
+                    if (journalSetupMode && !journalSetupReturnToCreate) {
+                        journalSetupMode = false
+                        journalSetupReturnToCreate = false
+                        showVideos()
+                    }
+                    loadJournal(journal.id, force = false)
+                }
             } catch (error: Throwable) {
                 Log.e(TAG, "Travel Journal reload failed", error)
             } finally {
@@ -1393,6 +1465,12 @@ class MainActivity : AppCompatActivity() {
                 journalLoadJob = null
                 updateTimelineSettingsCard()
                 renderCreateStep()
+                if (journalSetupMode && timeline != null) {
+                    val returnToCreate = journalSetupReturnToCreate
+                    journalSetupMode = false
+                    journalSetupReturnToCreate = false
+                    if (returnToCreate) showNewVideo(loadRemembered = true) else showVideos()
+                }
             }
         }
     }
@@ -1407,6 +1485,55 @@ class MainActivity : AppCompatActivity() {
                 endExclusive = Instant.ofEpochMilli(Long.MAX_VALUE),
             )
         }
+        applyJournalRoute(loadedJournal, route, refreshTrips = true)
+    }
+
+    private suspend fun refreshJournalAfterImport(journalId: String, result: JournalImportResult) {
+        val committed = result as? JournalImportResult.Committed ?: return
+        val existingRoute = activeJournalRoute
+        if (existingRoute == null || activeJournal?.id != journalId || committed.changeKind == JournalImportResult.ChangeKind.INITIAL) {
+            loadJournal(journalId, force = true)
+            return
+        }
+        val loadedJournal = withContext(Dispatchers.IO) { journalRepository.journal(journalId) } ?: return
+        if (!committed.needsRouteRefresh) {
+            activeJournal = loadedJournal
+            journalLoaded = true
+            updateTimelineSettingsCard()
+            return
+        }
+        val changedStart = committed.changedStartEpochMillis
+        val changedEnd = committed.changedEndEpochMillis
+        if (changedStart == null || changedEnd == null) {
+            loadJournal(journalId, force = true)
+            return
+        }
+        val paddedStart = Instant.ofEpochMilli(subtractSaturated(changedStart, JOURNAL_REFRESH_PADDING_MILLIS))
+        val paddedEnd = Instant.ofEpochMilli(addSaturated(
+            if (changedEnd == Long.MAX_VALUE) changedEnd else changedEnd + 1,
+            JOURNAL_REFRESH_PADDING_MILLIS,
+        ))
+        val (refreshStart, refreshEnd) = existingRoute.expandedRefreshWindow(paddedStart, paddedEnd)
+        val replacement = withContext(Dispatchers.IO) {
+            journalRouteService.route(
+                journalId = journalId,
+                start = refreshStart,
+                endExclusive = refreshEnd,
+            )
+        }
+        applyJournalRoute(
+            journal = loadedJournal,
+            route = existingRoute.replacingWindow(
+                start = refreshStart,
+                endExclusive = refreshEnd,
+                replacement = replacement,
+            ),
+            refreshTrips = true,
+        )
+    }
+
+    private suspend fun applyJournalRoute(journal: JournalEntity, route: JournalRoute, refreshTrips: Boolean) {
+        val loadedJournal = journal
         activeJournal = loadedJournal
         activeJournalRoute = route
         journalLoaded = true
@@ -1422,7 +1549,7 @@ class MainActivity : AppCompatActivity() {
             val period = TimelinePeriod.sameYear(loaded.years.first())
             configureYears(loaded, route.journeyForRange(period), ignoredCount = 0)
             applyActiveProjectDates()
-            tripSuggestions = refreshRequestedTripSuggestions(loaded)
+            if (refreshTrips) tripSuggestions = refreshRequestedTripSuggestions(loaded)
             editor.editorGroup.visibility = View.VISIBLE
             updateCameraPreparationUi()
         }
@@ -1430,6 +1557,12 @@ class MainActivity : AppCompatActivity() {
         renderCreateStep()
         updateTimelineSettingsCard()
     }
+
+    private fun subtractSaturated(value: Long, amount: Long): Long =
+        if (value < Long.MIN_VALUE + amount) Long.MIN_VALUE else value - amount
+
+    private fun addSaturated(value: Long, amount: Long): Long =
+        if (value > Long.MAX_VALUE - amount) Long.MAX_VALUE else value + amount
 
     private fun showRawOnlyImportChoice(uri: Uri, points: List<RawSignalPoint>, remembered: Boolean) {
         MaterialAlertDialogBuilder(this)
@@ -4523,6 +4656,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestTimelineImport(uri: Uri? = null) {
+        if (BuildConfig.IS_JOURNAL_LAB && currentScreen != Screen.SETTINGS) {
+            showJournalSetup(returnToCreate = true)
+        }
         val continueImport = {
             if (uri != null) {
                 importTimeline(uri)
@@ -4829,6 +4965,9 @@ class MainActivity : AppCompatActivity() {
         private const val STATE_VIDEO_TITLE_EDITED = "video_title_edited_v2"
         private const val STATE_DRAFT_DURATION = "draft_duration_v2"
         private const val STATE_SETTINGS_RETURN_TO_CREATE = "settings_return_to_create_v3"
+        private const val STATE_JOURNAL_SETUP_MODE = "journal_setup_mode_v1"
+        private const val STATE_JOURNAL_SETUP_RETURN_TO_CREATE = "journal_setup_return_to_create_v1"
+        private const val JOURNAL_REFRESH_PADDING_MILLIS = 31L * 60L * 1000L
         private const val STATE_CUSTOMIZATION_CAMERA = "customization_camera_v3"
         private const val STATE_CUSTOMIZATION_PACING = "customization_pacing_v3"
         private const val STATE_CUSTOMIZATION_QUALITY = "customization_quality_v3"

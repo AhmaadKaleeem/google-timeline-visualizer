@@ -47,7 +47,7 @@ class JournalRepositoryTest {
     }
 
     @Test
-    fun repeatedFileIsNoOpAndRepeatedObservationsKeepProvenance() = runBlocking {
+    fun repeatedFileIsNoOpAndRedundantObservationProvenanceIsSkipped() = runBlocking {
         val first = repository.import(
             JOURNAL_ID,
             importInput(
@@ -85,9 +85,123 @@ class JournalRepositoryTest {
         assertEquals(1, overlapping.insertedObservationCount)
         assertEquals(1, overlapping.duplicateObservationCount)
         assertEquals(3, dao.observationCount(JOURNAL_ID))
-        assertEquals(2, dao.provenanceCount(overlapping.batchId))
+        assertEquals(1, dao.provenanceCount(overlapping.batchId))
+        assertEquals(JournalImportResult.ChangeKind.ADVANCED, overlapping.changeKind)
+        assertEquals(4_000L, overlapping.changedStartEpochMillis)
+        assertEquals(4_000L, overlapping.changedEndEpochMillis)
         assertEquals(4_000L, dao.journal(JOURNAL_ID)?.detailedCapturedThroughEpochMillis)
         assertEquals(12_000L, dao.journal(JOURNAL_ID)?.lastAdvancedAtEpochMillis)
+    }
+
+    @Test
+    fun betterDuplicateAccuracyIsRetainedButWorseAccuracyIsNot() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput("base", 10_000, listOf(observation(2_000, accuracy = 12.0))),
+        )
+
+        val worse = repository.import(
+            JOURNAL_ID,
+            importInput("worse", 11_000, listOf(observation(2_000, accuracy = 20.0))),
+        ) as JournalImportResult.Committed
+        val better = repository.import(
+            JOURNAL_ID,
+            importInput("better", 12_000, listOf(observation(2_000, accuracy = 5.0))),
+        ) as JournalImportResult.Committed
+
+        assertEquals(0, dao.provenanceCount(worse.batchId))
+        assertEquals(false, worse.needsRouteRefresh)
+        assertEquals(1, dao.provenanceCount(better.batchId))
+        assertEquals(true, better.needsRouteRefresh)
+        assertEquals(2_000L, better.changedStartEpochMillis)
+        assertEquals(2_000L, better.changedEndEpochMillis)
+        assertEquals(5.0, repository.activeDetailedObservations(JOURNAL_ID, 0, 3_000).single().accuracyMeters, 0.0)
+    }
+
+    @Test
+    fun olderImportIsBackfillAndCannotOutrankNewerSemanticCoverage() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "newer-export",
+                importedAt = 10_000,
+                observations = listOf(observation(8_000), observation(10_000)),
+                segments = listOf(segment(8_000, 10_000, "VISIT", activityType = "NEWER")),
+            ),
+        )
+
+        val backfill = repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "older-export-imported-later",
+                importedAt = 30_000,
+                observations = listOf(observation(2_000), observation(5_000)),
+                segments = listOf(segment(2_000, 9_000, "VISIT", activityType = "OLDER")),
+            ),
+        ) as JournalImportResult.Committed
+
+        assertEquals(JournalImportResult.ChangeKind.BACKFILL, backfill.changeKind)
+        assertEquals(2_000L, backfill.changedStartEpochMillis)
+        assertEquals(8_000L, backfill.changedEndEpochMillis)
+        assertEquals(true, backfill.activeSemanticChanged)
+        assertEquals(10_000L, repository.journal(JOURNAL_ID)?.detailedCapturedThroughEpochMillis)
+        val overlapping = repository.activeSemanticSegments(JOURNAL_ID, 8_000, 9_000)
+        assertEquals("NEWER", overlapping.first().activityType)
+        assertEquals(10_000L, overlapping.first().snapshotCapturedAtEpochMillis)
+        assertEquals("OLDER", overlapping.last().activityType)
+        assertEquals(9_000L, overlapping.last().snapshotCapturedAtEpochMillis)
+    }
+
+    @Test
+    fun identicalSemanticProjectionDoesNotStoreAnotherSnapshotOrRequestRefresh() = runBlocking {
+        val segments = listOf(
+            segment(1_000, 2_000, "VISIT", activityType = "STILL"),
+            segment(2_000, 3_000, "ACTIVITY", activityType = "WALKING"),
+        )
+        repository.import(JOURNAL_ID, importInput("first", 10_000, segments = segments))
+
+        val repeatedProjection = repository.import(
+            JOURNAL_ID,
+            importInput("different-file-same-semantics", 20_000, segments = segments),
+        ) as JournalImportResult.Committed
+
+        assertEquals(1, dao.committedSnapshotCount(JOURNAL_ID))
+        assertEquals(0, repeatedProjection.semanticSegmentCount)
+        assertEquals(false, repeatedProjection.activeSemanticChanged)
+        assertEquals(false, repeatedProjection.needsRouteRefresh)
+        assertNull(repeatedProjection.changedStartEpochMillis)
+        assertNull(repeatedProjection.changedEndEpochMillis)
+    }
+
+    @Test
+    fun fullyCoveredBackfillDoesNotStoreSemanticSnapshotOrRequestRefresh() = runBlocking {
+        val fullSegments = listOf(segment(1_000, 10_000, "ACTIVITY", activityType = "DRIVING"))
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                "current",
+                10_000,
+                observations = listOf(observation(2_000), observation(10_000)),
+                segments = fullSegments,
+            ),
+        )
+
+        val coveredBackfill = repository.import(
+            JOURNAL_ID,
+            importInput(
+                "covered-backfill",
+                20_000,
+                observations = listOf(observation(2_000)),
+                segments = listOf(segment(2_000, 5_000, "ACTIVITY", activityType = "DRIVING")),
+            ),
+        ) as JournalImportResult.Committed
+
+        assertEquals(JournalImportResult.ChangeKind.BACKFILL, coveredBackfill.changeKind)
+        assertEquals(1, dao.committedSnapshotCount(JOURNAL_ID))
+        assertEquals(0, coveredBackfill.semanticSegmentCount)
+        assertEquals(false, coveredBackfill.needsRouteRefresh)
+        assertNull(coveredBackfill.changedStartEpochMillis)
+        assertNull(coveredBackfill.changedEndEpochMillis)
     }
 
     @Test
@@ -248,17 +362,24 @@ class JournalRepositoryTest {
     private fun observation(
         instant: Long,
         latitude: Double = 37.5,
+        accuracy: Double? = 12.0,
     ) = DetailedObservationInput(
         instantEpochMillis = instant,
         latitude = latitude,
         longitude = 127.0,
-        accuracyMeters = 12.0,
+        accuracyMeters = accuracy,
     )
 
-    private fun segment(start: Long, end: Long, kind: String) = SemanticSegmentInput(
+    private fun segment(
+        start: Long,
+        end: Long,
+        kind: String,
+        activityType: String? = null,
+    ) = SemanticSegmentInput(
         startEpochMillis = start,
         endEpochMillis = end,
         kind = kind,
+        activityType = activityType,
     )
 
     private companion object {

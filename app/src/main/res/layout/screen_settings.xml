@@ -21,7 +21,30 @@
             app:strokeWidth="1dp">
 
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/timeline_data" android:textAppearance="?attr/textAppearanceTitleMedium" android:textStyle="bold" />
+                <LinearLayout
+                    android:id="@+id/journalSetupIntro"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/journal_setup_intro_title"
+                        android:textAppearance="?attr/textAppearanceTitleLarge"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="@string/journal_setup_intro_detail"
+                        android:textAppearance="?attr/textAppearanceBodyMedium" />
+                </LinearLayout>
+                <TextView android:id="@+id/timelineDataTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/timeline_data" android:textAppearance="?attr/textAppearanceTitleMedium" android:textStyle="bold" />
                 <TextView android:id="@+id/timelineDataStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="@string/timeline_source_empty" android:textAppearance="?attr/textAppearanceBodySmall" />
                 <LinearLayout
                     android:id="@+id/settingsTimelineProgressGroup"

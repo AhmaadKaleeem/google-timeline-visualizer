@@ -121,6 +121,11 @@ class JournalRouteServiceTest {
             ),
         )
 
+        val captures = repository.activeSemanticSegments(JOURNAL_ID, minute(0), minute(41))
+            .map { it.snapshotCapturedAtEpochMillis }
+            .distinct()
+        assertEquals(listOf(minute(40) + 1, minute(40)), captures)
+
         val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(41)))
 
         assertEquals(listOf(1.0, 1.1, 5.2, 5.3, 1.4), route.timeline.points.map(GeoPoint::latitude))

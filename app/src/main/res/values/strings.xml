@@ -348,8 +348,14 @@
     <string name="journal_import_read_progress" translatable="false">%1$s of %2$s read</string>
     <string name="journal_import_save_progress" translatable="false">%1$d of %2$d Journal records saved</string>
     <string name="journal_import_in_progress" translatable="false">Growing Travel Journal…</string>
+    <string name="journal_import_no_changes" translatable="false">Your Travel Journal already contains newer or matching data. Nothing needed updating.</string>
     <string name="journal_import_mismatch_title" translatable="false">This may be a different Travel Journal</string>
     <string name="journal_import_mismatch_message" translatable="false">This file does not have enough detailed locations in common with your saved Travel Journal. Nothing was changed. A different person’s Timeline cannot be added to the same Journal.</string>
+    <string name="travel_journal" translatable="false">Travel Journal</string>
+    <string name="journal_setup_title" translatable="false">Set up your Travel Journal</string>
+    <string name="journal_setup_summary" translatable="false">Your Journal keeps the best available journey history on this device.</string>
+    <string name="journal_setup_intro_title" translatable="false">Build your Travel Journal</string>
+    <string name="journal_setup_intro_detail" translatable="false">Choose Timeline.json to save your journey history. Return with a newer export regularly to grow the detailed parts of your Journal.</string>
     <string name="trips">Trips</string>
     <string name="library">Library</string>
     <string name="create">Create</string>
