@@ -69,6 +69,9 @@ sealed interface JournalImportResult {
 data class JournalStatusSnapshot(
     val journal: JournalEntity,
     val preservedObservationCount: Int,
+    val detailedStartEpochMillis: Long?,
+    val detailedEndEpochMillis: Long?,
+    val semanticEntryCount: Int,
     val lastSuccessfulImportAtEpochMillis: Long?,
 )
 
@@ -97,9 +100,13 @@ class JournalRepository(
 
     suspend fun status(journalId: String): JournalStatusSnapshot? {
         val journal = dao.journal(journalId) ?: return null
+        val detailedBounds = dao.committedDetailedBounds(journalId)
         return JournalStatusSnapshot(
             journal = journal,
             preservedObservationCount = dao.observationCount(journalId),
+            detailedStartEpochMillis = detailedBounds.startEpochMillis,
+            detailedEndEpochMillis = detailedBounds.endEpochMillis,
+            semanticEntryCount = dao.latestPreferredSemanticSegmentCount(journalId),
             lastSuccessfulImportAtEpochMillis = dao.latestCommittedImportAt(journalId),
         )
     }

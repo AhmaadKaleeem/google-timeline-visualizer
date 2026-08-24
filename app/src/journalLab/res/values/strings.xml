@@ -4,7 +4,7 @@
     <string name="timeline_source">Travel Journal</string>
     <string name="timeline_source_empty">Grow your Travel Journal by importing Timeline.json.</string>
     <string name="timeline_source_ready">Your Travel Journal is saved locally. Import Timeline.json regularly to keep its detailed routes growing.</string>
-    <string name="import_or_update">Grow Travel Journal</string>
+    <string name="import_or_update">Import updated Timeline</string>
     <string name="timeline_not_imported">Your Travel Journal is ready to grow. Import Timeline.json to add the history available in the file.</string>
     <string name="timeline_file_status">%1$s\nUpdated %2$s\nJournal coverage %3$s\nDetailed coverage %4$s</string>
     <string name="create_step_type">Choose a video for your Travel Journal</string>

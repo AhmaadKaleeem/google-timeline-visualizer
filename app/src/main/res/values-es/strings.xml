@@ -450,7 +450,7 @@
     <string name="journal_status_due">Amplía tu diario con los últimos días de Timeline.</string>
     <string name="journal_status_at_risk">Algunos detalles de rutas que aún no se han conservado podrían desaparecer pronto de futuras exportaciones.</string>
     <string name="journal_status_overdue">Actualiza tu diario cuando puedas. La aplicación no puede recuperar los detalles que falten en exportaciones anteriores.</string>
-    <string name="journal_status_detail">Rutas detalladas conservadas hasta %1$s\n%2$s ubicaciones detalladas conservadas\nHistorial del diario %3$s\nÚltima importación correcta %4$s</string>
+    <string name="journal_status_detail">Rutas detalladas\n%1$s · %2$s puntos\n\nHistorial del viaje\n%3$s · %4$s entradas en la última cronología\n\nÚltima actualización %5$s</string>
     <string name="journal_growth_title">Tu diario ha crecido</string>
     <string name="journal_created_title">Tu diario de viaje está listo</string>
     <string name="journal_backfill_title">Una parte anterior ahora tiene más detalles</string>
@@ -502,4 +502,10 @@
     <string name="journal_setup_card_title">Empieza tu diario de viaje</string>
     <string name="journal_setup_card_detail">Importa una exportación de Timeline de Google Maps para conservar tu historial de viajes y empezar a crear rutas detalladas.</string>
     <string name="journal_setup_card_action">Configurar el diario</string>
+    <string name="journal_update_added_detail">Se añadieron %1$s.\n\n%2$s</string>
+    <string name="import_timeline_to_journal">Importar cronología</string>
+    <string name="import_updated_timeline">Importar cronología actualizada</string>
+    <string name="get_updated_timeline_file">Obtener archivo de cronología actualizado</string>
+    <string name="journal_route_load_failed">Tu diario está seguro, pero no se pudieron preparar sus rutas. Inténtalo de nuevo.</string>
+    <string name="save_as_preset">Guardar como preajuste</string>
 </resources>

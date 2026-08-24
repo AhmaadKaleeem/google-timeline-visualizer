@@ -445,7 +445,7 @@
     <string name="journal_status_due">Erweitere dein Reisetagebuch um die neuesten Tage aus der Zeitachse.</string>
     <string name="journal_status_at_risk">Einige noch nicht gespeicherte Routendetails könnten bald aus künftigen Exporten verschwinden.</string>
     <string name="journal_status_overdue">Aktualisiere dein Reisetagebuch, wenn du kannst. Details, die in früheren Exporten fehlen, kann die App nicht wiederherstellen.</string>
-    <string name="journal_status_detail">Detaillierte Routen gespeichert bis %1$s\n%2$s detaillierte Standorte gespeichert\nTagebuchverlauf %3$s\nLetzter erfolgreicher Import %4$s</string>
+    <string name="journal_status_detail">Detaillierte Routen\n%1$s · %2$s Punkte\n\nReiseverlauf\n%3$s · %4$s Einträge in der neuesten Timeline\n\nZuletzt aktualisiert %5$s</string>
     <string name="journal_growth_title">Dein Reisetagebuch ist gewachsen</string>
     <string name="journal_created_title">Dein Reisetagebuch ist bereit</string>
     <string name="journal_backfill_title">Ein älterer Abschnitt ist jetzt detaillierter</string>
@@ -497,4 +497,10 @@
     <string name="journal_setup_card_title">Starte dein Reisetagebuch</string>
     <string name="journal_setup_card_detail">Importiere einen Export der Google Maps-Zeitachse, um deinen Reiseverlauf zu bewahren und detaillierte Routen aufzubauen.</string>
     <string name="journal_setup_card_action">Reisetagebuch einrichten</string>
+    <string name="journal_update_added_detail">%1$s wurden hinzugefügt.\n\n%2$s</string>
+    <string name="import_timeline_to_journal">Timeline importieren</string>
+    <string name="import_updated_timeline">Aktualisierte Timeline importieren</string>
+    <string name="get_updated_timeline_file">Aktualisierte Timeline-Datei abrufen</string>
+    <string name="journal_route_load_failed">Ihr Reisetagebuch ist sicher, aber die Routen konnten nicht vorbereitet werden. Bitte versuchen Sie es erneut.</string>
+    <string name="save_as_preset">Als Voreinstellung speichern</string>
 </resources>

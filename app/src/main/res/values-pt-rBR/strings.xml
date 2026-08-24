@@ -450,7 +450,7 @@
     <string name="journal_status_due">Amplie seu diário com os dias mais recentes da Linha do tempo.</string>
     <string name="journal_status_at_risk">Alguns detalhes de rotas ainda não preservados podem desaparecer em breve de futuras exportações.</string>
     <string name="journal_status_overdue">Atualize seu diário quando puder. O aplicativo não consegue recuperar detalhes ausentes de exportações anteriores.</string>
-    <string name="journal_status_detail">Rotas detalhadas preservadas até %1$s\n%2$s locais detalhados preservados\nHistórico do diário %3$s\nÚltima importação bem-sucedida %4$s</string>
+    <string name="journal_status_detail">Rotas detalhadas\n%1$s · %2$s pontos\n\nHistórico de viagens\n%3$s · %4$s entradas na Linha do tempo mais recente\n\nÚltima atualização %5$s</string>
     <string name="journal_growth_title">Seu diário cresceu</string>
     <string name="journal_created_title">Seu diário de viagem está pronto</string>
     <string name="journal_backfill_title">Uma parte mais antiga ficou mais detalhada</string>
@@ -502,4 +502,10 @@
     <string name="journal_setup_card_title">Comece seu diário de viagem</string>
     <string name="journal_setup_card_detail">Importe uma exportação da Linha do tempo do Google Maps para preservar seu histórico de viagens e começar a criar rotas detalhadas.</string>
     <string name="journal_setup_card_action">Configurar o diário</string>
+    <string name="journal_update_added_detail">%1$s foram adicionados.\n\n%2$s</string>
+    <string name="import_timeline_to_journal">Importar Linha do tempo</string>
+    <string name="import_updated_timeline">Importar Linha do tempo atualizada</string>
+    <string name="get_updated_timeline_file">Obter arquivo atualizado da Linha do tempo</string>
+    <string name="journal_route_load_failed">Seu diário está seguro, mas não foi possível preparar as rotas. Tente novamente.</string>
+    <string name="save_as_preset">Salvar como predefinição</string>
 </resources>

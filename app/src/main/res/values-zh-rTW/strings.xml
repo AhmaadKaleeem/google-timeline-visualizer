@@ -441,7 +441,7 @@
     <string name="journal_status_due">加入時間軸中的最近日期，讓旅行記錄繼續成長。</string>
     <string name="journal_status_at_risk">一些尚未保留的詳細路線可能很快會從未來的匯出檔中消失。</string>
     <string name="journal_status_overdue">請在方便時更新旅行記錄。應用程式無法復原先前匯出檔中缺少的詳細資料。</string>
-    <string name="journal_status_detail">詳細路線已保留至 %1$s\n已保留 %2$s 個詳細位置\n旅行記錄範圍 %3$s\n上次成功匯入 %4$s</string>
+    <string name="journal_status_detail">詳細路線\n%1$s · %2$s 個點\n\n旅程記錄\n%3$s · 最新時間軸中的 %4$s 個項目\n\n上次更新 %5$s</string>
     <string name="journal_growth_title">旅行記錄已成長</string>
     <string name="journal_created_title">旅行記錄已準備就緒</string>
     <string name="journal_backfill_title">較早的記錄現在更詳細了</string>
@@ -493,4 +493,10 @@
     <string name="journal_setup_card_title">開始你的旅行記錄</string>
     <string name="journal_setup_card_detail">匯入 Google 地圖時間軸匯出檔，保留你的旅程歷史並開始累積詳細路線。</string>
     <string name="journal_setup_card_action">設定旅行記錄</string>
+    <string name="journal_update_added_detail">已新增 %1$s。\n\n%2$s</string>
+    <string name="import_timeline_to_journal">匯入時間軸</string>
+    <string name="import_updated_timeline">匯入更新後的時間軸</string>
+    <string name="get_updated_timeline_file">取得更新後的時間軸檔案</string>
+    <string name="journal_route_load_failed">您的旅行記錄是安全的，但無法準備路線。請再試一次。</string>
+    <string name="save_as_preset">另存為預設</string>
 </resources>

@@ -441,7 +441,7 @@
     <string name="journal_status_due">添加时间轴中的最近日期，让旅行记录继续增长。</string>
     <string name="journal_status_at_risk">一些尚未保留的详细路线可能很快会从未来的导出文件中消失。</string>
     <string name="journal_status_overdue">请在方便时更新旅行记录。应用无法恢复早期导出文件中缺失的详细信息。</string>
-    <string name="journal_status_detail">详细路线已保留至 %1$s\n已保留 %2$s 个详细位置\n旅行记录范围 %3$s\n上次成功导入 %4$s</string>
+    <string name="journal_status_detail">详细路线\n%1$s · %2$s 个点\n\n旅程历史\n%3$s · 最新时间线中的 %4$s 个条目\n\n上次更新 %5$s</string>
     <string name="journal_growth_title">旅行记录已增长</string>
     <string name="journal_created_title">旅行记录已准备就绪</string>
     <string name="journal_backfill_title">较早的记录现在更详细了</string>
@@ -493,4 +493,10 @@
     <string name="journal_setup_card_title">开始你的旅行记录</string>
     <string name="journal_setup_card_detail">导入 Google 地图时间轴导出文件，保留你的旅程历史并开始积累详细路线。</string>
     <string name="journal_setup_card_action">设置旅行记录</string>
+    <string name="journal_update_added_detail">已添加 %1$s。\n\n%2$s</string>
+    <string name="import_timeline_to_journal">导入时间线</string>
+    <string name="import_updated_timeline">导入更新后的时间线</string>
+    <string name="get_updated_timeline_file">获取更新后的时间线文件</string>
+    <string name="journal_route_load_failed">您的旅行记录是安全的，但无法准备路线。请重试。</string>
+    <string name="save_as_preset">另存为预设</string>
 </resources>

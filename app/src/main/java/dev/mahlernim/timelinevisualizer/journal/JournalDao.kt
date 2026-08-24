@@ -71,6 +71,25 @@ interface JournalDao {
     @Query("SELECT COUNT(*) FROM detailed_observations WHERE journalId = :journalId")
     suspend fun observationCount(journalId: String): Int
 
+    @Query(
+        """
+        SELECT COUNT(*)
+        FROM semantic_segments
+        WHERE snapshotId = (
+            SELECT semantic_snapshots.id
+            FROM semantic_snapshots
+            INNER JOIN import_batches
+                ON import_batches.id = semantic_snapshots.importBatchId
+            WHERE import_batches.journalId = :journalId
+              AND import_batches.status = 'COMMITTED'
+            ORDER BY semantic_snapshots.capturedAtEpochMillis DESC,
+                     semantic_snapshots.id DESC
+            LIMIT 1
+        )
+        """,
+    )
+    suspend fun latestPreferredSemanticSegmentCount(journalId: String): Int
+
     @Query("SELECT MAX(importedAtEpochMillis) FROM import_batches WHERE journalId = :journalId AND status = 'COMMITTED'")
     suspend fun latestCommittedImportAt(journalId: String): Long?
 

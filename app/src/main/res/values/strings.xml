@@ -347,7 +347,7 @@
     <string name="journal_import_working_detail" translatable="false">Your saved Journal stays safe while this finishes.</string>
     <string name="journal_import_read_progress" translatable="false">%1$s of %2$s read</string>
     <string name="journal_import_save_progress" translatable="false">%1$d of %2$d Journal records saved</string>
-    <string name="journal_import_in_progress" translatable="false">Growing Travel Journal…</string>
+    <string name="journal_import_in_progress" translatable="false">Updating Travel Journal…</string>
     <string name="journal_import_creating" translatable="false">Creating your Travel Journal…</string>
     <string name="journal_import_preparing" translatable="false">Preparing Travel Journal…</string>
     <string name="journal_import_created" translatable="false">Travel Journal created. %1$s and %2$s are ready.</string>
@@ -536,13 +536,14 @@
     <string name="journal_status_due">Grow your Journal with the latest days from Timeline.</string>
     <string name="journal_status_at_risk">Some unpreserved route detail may soon disappear from future exports.</string>
     <string name="journal_status_overdue">Update your Journal when you can. Detail missing from earlier exports cannot be recovered by the app.</string>
-    <string name="journal_status_detail">Detailed routes preserved through %1$s\n%2$s detailed locations preserved\nJournal history %3$s\nLast successful import %4$s</string>
+    <string name="journal_status_detail">Detailed routes\n%1$s · %2$s points\n\nJourney history\n%3$s · %4$s entries in the latest Timeline\n\nLast updated %5$s</string>
     <string name="journal_growth_title">Your Journal grew</string>
     <string name="journal_created_title">Your Travel Journal is ready</string>
     <string name="journal_backfill_title">An older part became more detailed</string>
     <string name="journal_timeline_growth_title">More Timeline history was added</string>
     <string name="journal_up_to_date_title">Your Journal is up to date</string>
     <string name="journal_growth_detail">%1$s\n%2$s\nDetailed routes now continue through %3$s</string>
+    <string name="journal_update_added_detail">%1$s were added.\n\n%2$s</string>
     <string name="journal_backfill_detail">%1$s were added to an earlier period. Your latest detailed date is unchanged.</string>
     <string name="journal_timeline_growth_detail">The best available Timeline history was added without changing your latest detailed route date.</string>
     <string name="journal_up_to_date_detail">No new route detail was found. Your saved Journal was not changed.</string>
@@ -588,4 +589,9 @@
     <string name="journal_setup_card_title">Start your Travel Journal</string>
     <string name="journal_setup_card_detail">Import a Google Maps Timeline export to preserve your journey history and begin building detailed routes.</string>
     <string name="journal_setup_card_action">Set up Journal</string>
+    <string name="import_timeline_to_journal">Import Timeline</string>
+    <string name="import_updated_timeline">Import updated Timeline</string>
+    <string name="get_updated_timeline_file">Get updated Timeline file</string>
+    <string name="journal_route_load_failed">Your Journal is safe, but its routes could not be prepared. Please try again.</string>
+    <string name="save_as_preset">Save as preset</string>
 </resources>

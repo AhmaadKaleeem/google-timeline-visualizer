@@ -65,11 +65,11 @@ android {
         create("journalLab") {
             dimension = "distribution"
             applicationId = "dev.mahlernim.timelinevisualizer.journallab"
-            versionCode = 9
-            versionName = "3.0.0-journal-lab.9"
+            versionCode = 10
+            versionName = "3.0.0-journal-lab.10"
             manifestPlaceholders["appLabel"] = "Journal Lab"
             buildConfigField("boolean", "IS_JOURNAL_LAB", "true")
-            buildConfigField("String", "UPDATE_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases/tag/journal-lab-9\"")
+            buildConfigField("String", "UPDATE_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases/tag/journal-lab-10\"")
             buildConfigField("String", "UPDATE_FALLBACK_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases\"")
         }
     }

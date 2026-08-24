@@ -1,6 +1,7 @@
 package dev.mahlernim.timelinevisualizer
 
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.net.Uri
 import android.os.Looper
@@ -9,8 +10,13 @@ import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.journal.JournalOnboardingStore
+import dev.mahlernim.timelinevisualizer.journal.JournalDatabase
+import dev.mahlernim.timelinevisualizer.journal.JournalEntity
+import dev.mahlernim.timelinevisualizer.journal.JournalRepository
+import dev.mahlernim.timelinevisualizer.presets.PresetRepository
 import dev.mahlernim.timelinevisualizer.videos.VideoDataSource
 import java.io.File
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -37,6 +43,7 @@ class JournalLabUiTest {
         context.deleteDatabase("travel-journal.db")
         context.getSharedPreferences(JournalOnboardingStore.PREFERENCES_NAME, Context.MODE_PRIVATE)
             .edit().clear().commit()
+        context.getSharedPreferences("video-presets", Context.MODE_PRIVATE).edit().clear().commit()
         JournalOnboardingStore(context).complete()
     }
 
@@ -59,9 +66,10 @@ class JournalLabUiTest {
     }
 
     @Test
-    fun settingsPresentTimelineImportAsGrowingTheTravelJournal() {
+    fun settingsUseConcreteTimelineImportLanguage() {
         assertEquals("Travel Journal", context.getString(R.string.timeline_data))
-        assertEquals("Grow Travel Journal", context.getString(R.string.import_or_update))
+        assertEquals("Import updated Timeline", context.getString(R.string.import_updated_timeline))
+        assertEquals("Get updated Timeline file", context.getString(R.string.get_updated_timeline_file))
         assertTrue(context.getString(R.string.timeline_not_imported).contains("ready to grow"))
         assertEquals("Title shown in video", context.getString(R.string.video_title_template))
         assertEquals(
@@ -69,6 +77,44 @@ class JournalLabUiTest {
             context.getString(R.string.title_template_help),
         )
         assertFalse(context.getString(R.string.title_template_help).contains("{year}"))
+    }
+
+    @Test
+    fun emptyJournalUsesFirstImportLanguage() {
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.navigationSettings).performClick()
+        waitUntil {
+            activity.findViewById<TextView>(R.id.settingsImportTimelineButton).text ==
+                activity.getString(R.string.import_timeline_to_journal)
+        }
+
+        assertEquals(
+            activity.getString(R.string.import_timeline_to_journal),
+            activity.findViewById<TextView>(R.id.settingsImportTimelineButton).text.toString(),
+        )
+        assertEquals(
+            activity.getString(R.string.get_timeline_file),
+            activity.findViewById<TextView>(R.id.settingsTimelineHelpButton).text.toString(),
+        )
+    }
+
+    @Test
+    fun videoDefaultsCanBeSavedAsAPresetBesidePresetManagement() {
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.navigationSettings).performClick()
+
+        val saveButton = activity.findViewById<TextView>(R.id.saveDefaultsAsPresetButton)
+        val manageButton = activity.findViewById<TextView>(R.id.managePresetsButton)
+        assertEquals(activity.getString(R.string.save_as_preset), saveButton.text.toString())
+        assertEquals(activity.getString(R.string.manage_presets), manageButton.text.toString())
+
+        saveButton.performClick()
+        val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+        requireNotNull(dialog.findViewById<android.widget.EditText>(R.id.presetNameInput))
+            .setText("My defaults")
+        dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick()
+
+        assertTrue(PresetRepository(context).presets().any { it.name == "My defaults" })
     }
 
     @Test
@@ -90,7 +136,7 @@ class JournalLabUiTest {
             activity.findViewById<View>(R.id.settingsTimelineProgressGroup).visibility == View.GONE
         }
         assertEquals(
-            activity.getString(R.string.import_or_update),
+            activity.getString(R.string.import_updated_timeline),
             activity.findViewById<TextView>(R.id.settingsImportTimelineButton).text.toString(),
         )
         val result = ShadowDialog.getLatestDialog()
@@ -98,6 +144,25 @@ class JournalLabUiTest {
             activity.getString(R.string.journal_created_title),
             result.findViewById<TextView>(R.id.journalGrowthHeadline)?.text,
         )
+    }
+
+    @Test
+    fun firstHybridImportReportsBothJournalLayers() {
+        val activity = launchActivity()
+        val source = Uri.fromFile(repoRoot().resolve("test-fixtures/semantic-and-raw-ranges.json"))
+
+        activity.importTimeline(source)
+        waitUntil {
+            ShadowDialog.getLatestDialog()?.findViewById<TextView>(R.id.journalGrowthHeadline)?.text ==
+                activity.getString(R.string.journal_created_title)
+        }
+
+        val result = requireNotNull(ShadowDialog.getLatestDialog())
+        val detail = requireNotNull(result.findViewById<TextView>(R.id.journalGrowthDetail)).text.toString()
+        assertTrue(detail.contains("Detailed routes"))
+        assertTrue(detail.contains("Journey history"))
+        assertTrue(detail.contains("points"))
+        assertTrue(detail.contains("entries"))
     }
 
     @Test
@@ -112,12 +177,31 @@ class JournalLabUiTest {
         waitUntil { activity.findViewById<View>(R.id.journalReminderSwitch).visibility == View.VISIBLE }
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.journalFreshnessStatus).visibility)
-        assertTrue(activity.findViewById<TextView>(R.id.timelineDataStatus).text.contains("detailed locations"))
+        val status = activity.findViewById<TextView>(R.id.timelineDataStatus).text
+        assertTrue(status.contains("Detailed routes"))
+        assertTrue(status.contains("Journey history"))
+        assertTrue(status.contains("points"))
+        assertTrue(status.contains("entries"))
         assertFalse(
             activity.findViewById<com.google.android.material.materialswitch.MaterialSwitch>(
                 R.id.journalReminderSwitch,
             ).isChecked,
         )
+    }
+
+    @Test
+    @Config(sdk = [32])
+    fun remindersDefaultOnWhenSystemPermissionIsNotRequired() {
+        val source = rawTimeline("reminder-default", 37.5, 127.0, java.time.Instant.now().toString())
+        val activity = launchActivity()
+
+        activity.importTimeline(Uri.fromFile(source))
+        waitUntil(activity::journalMetadataReady)
+
+        val database = JournalDatabase.open(context)
+        val reminderEnabled = runBlocking { JournalRepository(database).primaryJournal()?.reminderEnabled }
+        database.close()
+        assertEquals(true, reminderEnabled)
     }
 
     @Test
@@ -131,6 +215,28 @@ class JournalLabUiTest {
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsScreen).visibility)
         assertTrue(activity.findViewById<View>(R.id.settingsImportTimelineButton).hasFocus())
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)
+    }
+
+    @Test
+    fun secondLaunchLoadsOnlyFastJournalMetadata() {
+        val database = JournalDatabase.open(context)
+        runBlocking {
+            JournalRepository(database).createJournal(
+                JournalEntity(
+                    id = "existing-fast-start",
+                    name = "Travel Journal",
+                    isPrimary = true,
+                    createdAtEpochMillis = 1_000L,
+                ),
+            )
+        }
+        database.close()
+
+        val activity = launchActivity()
+        waitUntil(activity::journalMetadataReady)
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
+        assertFalse(activity.journalRouteReady())
     }
 
     @Test
@@ -162,6 +268,7 @@ class JournalLabUiTest {
 
         controller = requireNotNull(controller).recreate()
         val recreated = requireNotNull(controller).get()
+        waitUntil(recreated::journalMetadataReady)
         waitUntil { recreated.currentJourneyPoints() == imported }
 
         assertEquals(imported, recreated.currentJourneyPoints())
