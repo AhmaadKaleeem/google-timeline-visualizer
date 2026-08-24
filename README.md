@@ -21,8 +21,8 @@ in Safari. There is no app to install and no Timeline file is uploaded.
 1. In Google Maps, open **profile picture → Settings → Personal content →
    Export Timeline data** and save `Timeline.json` in Files.
 2. Return to the web app and select **Choose Timeline.json**.
-3. Choose a month range or exact dates, select the camera movement, and confirm
-   the map privacy notice.
+3. Choose a month range or exact dates, select the distance unit and camera
+   movement, and confirm the map privacy notice.
 4. Preview the journey, then select **Create MP4**.
 5. Play, share, or download the finished video.
 

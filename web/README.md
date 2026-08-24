@@ -56,8 +56,11 @@ The current implementation supports the complete private browser path.
 2. Read absolute path timestamps or current minute offsets from segment start.
    When timezone data is absent, preserve the exported route order and recorded
    calendar dates so date-line travel is not reordered by the browser timezone.
-3. Choose a month range or exact dates, title, and duration.
-4. Choose Fixed zoom, Steady following, or Dynamic following camera movement.
+3. Choose a month range or exact dates, title, duration, and distance unit.
+   Distance units can follow the browser region automatically or be set to
+   Kilometers or Miles, and the selection applies to summaries and video text.
+4. Choose Fixed zoom, Steady following, Dynamic following, or Close-up camera
+   movement.
 5. Choose a video format: square 480p, 720p, or 1080p, portrait 1080x1920, or
    landscape 1920x1080. The camera, map tiles, and overlay follow the selected
    aspect ratio.
