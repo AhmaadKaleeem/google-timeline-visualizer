@@ -13,7 +13,9 @@ import {
 import { applyStrings, syncDocumentLang } from './i18n-dom';
 import { filterLocationOutliers } from './outlier';
 import { parsePresetToken, presetIntentUrl } from './preset-link';
+import { formatRawDateRange } from './raw-range';
 import { drawFrame, prepareJourney, previewCanvasSize } from './renderer';
+import { selectTimelineModePoints } from './selection';
 import {
   availableMonths,
   localDateKey,
@@ -21,8 +23,6 @@ import {
   parseTimelineJson,
   pointDateKey,
   processRawSignals,
-  selectDateRange,
-  selectRange,
   TimelineParseError,
 } from './timeline';
 import type { I18n, LanguagePreference, TextKey } from './i18n';
@@ -65,6 +65,7 @@ const periodControls = element<HTMLElement>('period-controls');
 const rawSignalsRow = element<HTMLElement>('raw-signals-row');
 const rawSignalsToggle = element<HTMLInputElement>('raw-signals-toggle');
 const rawSignalsDescription = element<HTMLElement>('raw-signals-description');
+const rawDateRange = element<HTMLParagraphElement>('raw-date-range');
 const rawAccuracyField = element<HTMLElement>('raw-accuracy-field');
 const rawAccuracyLimit = element<HTMLInputElement>('raw-accuracy-limit');
 const locationFilterField = element<HTMLElement>('location-filter-field');
@@ -316,6 +317,7 @@ function rebuildRawSignalProcessing(): boolean {
   const trimmed = rawAccuracyLimit.value.trim();
   const limit = trimmed === '' ? null : Number(trimmed);
   if (limit !== null && (!Number.isFinite(limit) || limit < 0)) {
+    rawSignalProcessing = null;
     setSettingsError('errorAccuracyLimit');
     rawAccuracyLimit.focus();
     return false;
@@ -333,14 +335,25 @@ function rebuildFilteredPoints(): void {
 }
 
 function selectSemanticRange(source: GeoPoint[]): GeoPoint[] {
-  return exactDateToggle.checked
-    ? selectDateRange(source, startDateInput.value, endDateInput.value)
-    : selectRange(source, startSelect.value, endSelect.value);
+  return selectTimelineModePoints(false, [], source, {
+    exactDates: exactDateToggle.checked,
+    startMonth: startSelect.value,
+    endMonth: endSelect.value,
+    startDate: startDateInput.value,
+    endDate: endDateInput.value,
+  });
 }
 
 function currentPoints(): GeoPoint[] {
   if (rawSignalsToggle.checked) {
-    return rebuildRawSignalProcessing() ? rawSignalProcessing?.points ?? [] : [];
+    if (!rebuildRawSignalProcessing()) return [];
+    return selectTimelineModePoints(true, rawSignalProcessing?.points ?? [], filteredPoints, {
+      exactDates: exactDateToggle.checked,
+      startMonth: startSelect.value,
+      endMonth: endSelect.value,
+      startDate: startDateInput.value,
+      endDate: endDateInput.value,
+    });
   }
   return selectSemanticRange(filteredPoints);
 }
@@ -552,6 +565,9 @@ function refreshActionAvailability(points = currentPoints()): void {
  */
 function renderSelection(): void {
   const points = currentPoints();
+  const showRawRange = rawSignalsToggle.checked && rawSignalProcessing !== null;
+  rawDateRange.textContent = showRawRange ? formatRawDateRange(points, i18n) : '';
+  rawDateRange.classList.toggle('hidden', !showRawRange);
   const distanceKm = selectedDistanceKm(points);
   const outliersIgnored = rawSignalsToggle.checked
     ? 0

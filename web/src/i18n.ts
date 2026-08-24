@@ -117,6 +117,13 @@ export interface Strings {
   settingsTitle: string;
   rawSignalsToggle: string;
   rawSignalsDescription: string;
+  rawRangeEmpty: string;
+  /** {date} */
+  rawRangeOnePoint: string;
+  /** {count} {date} */
+  rawRangeOneDay: string;
+  /** {count} {start} {end} */
+  rawRangeMultipleDays: string;
   accuracyLimitLabel: string;
   accuracyLimitHelp: string;
   locationFilterLabel: string;
