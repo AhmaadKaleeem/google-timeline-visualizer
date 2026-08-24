@@ -299,6 +299,8 @@
     <string name="backup_restore_timeline">备份和恢复时间轴</string>
     <string name="raw_data_retention_explanation">通常只有最近最多30天保留为原始位置数据，更早的活动会以时间轴格式表示。</string>
     <string name="raw_data_available_range">原始数据可用范围：%1$s至%2$s</string>
+    <string name="raw_data_available_one_day">原始数据可用日期：%1$s</string>
+    <string name="raw_data_available_one_point">1 个原始位置可用于 %1$s</string>
     <string name="raw_data_range_conflict">此项目使用的日期超出当前原始数据范围。请选择有效范围。</string>
     <string name="use_available_range">使用可用范围</string>
     <string name="save_preset_choice_title">保存预设更改</string>

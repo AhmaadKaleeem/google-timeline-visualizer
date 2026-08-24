@@ -303,6 +303,8 @@
     <string name="backup_restore_timeline">Timeline sichern und wiederherstellen</string>
     <string name="raw_data_retention_explanation">Nur die neuesten, gewöhnlich bis zu 30 Tage bleiben als rohe Standortdaten erhalten. Ältere Aktivitäten werden im Timeline-Format dargestellt.</string>
     <string name="raw_data_available_range">Rohdaten verfügbar vom %1$s bis %2$s</string>
+    <string name="raw_data_available_one_day">Rohdaten verfügbar am %1$s</string>
+    <string name="raw_data_available_one_point">1 Rohdatenstandort verfügbar am %1$s</string>
     <string name="raw_data_range_conflict">Dieses Projekt verwendet Daten außerhalb der derzeit verfügbaren Rohdaten. Wähle einen gültigen Zeitraum aus.</string>
     <string name="use_available_range">Verfügbaren Zeitraum verwenden</string>
     <string name="save_preset_choice_title">Änderungen speichern</string>

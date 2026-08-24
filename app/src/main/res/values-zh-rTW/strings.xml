@@ -299,6 +299,8 @@
     <string name="backup_restore_timeline">備份與還原時間軸</string>
     <string name="raw_data_retention_explanation">通常只有最近最多30天會保留為原始位置資料，更早的活動會以時間軸格式呈現。</string>
     <string name="raw_data_available_range">原始資料可用範圍：%1$s至%2$s</string>
+    <string name="raw_data_available_one_day">原始資料可用日期：%1$s</string>
+    <string name="raw_data_available_one_point">1 個原始位置可用於 %1$s</string>
     <string name="raw_data_range_conflict">此專案使用的日期超出目前原始資料範圍。請選擇有效範圍。</string>
     <string name="use_available_range">使用可用範圍</string>
     <string name="save_preset_choice_title">儲存預設組合變更</string>

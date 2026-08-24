@@ -92,6 +92,7 @@ import dev.mahlernim.timelinevisualizer.export.VideoExportViewModel
 import dev.mahlernim.timelinevisualizer.export.EncoderSupport
 import dev.mahlernim.timelinevisualizer.export.VideoEncoderSupport
 import dev.mahlernim.timelinevisualizer.export.describe
+import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.Timeline
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
@@ -1723,15 +1724,22 @@ class MainActivity : AppCompatActivity() {
         val visible = currentCreateStep == CreateStep.PROJECT && activeProjectKind == TripKind.RAW_DATA
         editor.rawDataAvailabilityGroup.visibility = if (visible) View.VISIBLE else View.GONE
         if (!visible) return
-        rawDateBounds()?.let { (first, last) ->
-            editor.rawDataAvailabilityText.text = getString(
-                R.string.raw_data_available_range,
-                formatExactDate(first),
-                formatExactDate(last),
-            )
-        }
+        editor.rawDataAvailabilityText.text = rawDataAvailability(renderRawSignalsTimeline?.points.orEmpty())
         editor.rawDataRangeConflictGroup.visibility = if (rawProjectRangeConflict) View.VISIBLE else View.GONE
         editor.wizardContinueButton.isEnabled = !rawProjectRangeConflict
+    }
+
+    internal fun rawDataAvailability(points: List<GeoPoint>): String {
+        if (points.isEmpty()) return getString(R.string.raw_data_unavailable)
+        val zone = ZoneId.systemDefault()
+        val first = points.minOf { it.instant }.atZone(zone).toLocalDate()
+        val last = points.maxOf { it.instant }.atZone(zone).toLocalDate()
+        val date = formatExactDate(first)
+        return when {
+            points.size == 1 -> getString(R.string.raw_data_available_one_point, date)
+            first == last -> getString(R.string.raw_data_available_one_day, date)
+            else -> getString(R.string.raw_data_available_range, date, formatExactDate(last))
+        }
     }
 
     private fun useAvailableRawRange() {
