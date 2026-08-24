@@ -1,5 +1,7 @@
 plugins {
     id("com.android.application")
+    id("androidx.room")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -12,6 +14,7 @@ android {
         targetSdk = 36
         versionCode = 40
         versionName = "2.4.1"
+        manifestPlaceholders["appLabel"] = "@string/app_name"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -57,6 +60,15 @@ android {
             buildConfigField("String", "UPDATE_URL", "\"market://details?id=dev.mahlernim.timelinevisualizer\"")
             buildConfigField("String", "UPDATE_FALLBACK_URL", "\"https://play.google.com/store/apps/details?id=dev.mahlernim.timelinevisualizer\"")
         }
+        create("journalLab") {
+            dimension = "distribution"
+            applicationId = "dev.mahlernim.timelinevisualizer.journallab"
+            versionCode = 1
+            versionName = "3.0.0-journal-lab.1"
+            manifestPlaceholders["appLabel"] = "Journal Lab"
+            buildConfigField("String", "UPDATE_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases/tag/journal-lab-1\"")
+            buildConfigField("String", "UPDATE_FALLBACK_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases\"")
+        }
     }
 
     compileOptions {
@@ -66,6 +78,10 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+}
+
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 dependencies {
@@ -80,10 +96,14 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.11.0")
     implementation("androidx.media3:media3-muxer:1.11.0")
     implementation("androidx.media3:media3-ui:1.11.0")
+    implementation("androidx.room:room-runtime:2.8.4")
+    implementation("androidx.room:room-ktx:2.8.4")
+    ksp("androidx.room:room-compiler:2.8.4")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("androidx.test:core:1.7.0")
     testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("androidx.room:room-testing:2.8.4")
     androidTestImplementation("androidx.test:core-ktx:1.7.0")
     androidTestImplementation("androidx.test.ext:junit-ktx:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")

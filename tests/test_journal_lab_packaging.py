@@ -1,0 +1,58 @@
+import re
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+BUILD_FILE = ROOT / "app" / "build.gradle.kts"
+MANIFEST = ROOT / "app" / "src" / "main" / "AndroidManifest.xml"
+LAB_WORKFLOW = ROOT / ".github" / "workflows" / "journal-lab.yml"
+VALIDATE_WORKFLOW = ROOT / ".github" / "workflows" / "validate.yml"
+
+
+def test_journal_lab_has_a_separate_installation_identity() -> None:
+    build_file = BUILD_FILE.read_text(encoding="utf-8")
+    manifest = MANIFEST.read_text(encoding="utf-8")
+
+    lab_flavor = re.search(
+        r'create\("journalLab"\) \{(?P<body>.*?)\n        \}',
+        build_file,
+        re.DOTALL,
+    )
+    assert lab_flavor is not None
+    assert 'applicationId = "dev.mahlernim.timelinevisualizer.journallab"' in lab_flavor.group("body")
+    assert 'versionCode = 1' in lab_flavor.group("body")
+    assert 'versionName = "3.0.0-journal-lab.1"' in lab_flavor.group("body")
+    assert 'manifestPlaceholders["appLabel"] = "Journal Lab"' in lab_flavor.group("body")
+    assert 'android:label="${appLabel}"' in manifest
+
+
+def test_normal_validation_builds_the_journal_lab_variant() -> None:
+    workflow = VALIDATE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "testGithubDebugUnitTest testPlayDebugUnitTest lint" in workflow
+    assert "assembleGithubDebug assemblePlayDebug assembleJournalLabDebug" in workflow
+    assert "testJournalLabDebugUnitTest --tests dev.mahlernim.timelinevisualizer.JournalLabUiTest" in workflow
+
+
+def test_lab_release_is_immutable_verified_and_coinstallable() -> None:
+    workflow = LAB_WORKFLOW.read_text(encoding="utf-8")
+
+    for required in (
+        'tags:\n      - "journal-lab-*"',
+        "testGithubDebugUnitTest lintJournalLabRelease assembleGithubRelease assembleJournalLabRelease",
+        "testJournalLabDebugUnitTest --tests dev.mahlernim.timelinevisualizer.JournalLabUiTest",
+        'test "$package_name" = "dev.mahlernim.timelinevisualizer.journallab"',
+        'test "$application_label" = "Journal Lab"',
+        'test "$LAB_RELEASE_TAG" = "journal-lab-1"',
+        'test "$version_name" = "$EXPECTED_VERSION_NAME"',
+        'test "$lab_cert" = "$production_cert"',
+        "adb install app/build/outputs/apk/github/release/app-github-release.apk",
+        "adb install app/build/outputs/apk/journalLab/release/app-journalLab-release.apk",
+        'if gh release view "$LAB_RELEASE_TAG" >/dev/null 2>&1; then',
+        'echo "Release $LAB_RELEASE_TAG already exists and will not be replaced."',
+        'sha256sum "$lab_apk" > "$lab_apk.sha256"',
+        "--notes-file docs/journal-lab-1.md",
+        "--prerelease",
+        "--verify-tag",
+    ):
+        assert required in workflow

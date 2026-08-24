@@ -85,6 +85,12 @@
             android:layout_marginTop="10dp"
             android:orientation="vertical">
 
+            <TextView
+                android:id="@+id/automaticJournalSourceText"
+                style="@style/JournalAutomaticSourceMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/tripVideoChoice"
                 android:layout_width="match_parent"
@@ -140,6 +146,7 @@
 
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/rawDataChoice"
+                style="@style/JournalRawDataChoice"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
