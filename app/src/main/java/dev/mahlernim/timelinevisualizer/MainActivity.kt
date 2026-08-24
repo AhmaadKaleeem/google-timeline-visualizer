@@ -92,6 +92,15 @@ import dev.mahlernim.timelinevisualizer.export.VideoExportViewModel
 import dev.mahlernim.timelinevisualizer.export.EncoderSupport
 import dev.mahlernim.timelinevisualizer.export.VideoEncoderSupport
 import dev.mahlernim.timelinevisualizer.export.describe
+import dev.mahlernim.timelinevisualizer.journal.JournalDatabase
+import dev.mahlernim.timelinevisualizer.journal.JournalEntity
+import dev.mahlernim.timelinevisualizer.journal.JournalImportResult
+import dev.mahlernim.timelinevisualizer.journal.JournalMatchClassification
+import dev.mahlernim.timelinevisualizer.journal.JournalRepository
+import dev.mahlernim.timelinevisualizer.journal.importer.TimelineJournalImportAdapter
+import dev.mahlernim.timelinevisualizer.journal.route.JournalRoute
+import dev.mahlernim.timelinevisualizer.journal.route.JournalRouteService
+import dev.mahlernim.timelinevisualizer.journal.route.RouteSource
 import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.Timeline
@@ -153,6 +162,7 @@ import java.text.DateFormatSymbols
 import java.text.DateFormat
 import java.text.NumberFormat
 import java.util.Date
+import java.util.UUID
 import java.util.Locale
 import java.time.YearMonth
 import java.time.Instant
@@ -202,6 +212,11 @@ class MainActivity : AppCompatActivity() {
     private val generatedMedia by lazy { GeneratedMediaRepository(applicationContext) }
     private val timelineLoader by lazy { CachedTimelineLoader(applicationContext) }
     private val timelineSourceStore by lazy { TimelineSourceStore(applicationContext) }
+    private val journalDatabaseDelegate = lazy { JournalDatabase.open(applicationContext) }
+    private val journalDatabase by journalDatabaseDelegate
+    private val journalRepository by lazy { JournalRepository(journalDatabase) }
+    private val journalRouteService by lazy { JournalRouteService(journalRepository) }
+    private val journalImportAdapter by lazy { TimelineJournalImportAdapter() }
     private val presetRepository by lazy { PresetRepository(applicationContext) }
     private val tripsStore by lazy { TripsStore(applicationContext) }
     private val settingsViewModel by viewModels<SettingsViewModel> {
@@ -272,6 +287,10 @@ class MainActivity : AppCompatActivity() {
     private var customizationOriginalPresetId: String? = null
     private var customizationOriginalModifiedBuiltInId: String? = null
     private var rawProjectRangeConflict = false
+    private var activeJournal: JournalEntity? = null
+    private var activeJournalRoute: JournalRoute? = null
+    private var journalLoaded = false
+    private var journalLoadJob: Job? = null
 
     private val openTimeline = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importTimeline(uri)
@@ -317,10 +336,12 @@ class MainActivity : AppCompatActivity() {
             isAppearanceLightStatusBars = lightSystemBars
             isAppearanceLightNavigationBars = lightSystemBars
         }
-        timelineSourceStore.recoverInterruptedImport()?.let { uri ->
-            releaseUriAccess(uri)
-            interruptedTimelineRecovered = true
-            rememberedTimelineLoaded = true
+        if (!BuildConfig.IS_JOURNAL_LAB) {
+            timelineSourceStore.recoverInterruptedImport()?.let { uri ->
+                releaseUriAccess(uri)
+                interruptedTimelineRecovered = true
+                rememberedTimelineLoaded = true
+            }
         }
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
             val bars: Insets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -663,6 +684,10 @@ class MainActivity : AppCompatActivity() {
         }
         renderVideos()
         renderTrips()
+        if (BuildConfig.IS_JOURNAL_LAB) {
+            loadJournalIfNeeded()
+            return
+        }
         if (!rememberedTimelineLoaded && timeline == null && preferences.getBoolean(MAP_PRIVACY_ACCEPTED, false)) {
             rememberedTimelineLoaded = true
             timelineSourceStore.load()?.let { importTimeline(it, remembered = true) }
@@ -713,6 +738,10 @@ class MainActivity : AppCompatActivity() {
         }
         editor.saveTripButton.isEnabled = activeProjectId != null
         renderCreateStep()
+        if (BuildConfig.IS_JOURNAL_LAB) {
+            loadJournalIfNeeded()
+            return
+        }
         if (loadRemembered && interruptedTimelineRecovered) {
             interruptedTimelineRecovered = false
             editor.statusText.setText(R.string.timeline_file_unavailable)
@@ -1101,8 +1130,10 @@ class MainActivity : AppCompatActivity() {
         releaseVideoPlayer()
         titleHandler.removeCallbacks(applyTitleChanges)
         importJob?.cancel()
+        journalLoadJob?.cancel()
         setTimelineLoading(false)
         animation?.cancel()
+        if (journalDatabaseDelegate.isInitialized()) journalDatabase.close()
         super.onDestroy()
     }
 
@@ -1138,6 +1169,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     internal fun importTimeline(uri: Uri, remembered: Boolean = false) {
+        if (BuildConfig.IS_JOURNAL_LAB) {
+            importJournalTimeline(uri)
+            return
+        }
         if (importJob?.isActive == true) return
         if (!remembered && currentScreen == Screen.VIDEOS) showNewVideo(loadRemembered = false)
         if (!remembered) interruptedTimelineRecovered = false
@@ -1222,6 +1257,154 @@ class MainActivity : AppCompatActivity() {
                 importJob = null
             }
         }
+    }
+
+    private fun importJournalTimeline(uri: Uri) {
+        if (importJob?.isActive == true) return
+        if (currentScreen == Screen.VIDEOS) showNewVideo(loadRemembered = false)
+        animation?.cancel()
+        setTimelineLoading(true, R.string.opening_timeline)
+        importJob = lifecycleScope.launch {
+            try {
+                editor.loadingStageText.setText(R.string.reading_timeline)
+                val existing = withContext(Dispatchers.IO) { journalRepository.primaryJournal() }
+                val adapted = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.buffered()?.use { input ->
+                        journalImportAdapter.adapt(
+                            input = input,
+                            sourceName = timelineDisplayName(uri),
+                            importedAtEpochMillis = System.currentTimeMillis(),
+                            matchClassification = if (existing == null) {
+                                JournalMatchClassification.NEW_JOURNAL
+                            } else {
+                                JournalMatchClassification.UNCERTAIN
+                            },
+                        )
+                    } ?: error("Timeline document is unavailable")
+                }
+                val journal = existing ?: JournalEntity(
+                    id = UUID.randomUUID().toString(),
+                    name = getString(R.string.timeline_data),
+                    isPrimary = true,
+                    createdAtEpochMillis = System.currentTimeMillis(),
+                )
+                val classified = if (existing == null) {
+                    adapted
+                } else {
+                    val committed = withContext(Dispatchers.IO) {
+                        journalRepository.committedImport(journal.id, adapted.sourceHash)
+                    }
+                    if (committed != null) {
+                        adapted
+                    } else {
+                        val overlap = withContext(Dispatchers.IO) {
+                            journalRepository.detailedOverlapCount(journal.id, adapted.detailedObservations)
+                        }
+                        if (overlap == 0) {
+                            showJournalMismatch()
+                            return@launch
+                        }
+                        adapted.copy(matchClassification = JournalMatchClassification.LIKELY_SAME)
+                    }
+                }
+                editor.loadingStageText.setText(R.string.preparing_trips)
+                val result = withContext(Dispatchers.IO) {
+                    if (existing == null) {
+                        journalRepository.createJournalAndImport(journal, classified)
+                    } else {
+                        journalRepository.import(journal.id, classified)
+                    }
+                }
+                loadJournal(journal.id, force = true)
+                when (result) {
+                    is JournalImportResult.Committed -> Snackbar.make(
+                        binding.root,
+                        if (result.insertedObservationCount == 0 && result.semanticSegmentCount > 0) {
+                            getString(R.string.journal_import_added_timeline)
+                        } else {
+                            resources.getQuantityString(
+                                R.plurals.journal_import_added,
+                                result.insertedObservationCount,
+                                result.insertedObservationCount,
+                            )
+                        },
+                        Snackbar.LENGTH_LONG,
+                    ).show()
+                    is JournalImportResult.AlreadyImported -> Snackbar.make(
+                        binding.root,
+                        R.string.journal_import_duplicate,
+                        Snackbar.LENGTH_LONG,
+                    ).show()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                Log.e(TAG, "Travel Journal import failed", error)
+                Snackbar.make(binding.root, R.string.journal_import_failed_preserved, Snackbar.LENGTH_LONG).show()
+            } finally {
+                setTimelineLoading(false)
+                importJob = null
+            }
+        }
+    }
+
+    private fun showJournalMismatch() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.journal_import_mismatch_title)
+            .setMessage(R.string.journal_import_mismatch_message)
+            .setPositiveButton(R.string.done, null)
+            .show()
+    }
+
+    private fun loadJournalIfNeeded() {
+        if (journalLoaded || journalLoadJob?.isActive == true) return
+        journalLoadJob = lifecycleScope.launch {
+            try {
+                val journal = withContext(Dispatchers.IO) { journalRepository.primaryJournal() }
+                if (journal != null) loadJournal(journal.id, force = false)
+            } catch (error: Throwable) {
+                Log.e(TAG, "Travel Journal reload failed", error)
+            } finally {
+                journalLoaded = true
+                journalLoadJob = null
+                updateTimelineSettingsCard()
+                renderCreateStep()
+            }
+        }
+    }
+
+    private suspend fun loadJournal(journalId: String, force: Boolean) {
+        if (!force && activeJournal?.id == journalId && activeJournalRoute != null) return
+        val loadedJournal = withContext(Dispatchers.IO) { journalRepository.journal(journalId) } ?: return
+        val route = withContext(Dispatchers.IO) {
+            journalRouteService.route(
+                journalId = journalId,
+                start = Instant.ofEpochMilli(Long.MIN_VALUE),
+                endExclusive = Instant.ofEpochMilli(Long.MAX_VALUE),
+            )
+        }
+        activeJournal = loadedJournal
+        activeJournalRoute = route
+        journalLoaded = true
+        rawSignalPoints = emptyList()
+        rawSignalProcessing = null
+        renderRawSignalsTimeline = null
+        rawSignalsEnabled = false
+        rawOnlyImport = false
+        timeline = route.timeline.takeIf { it.points.isNotEmpty() }
+        renderTimeline = timeline
+        val loaded = timeline
+        if (loaded != null) {
+            val period = TimelinePeriod.sameYear(loaded.years.first())
+            configureYears(loaded, loaded.forRange(period), ignoredCount = 0)
+            applyActiveProjectDates()
+            tripSuggestions = refreshRequestedTripSuggestions(loaded)
+            editor.editorGroup.visibility = View.VISIBLE
+            updateCameraPreparationUi()
+        }
+        renderTrips()
+        renderCreateStep()
+        updateTimelineSettingsCard()
     }
 
     private fun showRawOnlyImportChoice(uri: Uri, points: List<RawSignalPoint>, remembered: Boolean) {
@@ -1385,6 +1568,30 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateTimelineSettingsCard() {
         if (!::settingsScreen.isInitialized) return
+        if (BuildConfig.IS_JOURNAL_LAB) {
+            val journal = activeJournal
+            val route = activeJournalRoute
+            settingsScreen.timelineDataStatus.text = if (journal == null) {
+                getString(R.string.timeline_not_imported)
+            } else {
+                val updatedAt = journal.lastAdvancedAtEpochMillis ?: journal.createdAtEpochMillis
+                val updated = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(updatedAt))
+                val journalPoints = route?.timeline?.points.orEmpty()
+                val detailedPoints = route?.spans.orEmpty()
+                    .asSequence()
+                    .filter { it.source == RouteSource.DETAILED }
+                    .flatMap { it.points.asSequence() }
+                    .toList()
+                getString(
+                    R.string.timeline_file_status,
+                    journal.name,
+                    updated,
+                    formatPointRange(journalPoints),
+                    formatPointRange(detailedPoints),
+                )
+            }
+            return
+        }
         var metadata = timelineSourceStore.metadata()
         if (metadata?.fileSizeBytes == null) {
             timelineSourceStore.load()?.let(::timelineFileSize)?.let { size ->
@@ -1420,6 +1627,15 @@ class MainActivity : AppCompatActivity() {
         } else {
             getString(R.string.timeline_raw_points_available, formatExactDate(start), formatExactDate(end))
         }
+
+    private fun formatPointRange(points: List<GeoPoint>): String {
+        if (points.isEmpty()) return getString(R.string.timeline_range_unavailable)
+        val zone = ZoneId.systemDefault()
+        return formatTimelineRange(
+            points.minOf { it.instant }.atZone(zone).toLocalDate(),
+            points.maxOf { it.instant }.atZone(zone).toLocalDate(),
+        )
+    }
 
     private fun prepareTimeline(loaded: Timeline): PreparedTimeline {
         val filtered = LocationOutlierFilter.filter(loaded.points, locationFilterMode)
@@ -1721,7 +1937,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateRawDataAvailability() {
         if (!::editor.isInitialized) return
-        val visible = currentCreateStep == CreateStep.PROJECT && activeProjectKind == TripKind.RAW_DATA
+        val visible = !BuildConfig.IS_JOURNAL_LAB &&
+            currentCreateStep == CreateStep.PROJECT && activeProjectKind == TripKind.RAW_DATA
         editor.rawDataAvailabilityGroup.visibility = if (visible) View.VISIBLE else View.GONE
         if (!visible) return
         editor.rawDataAvailabilityText.text = rawDataAvailability(renderRawSignalsTimeline?.points.orEmpty())
@@ -2505,6 +2722,14 @@ class MainActivity : AppCompatActivity() {
             renderTimeline = null
             return
         }
+        if (BuildConfig.IS_JOURNAL_LAB) {
+            // JournalRouteService already applies the active detailed filter and fuses semantic
+            // fallback. Journey cannot represent explicit GAP spans yet, so Lab 2 uses the
+            // service's documented flattened compatibility projection.
+            renderTimeline = source
+            if (reselect && selectedStartYear != null && selectedEndYear != null) selectRange()
+            return
+        }
         val result = LocationOutlierFilter.filter(source.points, locationFilterMode)
         renderTimeline = Timeline(result.points)
         if (rawSignalPoints.isNotEmpty()) rebuildRawSignalsTimeline()
@@ -2840,7 +3065,7 @@ class MainActivity : AppCompatActivity() {
             cameraSettings = cameraSettings,
             projectId = project?.id,
             presetName = selectedPreset()?.name,
-            dataSource = if (rawSignalsEnabled) VideoDataSource.RAW else VideoDataSource.SEMANTIC,
+            dataSource = currentVideoDataSource(),
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val request = pendingExport ?: return
@@ -3534,7 +3759,7 @@ class MainActivity : AppCompatActivity() {
         val end = activeEndDate ?: return
         val years = timeline?.years ?: return
         if (start.year !in years || end.year !in years) return
-        rawSignalsEnabled = activeProjectKind == TripKind.RAW_DATA
+        rawSignalsEnabled = !BuildConfig.IS_JOURNAL_LAB && activeProjectKind == TripKind.RAW_DATA
         if (!rawSignalsEnabled) rawProjectRangeConflict = false
         if (rawSignalsEnabled) rebuildRawSignalsTimeline()
         exactDateRangeEnabled = activeProjectKind in setOf(TripKind.TRIP, TripKind.CUSTOM_RECAP, TripKind.RAW_DATA)
@@ -3707,7 +3932,8 @@ class MainActivity : AppCompatActivity() {
         editor.exactDateSwitch.visibility = View.GONE
         editor.exactDateRangeButton.visibility = if (!periodBased) View.VISIBLE else View.GONE
         editor.rawSignalsSwitch.visibility = View.GONE
-        editor.rawSignalsDescription.visibility = if (activeProjectKind == TripKind.RAW_DATA) View.VISIBLE else View.GONE
+        editor.rawSignalsDescription.visibility =
+            if (!BuildConfig.IS_JOURNAL_LAB && activeProjectKind == TripKind.RAW_DATA) View.VISIBLE else View.GONE
         updateExactDateControls()
         if (periodBased) editor.exactDateRangeButton.visibility = View.GONE
         updateRawDataAvailability()
@@ -3731,7 +3957,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun activeDateBounds(): Pair<LocalDate, LocalDate> =
-        (if (activeProjectKind == TripKind.RAW_DATA) rawDateBounds() else semanticDateBounds())
+        (if (!BuildConfig.IS_JOURNAL_LAB && activeProjectKind == TripKind.RAW_DATA) rawDateBounds() else semanticDateBounds())
             ?: ((selectedStartDate ?: LocalDate.now()) to (selectedEndDate ?: LocalDate.now()))
 
     private fun saveActiveProject(asNew: Boolean): TripProject? {
@@ -4021,7 +4247,7 @@ class MainActivity : AppCompatActivity() {
                 localFraming = cameraSettings.localFraming,
                 longTripCompression = cameraSettings.longTripCompression,
                 resolution = cameraSettings.videoQuality.resolution,
-                dataSource = if (rawSignalsEnabled) VideoDataSource.RAW else VideoDataSource.SEMANTIC,
+                dataSource = currentVideoDataSource(),
                 exportShortEdge = cameraSettings.effectiveExportFormat.shortEdge,
                 exportFrameRate = cameraSettings.effectiveExportFormat.frameRate,
             ),
@@ -4420,6 +4646,14 @@ class MainActivity : AppCompatActivity() {
     internal fun selectedDurationSeconds(): Int = routeDurationSeconds
 
     internal fun pendingExportDurationSeconds(): Int? = pendingExport?.durationSeconds
+
+    internal fun currentJourneyPoints(): List<GeoPoint> = journey?.points.orEmpty()
+
+    internal fun currentVideoDataSource(): VideoDataSource = when {
+        BuildConfig.IS_JOURNAL_LAB -> VideoDataSource.JOURNAL
+        rawSignalsEnabled -> VideoDataSource.RAW
+        else -> VideoDataSource.SEMANTIC
+    }
 
     internal fun installedVersionLabel(): String =
         getString(R.string.app_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE)

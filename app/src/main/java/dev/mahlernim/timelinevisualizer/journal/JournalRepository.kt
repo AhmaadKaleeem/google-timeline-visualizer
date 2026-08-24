@@ -64,9 +64,60 @@ class JournalRepository(
         dao.insertJournal(journal)
     }
 
+    suspend fun createJournalAndImport(
+        journal: JournalEntity,
+        input: JournalImport,
+    ): JournalImportResult = database.withTransaction {
+        dao.insertJournal(journal)
+        import(journal.id, input)
+    }
+
+    suspend fun journal(journalId: String): JournalEntity? = dao.journal(journalId)
+
+    suspend fun primaryJournal(): JournalEntity? = dao.primaryJournal()
+
+    suspend fun committedImport(journalId: String, sourceHash: String): ImportBatchEntity? {
+        require(sourceHash.isNotBlank()) { "sourceHash must not be blank" }
+        return dao.committedBatchByHash(journalId, sourceHash)
+    }
+
+    /** Returns concrete coordinate and timestamp overlap with already committed detail. */
+    suspend fun detailedOverlapCount(
+        journalId: String,
+        candidates: List<DetailedObservationInput>,
+    ): Int {
+        if (candidates.isEmpty()) return 0
+        val keys = candidates.asSequence().map(::observationKey).distinct().toList()
+        return keys.chunked(SQLITE_BIND_CHUNK_SIZE).sumOf { chunk ->
+            dao.committedObservationKeyCount(journalId, chunk)
+        }
+    }
+
+    suspend fun activeDetailedObservations(
+        journalId: String,
+        startEpochMillis: Long,
+        endExclusiveEpochMillis: Long,
+    ): List<ActiveDetailedObservation> {
+        require(endExclusiveEpochMillis > startEpochMillis) { "The route range must not be empty" }
+        return dao.activeDetailedObservations(journalId, startEpochMillis, endExclusiveEpochMillis)
+    }
+
+    suspend fun activeSemanticSegments(
+        journalId: String,
+        startEpochMillis: Long,
+        endExclusiveEpochMillis: Long,
+    ): List<ActiveSemanticSegment> {
+        require(endExclusiveEpochMillis > startEpochMillis) { "The route range must not be empty" }
+        return dao.activeSemanticSegmentsNewestFirst(journalId, startEpochMillis, endExclusiveEpochMillis)
+    }
+
     suspend fun import(journalId: String, input: JournalImport): JournalImportResult =
         database.withTransaction {
             require(input.sourceHash.isNotBlank()) { "sourceHash must not be blank" }
+            val journal = requireNotNull(dao.journal(journalId)) { "Journal does not exist" }
+            dao.committedBatchByHash(journalId, input.sourceHash)?.let {
+                return@withTransaction JournalImportResult.AlreadyImported(it.id)
+            }
             require(
                 input.matchClassification in setOf(
                     JournalMatchClassification.LIKELY_SAME,
@@ -74,10 +125,6 @@ class JournalRepository(
                     JournalMatchClassification.EXPLICITLY_APPROVED,
                 ),
             ) { "This import requires an explicit Journal destination decision" }
-            val journal = requireNotNull(dao.journal(journalId)) { "Journal does not exist" }
-            dao.committedBatchByHash(journalId, input.sourceHash)?.let {
-                return@withTransaction JournalImportResult.AlreadyImported(it.id)
-            }
 
             val batchId = idFactory()
             val detailedStart = input.detailedObservations.minOfOrNull { it.instantEpochMillis }
@@ -218,5 +265,9 @@ class JournalRepository(
         first == null -> second
         second == null -> first
         else -> maxOf(first, second)
+    }
+
+    private companion object {
+        const val SQLITE_BIND_CHUNK_SIZE = 900
     }
 }

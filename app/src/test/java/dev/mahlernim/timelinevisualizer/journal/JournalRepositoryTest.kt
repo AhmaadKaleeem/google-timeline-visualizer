@@ -68,9 +68,10 @@ class JournalRepositoryTest {
                 hash = "hash-one",
                 importedAt = 11_000,
                 observations = listOf(observation(2_000), observation(3_000)),
-            ),
+            ).copy(matchClassification = JournalMatchClassification.UNCERTAIN),
         )
         assertEquals(JournalImportResult.AlreadyImported(first.batchId), duplicateFile)
+        assertEquals(first.batchId, repository.committedImport(JOURNAL_ID, "hash-one")?.id)
         assertEquals(2, dao.observationCount(JOURNAL_ID))
 
         val overlapping = repository.import(
@@ -157,6 +158,29 @@ class JournalRepositoryTest {
 
         assertEquals(0, dao.observationCount(JOURNAL_ID))
         assertNull(dao.committedBatchByHash(JOURNAL_ID, "another-person"))
+    }
+
+    @Test
+    fun failedFirstImportDoesNotLeaveAnEmptyJournal() = runBlocking {
+        val journal = JournalEntity(
+            id = "new-journal",
+            name = "New Journal",
+            isPrimary = false,
+            createdAtEpochMillis = 2_000,
+        )
+        val invalid = importInput(
+            hash = "invalid-first",
+            importedAt = 10_000,
+            observations = listOf(observation(3_000, latitude = 95.0)),
+        ).copy(matchClassification = JournalMatchClassification.NEW_JOURNAL)
+
+        try {
+            repository.createJournalAndImport(journal, invalid)
+        } catch (_: IllegalArgumentException) {
+            // Expected. Journal creation and its first import share one transaction.
+        }
+
+        assertNull(repository.journal(journal.id))
     }
 
     private fun importInput(

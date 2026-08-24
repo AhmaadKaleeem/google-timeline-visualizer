@@ -100,6 +100,27 @@ class VideoExportRequestStoreTest {
     }
 
     @Test
+    fun journalSourceSurvivesPendingExportRestart() {
+        val request = VideoExportRequest(
+            outputUri = "content://documents/journal.mp4",
+            journey = Journey.from(
+                listOf(
+                    GeoPoint(Instant.parse("2026-01-01T00:00:00Z"), 37.5, 127.0),
+                    GeoPoint(Instant.parse("2026-01-01T01:00:00Z"), 37.6, 127.1),
+                ),
+                2026,
+            ),
+            title = "Travel Journal",
+            durationSeconds = 30,
+            dataSource = VideoDataSource.JOURNAL,
+        )
+
+        store.save(request)
+
+        assertEquals(VideoDataSource.JOURNAL, store.load()?.dataSource)
+    }
+
+    @Test
     fun restoresPortraitAndLandscapePendingExports() {
         listOf(VideoQuality.PORTRAIT, VideoQuality.LANDSCAPE).forEach { format ->
             val request = VideoExportRequest(

@@ -52,21 +52,24 @@ android {
     productFlavors {
         create("github") {
             dimension = "distribution"
+            buildConfigField("boolean", "IS_JOURNAL_LAB", "false")
             buildConfigField("String", "UPDATE_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases/latest\"")
             buildConfigField("String", "UPDATE_FALLBACK_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases/latest\"")
         }
         create("play") {
             dimension = "distribution"
+            buildConfigField("boolean", "IS_JOURNAL_LAB", "false")
             buildConfigField("String", "UPDATE_URL", "\"market://details?id=dev.mahlernim.timelinevisualizer\"")
             buildConfigField("String", "UPDATE_FALLBACK_URL", "\"https://play.google.com/store/apps/details?id=dev.mahlernim.timelinevisualizer\"")
         }
         create("journalLab") {
             dimension = "distribution"
             applicationId = "dev.mahlernim.timelinevisualizer.journallab"
-            versionCode = 1
-            versionName = "3.0.0-journal-lab.1"
+            versionCode = 2
+            versionName = "3.0.0-journal-lab.2"
             manifestPlaceholders["appLabel"] = "Journal Lab"
-            buildConfigField("String", "UPDATE_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases/tag/journal-lab-1\"")
+            buildConfigField("boolean", "IS_JOURNAL_LAB", "true")
+            buildConfigField("String", "UPDATE_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases/tag/journal-lab-2\"")
             buildConfigField("String", "UPDATE_FALLBACK_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases\"")
         }
     }

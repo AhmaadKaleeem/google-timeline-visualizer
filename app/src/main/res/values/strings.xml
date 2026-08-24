@@ -334,6 +334,15 @@
     <string name="preset_link_unsupported_message">This link is invalid, incomplete, or uses settings this app does not support. Nothing was changed.</string>
     <string name="preset_limit_reached">Delete a preset before saving another.</string>
     <string name="preset_value_format">%1$s · %2$s</string>
+    <plurals name="journal_import_added" translatable="false">
+        <item quantity="one">Travel Journal grew by %d detailed location.</item>
+        <item quantity="other">Travel Journal grew by %d detailed locations.</item>
+    </plurals>
+    <string name="journal_import_added_timeline" translatable="false">Your Travel Journal grew with the available Timeline history.</string>
+    <string name="journal_import_duplicate" translatable="false">This Timeline file is already in your Travel Journal. Nothing was changed.</string>
+    <string name="journal_import_failed_preserved" translatable="false">This Timeline file could not be added. Your saved Travel Journal was not changed.</string>
+    <string name="journal_import_mismatch_title" translatable="false">This may be a different Travel Journal</string>
+    <string name="journal_import_mismatch_message" translatable="false">This file has no detailed locations in common with your saved Travel Journal. Nothing was changed. Journal Lab 2 does not yet add a different person’s Timeline to the same Journal.</string>
     <string name="trips">Trips</string>
     <string name="library">Library</string>
     <string name="create">Create</string>
