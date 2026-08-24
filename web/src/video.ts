@@ -15,6 +15,8 @@ export interface ExportOptions {
 }
 
 export type VideoFormatKey = 'standard' | 'high' | 'ultra' | 'portrait' | 'landscape';
+export const VIDEO_FRAME_RATES = [24, 30, 60] as const;
+export type VideoFrameRate = (typeof VIDEO_FRAME_RATES)[number];
 
 export interface VideoFormat {
   key: VideoFormatKey;
@@ -88,8 +90,8 @@ export const VIDEO_FORMATS: readonly VideoFormat[] = [
   },
 ];
 
-/** Maps every format key to the codec string that works, or null when the browser cannot encode it. */
-export type VideoFormatSupport = ReadonlyMap<VideoFormatKey, string | null>;
+/** Maps every size and frame-rate combination to the codec string that works, or null. */
+export type VideoFormatSupport = ReadonlyMap<string, string | null>;
 
 export function hasVideoEncoder(): boolean {
   return typeof globalThis.VideoEncoder !== 'undefined';
@@ -98,6 +100,50 @@ export function hasVideoEncoder(): boolean {
 export function videoFormatByKey(key: string): VideoFormat | null {
   return VIDEO_FORMATS.find((format) => format.key === key) ?? null;
 }
+
+function bitrateAtFrameRate(format: VideoFormat, frameRate: VideoFrameRate): number {
+  return Math.max(1_500_000, Math.min(40_000_000,
+    Math.floor(format.bitrate * frameRate / format.frameRate)));
+}
+
+const AVC_LEVELS = [
+  { code: '1f', maxFs: 3_600, maxMbps: 108_000, maxBitrate: 14_000_000 },
+  { code: '20', maxFs: 5_120, maxMbps: 216_000, maxBitrate: 20_000_000 },
+  { code: '28', maxFs: 8_192, maxMbps: 245_760, maxBitrate: 20_000_000 },
+  { code: '2a', maxFs: 8_704, maxMbps: 522_240, maxBitrate: 50_000_000 },
+] as const;
+
+function codecCandidates(width: number, height: number, frameRate: number, bitrate: number): string[] {
+  const macroblocks = Math.ceil(width / 16) * Math.ceil(height / 16);
+  const levelIndex = AVC_LEVELS.findIndex((level) => level.maxFs >= macroblocks
+    && level.maxMbps >= macroblocks * frameRate
+    && level.maxBitrate >= bitrate);
+  if (levelIndex < 0) return [];
+  const levels = AVC_LEVELS.slice(levelIndex, levelIndex + 2);
+  return levels.flatMap((level) => [`avc1.4200${level.code}`, `avc1.6400${level.code}`]);
+}
+
+/** Builds a concrete format while preserving the proven legacy configuration exactly. */
+export function videoFormatAtFrameRate(
+  format: VideoFormat,
+  frameRate: VideoFrameRate,
+): VideoFormat {
+  if (frameRate === format.frameRate) return format;
+  const bitrate = bitrateAtFrameRate(format, frameRate);
+  return {
+    ...format,
+    frameRate,
+    bitrate,
+    codecCandidates: codecCandidates(format.width, format.height, frameRate, bitrate),
+  };
+}
+
+export function videoFormatSupportKey(format: VideoFormat): string {
+  return `${format.key}@${format.frameRate}`;
+}
+
+export const ALL_VIDEO_FORMATS: readonly VideoFormat[] = VIDEO_FORMATS.flatMap((format) =>
+  VIDEO_FRAME_RATES.map((frameRate) => videoFormatAtFrameRate(format, frameRate)));
 
 async function probeCodec(format: VideoFormat, codec: string): Promise<boolean> {
   try {
@@ -130,11 +176,11 @@ async function resolveCodecString(format: VideoFormat): Promise<string | null> {
  */
 export async function probeVideoFormats(): Promise<VideoFormatSupport> {
   if (!hasVideoEncoder()) {
-    return new Map(VIDEO_FORMATS.map((format) => [format.key, null]));
+    return new Map(ALL_VIDEO_FORMATS.map((format) => [videoFormatSupportKey(format), null]));
   }
   const entries = await Promise.all(
-    VIDEO_FORMATS.map(async (format): Promise<[VideoFormatKey, string | null]> => [
-      format.key,
+    ALL_VIDEO_FORMATS.map(async (format): Promise<[string, string | null]> => [
+      videoFormatSupportKey(format),
       await resolveCodecString(format),
     ]),
   );
@@ -142,12 +188,10 @@ export async function probeVideoFormats(): Promise<VideoFormatSupport> {
 }
 
 export function resolveVideoFormat(
-  key: string,
+  format: VideoFormat,
   support: VideoFormatSupport,
 ): ResolvedVideoFormat | null {
-  const format = videoFormatByKey(key);
-  if (!format) return null;
-  const codec = support.get(format.key) ?? null;
+  const codec = support.get(videoFormatSupportKey(format)) ?? null;
   return codec === null ? null : { ...format, codec };
 }
 
