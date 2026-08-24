@@ -67,6 +67,17 @@ const MOVEMENT_PROFILES: Record<CameraMovement, CameraMovementProfile> = {
     legAware: true,
     fixedZoom: false,
   },
+  'close-up': {
+    contextFraction: 0.035,
+    minimumContextKm: 15,
+    maximumContextKm: 120,
+    padding: 1.7,
+    minimumViewportSpan: 0.00030,
+    zoomOutAlpha: 0.30,
+    zoomInAlpha: 0.075,
+    legAware: true,
+    fixedZoom: false,
+  },
 };
 
 const CAMERA_TRACK_SAMPLES = 480;

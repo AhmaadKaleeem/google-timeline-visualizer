@@ -144,6 +144,7 @@ export interface Strings {
   cameraFixed: string;
   cameraSteady: string;
   cameraDynamic: string;
+  cameraCloseUp: string;
   videoFormatLabel: string;
   formatSquare480: string;
   formatSquare720: string;

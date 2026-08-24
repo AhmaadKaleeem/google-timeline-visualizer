@@ -79,15 +79,15 @@ describe('camera track', () => {
     [35.1796, 129.0756],
   ]);
 
-  it.each<CameraMovement>(['fixed', 'steady', 'dynamic'])('%s follows the journey instead of freezing', (movement) => {
+  it.each<CameraMovement>(['fixed', 'steady', 'dynamic', 'close-up'])('%s follows the journey instead of freezing', (movement) => {
     const track = buildCameraTrack(koreanJourney, SQUARE_480, movement);
     const [startX, startY] = center(cameraViewportAt(track, 0));
     const [endX, endY] = center(cameraViewportAt(track, 1));
     expect(Math.hypot(endX - startX, endY - startY)).toBeGreaterThan(0.001);
   });
 
-  it('keeps the marker inside the stable central area', () => {
-    const track = buildCameraTrack(koreanJourney, SQUARE_480, 'dynamic');
+  it.each<CameraMovement>(['dynamic', 'close-up'])('keeps the marker inside the stable central area in %s mode', (movement) => {
+    const track = buildCameraTrack(koreanJourney, SQUARE_480, movement);
     for (let sample = 0; sample <= 40; sample += 1) {
       const progress = sample / 40;
       const viewport = cameraViewportAt(track, progress);
@@ -110,9 +110,9 @@ describe('camera track', () => {
     spans.forEach((span) => expect(span).toBeCloseTo(spans[0], 12));
   });
 
-  it('uses the short camera path and wrapped tiles across the date line', () => {
+  it.each<CameraMovement>(['dynamic', 'close-up'])('uses the short camera path and wrapped tiles across the date line in %s mode', (movement) => {
     const dateLineJourney = journey([[10, 179], [10.2, -179]]);
-    const track = buildCameraTrack(dateLineJourney, SQUARE_480, 'dynamic');
+    const track = buildCameraTrack(dateLineJourney, SQUARE_480, movement);
     const middle = cameraViewportAt(track, 0.5);
     expect(middle.maxX - middle.minX).toBeLessThan(0.05);
     const count = 2 ** middle.zoom;
@@ -143,21 +143,56 @@ describe('camera track', () => {
     expect(endX).toBeLessThan(turnX);
   });
 
-  it('smooths changing spans and stabilizes integer tile zoom', () => {
+  it.each<CameraMovement>(['dynamic', 'close-up'])('smooths changing spans and stabilizes integer tile zoom in %s mode', (movement) => {
     const changingJourney = journey([
       [37.5665, 126.9780],
       [37.5650, 126.9850],
       [35.1796, 129.0756],
       [35.1800, 129.0800],
     ]);
-    const track = buildCameraTrack(changingJourney, SQUARE_480, 'dynamic');
+    const track = buildCameraTrack(changingJourney, SQUARE_480, movement);
+    const maximumLogSpanChange = movement === 'close-up' ? 1.1 : 0.8;
     for (let index = 1; index < track.frames.length; index += 1) {
       const previous = track.frames[index - 1];
       const current = track.frames[index];
       expect(Number.isFinite(current.spanY)).toBe(true);
-      expect(Math.abs(Math.log(current.spanY / previous.spanY))).toBeLessThan(0.8);
+      expect(Math.abs(Math.log(current.spanY / previous.spanY))).toBeLessThan(maximumLogSpanChange);
       expect(Math.abs(current.zoom - previous.zoom)).toBeLessThanOrEqual(3);
     }
+  });
+
+  it('frames local travel more tightly in close-up mode than dynamic mode', () => {
+    const localJourney = journey(densify([
+      [37.5665, 126.9780],
+      [37.5200, 127.0200],
+      [37.5000, 127.0600],
+    ], 12));
+    const closeUp = cameraViewportAt(buildCameraTrack(localJourney, SQUARE_480, 'close-up'), 0.5);
+    const dynamic = cameraViewportAt(buildCameraTrack(localJourney, SQUARE_480, 'dynamic'), 0.5);
+
+    expect(closeUp.maxY - closeUp.minY).toBeLessThan(dynamic.maxY - dynamic.minY);
+  });
+
+  it('keeps both ends of a long transfer visible while close-up mode crosses it', () => {
+    const transfer = journey([
+      [37.5665, 126.9780],
+      [48.8566, 2.3522],
+    ]);
+    const viewport = cameraViewportAt(buildCameraTrack(transfer, SQUARE_480, 'close-up'), 0.5);
+
+    transfer.worldPoints.forEach((point) => {
+      expect(point.x).toBeGreaterThanOrEqual(viewport.minX);
+      expect(point.x).toBeLessThanOrEqual(viewport.maxX);
+      expect(point.y).toBeGreaterThanOrEqual(viewport.minY);
+      expect(point.y).toBeLessThanOrEqual(viewport.maxY);
+    });
+  });
+
+  it.each(FORMATS)('keeps close-up camera frames at the $width x $height aspect ratio', (size) => {
+    const track = buildCameraTrack(koreanJourney, size, 'close-up');
+    [0, 0.25, 0.5, 0.75, 1].forEach((progress) => {
+      expect(ratio(cameraViewportAt(track, progress))).toBeCloseTo(size.width / size.height, 10);
+    });
   });
 
   it.each(FORMATS)('fits the complete route below the Android-style video header at $width x $height', (size) => {
