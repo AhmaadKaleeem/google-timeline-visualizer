@@ -45,6 +45,11 @@ export const ptBR: Strings = {
   languageSystemDefault: 'Padrão do sistema',
   languageLockedExporting: 'O idioma não pode ser alterado enquanto um vídeo está sendo criado.',
   languageLockedPreparing: 'O idioma não pode ser alterado enquanto o mapa está sendo preparado.',
+  distanceUnitLabel: 'Unidade de distância',
+  distanceUnitAutomatic: 'Automático',
+  distanceUnitKilometers: 'Quilômetros',
+  distanceUnitMiles: 'Milhas',
+  distanceUnitAutomaticResolved: '{automatic} · {resolved}',
 
   settingsTitle: 'Crie sua jornada',
   rawSignalsToggle: 'Usar dados de localização brutos',

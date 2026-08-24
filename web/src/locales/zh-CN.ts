@@ -46,6 +46,11 @@ export const zhCN: Strings = {
   languageSystemDefault: '系统默认',
   languageLockedExporting: '创建视频期间无法更改语言。',
   languageLockedPreparing: '准备地图期间无法更改语言。',
+  distanceUnitLabel: '距离单位',
+  distanceUnitAutomatic: '自动',
+  distanceUnitKilometers: '公里',
+  distanceUnitMiles: '英里',
+  distanceUnitAutomaticResolved: '{automatic} · {resolved}',
 
   settingsTitle: '创建您的旅程',
   rawSignalsToggle: '使用原始位置数据',

@@ -3,6 +3,12 @@ import { frameAtElapsedSeconds, totalDurationSeconds } from './animation';
 import { AppError } from './errors';
 import { cumulativeDistances } from './geo';
 import {
+  isDistanceUnitPreference,
+  readDistanceUnitPreference,
+  resolveDistanceUnit,
+  writeDistanceUnitPreference,
+} from './distance-unit';
+import {
   activeLocale,
   createI18n,
   formattingLocale,
@@ -26,6 +32,7 @@ import {
   TimelineParseError,
 } from './timeline';
 import type { I18n, LanguagePreference, TextKey } from './i18n';
+import type { DistanceUnit, DistanceUnitPreference } from './distance-unit';
 import type { LocationFilterMode } from './outlier';
 import type { OverlayText } from './renderer';
 import type { RawSignalPoint, RawSignalProcessingResult, TimelineParseReason } from './timeline';
@@ -63,6 +70,7 @@ const fileStatus = element<HTMLParagraphElement>('file-status');
 const compatibilityStatus = element<HTMLParagraphElement>('compatibility-status');
 const languageSelect = element<HTMLSelectElement>('app-language');
 const languageWarning = element<HTMLParagraphElement>('language-warning');
+const distanceUnitSelect = element<HTMLSelectElement>('distance-unit');
 const settingsCard = element<HTMLElement>('settings-card');
 const exactDateToggle = element<HTMLInputElement>('exact-date-toggle');
 const periodControls = element<HTMLElement>('period-controls');
@@ -130,6 +138,11 @@ function buildI18n(preference: LanguagePreference): I18n {
 
 let languagePreference: LanguagePreference = readLanguagePreference();
 let i18n: I18n = buildI18n(languagePreference);
+let distanceUnitPreference: DistanceUnitPreference = readDistanceUnitPreference();
+
+function currentDistanceUnit(): DistanceUnit {
+  return resolveDistanceUnit(distanceUnitPreference, browserLanguages());
+}
 
 /** Where the loaded points came from. The sample has no filename, so it carries a catalog key. */
 interface TimelineSource {
@@ -382,9 +395,13 @@ function currentPeriodLabel(): string {
 
 /** The renderer holds no copy, so the title fallback is resolved here against the catalog. */
 function overlayText(): OverlayText {
+  const unit = currentDistanceUnit();
+  const exportI18n = i18n;
   return {
     title: titleInput.value.trim() || i18n.t('defaultVideoTitle'),
     periodLabel: currentPeriodLabel(),
+    separator: i18n.strings.listSeparator,
+    formatDistance: (kilometers) => exportI18n.formatDistance(kilometers, unit),
   };
 }
 
@@ -627,7 +644,7 @@ function renderSelection(): void {
     selectionSummary.textContent = i18n.join(
       i18n.t(rawSignalsToggle.checked ? 'summaryDistanceEstimated' : 'summaryDistanceAbout', {
         count: points.length,
-        distance: i18n.formatDistanceKm(distanceKm),
+        distance: i18n.formatDistance(distanceKm, currentDistanceUnit()),
       }),
       rejected,
       outlierNote,
@@ -689,6 +706,7 @@ function requireMapConsent(): boolean {
 function renderLocalizedText(): void {
   applyStrings(document, i18n);
   syncDocumentLang(i18n);
+  renderDistanceUnitOptions();
   renderFrameRateOptions();
   renderCompatibilityStatus();
   renderFileStatus();
@@ -696,6 +714,28 @@ function renderLocalizedText(): void {
   renderErrorMessage();
   renderSettingsError();
   updateLanguageAvailability();
+}
+
+function renderDistanceUnitOptions(): void {
+  const automaticOption = distanceUnitSelect.querySelector<HTMLOptionElement>('option[value="automatic"]');
+  if (!automaticOption) throw new Error('Missing automatic distance unit option');
+  const resolvedKey = currentDistanceUnit() === 'miles' ? 'distanceUnitMiles' : 'distanceUnitKilometers';
+  automaticOption.textContent = i18n.t('distanceUnitAutomaticResolved', {
+    automatic: i18n.t('distanceUnitAutomatic'),
+    resolved: i18n.t(resolvedKey),
+  });
+}
+
+function onDistanceUnitChange(): void {
+  const value = distanceUnitSelect.value;
+  if (!isDistanceUnitPreference(value)) return;
+  distanceUnitPreference = value;
+  writeDistanceUnitPreference(distanceUnitPreference);
+  stopPreview();
+  if (!settingsCard.classList.contains('hidden')) renderSelection();
+  if (prepared && lastPreviewFrame && !previewCard.classList.contains('hidden')) {
+    drawFrame(canvas, prepared, lastPreviewFrame, overlayText());
+  }
 }
 
 /**
@@ -852,6 +892,7 @@ endDateInput.addEventListener('change', updateSelection);
 durationSelect.addEventListener('change', updateSelection);
 cameraMovementSelect.addEventListener('change', updateSelection);
 languageSelect.addEventListener('change', onLanguageChange);
+distanceUnitSelect.addEventListener('change', onDistanceUnitChange);
 formatSelect.addEventListener('change', () => {
   stopPreview();
   renderFrameRateOptions();
@@ -1072,6 +1113,7 @@ function applyFormatSupport(support: VideoFormatSupport): void {
 // Before anything else touches the DOM: the HTML ships the English source text so a failed
 // script still renders a usable page, and this replaces it with the active catalog.
 languageSelect.value = languagePreference;
+distanceUnitSelect.value = distanceUnitPreference;
 renderLocalizedText();
 // Safari restores form control values on reload and on bfcache restore without firing
 // change, so the canvas has to be synced to the selected format before anything is drawn.

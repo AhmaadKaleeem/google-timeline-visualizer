@@ -158,7 +158,12 @@ function splitFontSize(value: unknown): { size: number; rest: string } {
 
 function render(canvasSize: RenderSize, journey: PreparedJourney, frame: TimelineFrame): RecordedCall[] {
   const { canvas, calls } = recordingCanvas(canvasSize.width, canvasSize.height);
-  drawFrame(canvas, journey, frame, { title: 'Seoul to Busan', periodLabel: 'March 2026' });
+  drawFrame(canvas, journey, frame, {
+    title: 'Seoul to Busan',
+    periodLabel: 'March 2026',
+    separator: ' · ',
+    formatDistance: (kilometers) => `${Math.round(kilometers)} km`,
+  });
   return calls;
 }
 
@@ -427,10 +432,13 @@ describe('map attribution', () => {
     drawFrame(canvas, preparedAt(FORMATS[0]), { journeyProgress: 0.5, outroProgress: 0 }, {
       title: 'Seoul to Busan',
       periodLabel: 'March 2026',
+      separator: ' · ',
+      formatDistance: (kilometers) => `${Math.round(kilometers * 0.621371192237334)} mi`,
     });
     const drawn = calls.filter((call) => call.method === 'fillText').map((call) => call.args[0]);
     expect(drawn).toContain(MAP_ATTRIBUTION);
     expect(drawn).toContain('Seoul to Busan');
-    expect(drawn).toContain('March 2026');
+    const halfwayMiles = Math.round(preparedAt(FORMATS[0]).totalDistanceKm * 0.5 * 0.621371192237334);
+    expect(drawn).toContain(`March 2026 · ${halfwayMiles} mi`);
   });
 });

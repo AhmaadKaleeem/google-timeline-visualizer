@@ -44,6 +44,11 @@ export const de: Strings = {
   languageSystemDefault: 'Systemstandard',
   languageLockedExporting: 'Die Sprache kann nicht geändert werden, während ein Video erstellt wird.',
   languageLockedPreparing: 'Die Sprache kann nicht geändert werden, während die Karte vorbereitet wird.',
+  distanceUnitLabel: 'Entfernungseinheit',
+  distanceUnitAutomatic: 'Automatisch',
+  distanceUnitKilometers: 'Kilometer',
+  distanceUnitMiles: 'Meilen',
+  distanceUnitAutomaticResolved: '{automatic} · {resolved}',
 
   settingsTitle: 'Ihre Reise erstellen',
   rawSignalsToggle: 'Unverarbeitete Standortdaten verwenden',
