@@ -11,8 +11,8 @@
     <string name="preview">Avance</string>
     <string name="pause_preview">Pausar vista previa</string>
     <string name="export_video">Crear vídeo</string>
-    <string name="video_title_template">Título del vídeo</string>
-    <string name="title_template_help">Utilice {year} y {name}. Guardado para tu próximo vídeo.</string>
+    <string name="video_title_template">Título que aparece en el vídeo</string>
+    <string name="title_template_help">Edita el título que aparece en este vídeo.</string>
     <string name="start_year">Año de inicio</string>
     <string name="end_year">fin de año</string>
     <string name="duration">Duración de la animación de ruta</string>
@@ -405,7 +405,7 @@
     <string name="semantic_data_unavailable">Este archivo de línea de tiempo contiene únicamente ubicaciones sin formato.</string>
     <string name="settings_details">Detalles de configuración</string>
     <string name="settings_unavailable">La configuración no se registró para este video anterior.</string>
-    <string name="show_all_suggestions">Mostrar todo (%1$d)</string>
+    <string name="show_all_suggestions">Mostrar %1$d más</string>
     <string name="show_fewer_suggestions">Mostrar menos</string>
     <string name="strong_match">Coincidencia alta</string>
     <string name="suggested_trips">Viajes sugeridos</string>

@@ -16,10 +16,11 @@ data class JournalRouteSummary(
     val connectedSegmentCount: Int,
     val connectedDistanceKm: Double,
     val gapCount: Int,
+    val inferredTransferCount: Int,
 )
 
 /**
- * Returns independently connected timelines. No returned timeline crosses an explicit GAP span.
+ * Returns source-supported timelines for analytics. Inferred video transfers start a new component.
  *
  * Consumers that calculate distance or movement must use these components instead of
  * [JournalRoute.timeline], which is only a temporary compatibility projection.
@@ -30,7 +31,7 @@ fun List<RouteSpan>.connectedTimelines(): List<Timeline> {
     val components = mutableListOf<MutableList<GeoPoint>>()
     var current: MutableList<GeoPoint>? = null
     for (span in this) {
-        if (span.source == RouteSource.GAP) {
+        if (span.source == RouteSource.GAP || span.source == RouteSource.INFERRED_TRANSFER) {
             current = null
             continue
         }
@@ -57,6 +58,7 @@ fun JournalRoute.summary(): JournalRouteSummary {
             component.points.zipWithNext(::haversineKm).sum()
         },
         gapCount = spans.count { it.source == RouteSource.GAP },
+        inferredTransferCount = spans.count { it.source == RouteSource.INFERRED_TRANSFER },
     )
 }
 

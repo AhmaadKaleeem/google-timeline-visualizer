@@ -984,7 +984,7 @@ class TimelinePainter {
         canvas.drawText(fittedTitle, card.centerX(), 72f * scale, titlePaint)
         val date = renderText.dateFormatter.format(position.point.instant.atZone(ZoneId.systemDefault()))
         canvas.drawText(
-            "$date  ·  ${renderText.formatDistance(position.distanceKm)}",
+            "$date  ·  ${renderText.formatDistance(position.knownDistanceKm)}",
             card.centerX(),
             108f * scale,
             bodyPaint,

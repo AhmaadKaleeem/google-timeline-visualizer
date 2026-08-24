@@ -37,6 +37,8 @@ private fun JournalRoute.journeyFromSpans(
     include: (GeoPoint) -> Boolean,
 ): Journey {
     val sections = mutableListOf<MutableList<GeoPoint>>()
+    val inferredTransferBeforePointIndices = mutableListOf<Int>()
+    var pointCount = 0
     var current = mutableListOf<GeoPoint>()
     spans.forEach { span ->
         if (span.source == RouteSource.GAP) {
@@ -45,12 +47,18 @@ private fun JournalRoute.journeyFromSpans(
         } else {
             span.points.asSequence().filter(include).forEach { point ->
                 val previous = current.lastOrNull()
-                if (previous == null || pointKey(previous) != pointKey(point)) current += point
+                if (previous == null || pointKey(previous) != pointKey(point)) {
+                    if (previous != null && span.source == RouteSource.INFERRED_TRANSFER) {
+                        inferredTransferBeforePointIndices += pointCount
+                    }
+                    current += point
+                    pointCount += 1
+                }
             }
         }
     }
     if (current.isNotEmpty()) sections.add(current)
-    return Journey.fromSections(sections, period)
+    return Journey.fromSections(sections, period, inferredTransferBeforePointIndices)
 }
 
 private fun pointKey(point: GeoPoint): Triple<Long, Long, Long> = Triple(

@@ -11,8 +11,8 @@
     <string name="preview">Visualização</string>
     <string name="pause_preview">Pausar visualização</string>
     <string name="export_video">Criar vídeo</string>
-    <string name="video_title_template">Título do vídeo</string>
-    <string name="title_template_help">Use {year} e {name}. Salvo para o próximo vídeo.</string>
+    <string name="video_title_template">Título exibido no vídeo</string>
+    <string name="title_template_help">Edite o título que aparece neste vídeo.</string>
     <string name="start_year">Ano inicial</string>
     <string name="end_year">Fim do ano</string>
     <string name="duration">Duração da animação da rota</string>
@@ -405,7 +405,7 @@
     <string name="semantic_data_unavailable">Este arquivo de linha do tempo contém apenas locais brutos.</string>
     <string name="settings_details">Detalhes das configurações</string>
     <string name="settings_unavailable">As configurações não foram gravadas para este vídeo antigo.</string>
-    <string name="show_all_suggestions">Mostrar tudo (%1$d)</string>
+    <string name="show_all_suggestions">Mostrar mais %1$d</string>
     <string name="show_fewer_suggestions">Mostrar menos</string>
     <string name="strong_match">Correspondência forte</string>
     <string name="suggested_trips">Viagens sugeridas</string>

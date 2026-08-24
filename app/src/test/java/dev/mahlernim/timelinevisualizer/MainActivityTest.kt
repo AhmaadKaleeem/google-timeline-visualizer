@@ -1300,8 +1300,11 @@ class MainActivityTest {
 
         var dialog = ShadowDialog.getLatestDialog() as BottomSheetDialog
         assertTrue(dialog.isShowing)
+        val originalFrameRate = dialog.findViewById<AutoCompleteTextView>(R.id.frameRateDropdown)!!.text.toString()
         dialog.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown)!!
             .onItemClickListener?.onItemClick(null, null, 3, 3L)
+        dialog.findViewById<AutoCompleteTextView>(R.id.frameRateDropdown)!!
+            .onItemClickListener?.onItemClick(null, null, 2, 60L)
         dialog.findViewById<View>(R.id.cancelButton)!!.performClick()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.styleStepGroup).visibility)
@@ -1313,14 +1316,27 @@ class MainActivityTest {
 
         activity.findViewById<View>(R.id.customizeSettingsButton).performClick()
         dialog = ShadowDialog.getLatestDialog() as BottomSheetDialog
+        assertEquals(
+            originalFrameRate,
+            dialog.findViewById<AutoCompleteTextView>(R.id.frameRateDropdown)!!.text.toString(),
+        )
         dialog.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown)!!
             .onItemClickListener?.onItemClick(null, null, 2, 2L)
+        dialog.findViewById<AutoCompleteTextView>(R.id.frameRateDropdown)!!
+            .onItemClickListener?.onItemClick(null, null, 2, 60L)
         dialog.findViewById<View>(R.id.applyButton)!!.performClick()
 
         assertEquals(
             activity.getString(R.string.camera_dynamic),
             activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
         )
+        activity.findViewById<View>(R.id.customizeSettingsButton).performClick()
+        dialog = ShadowDialog.getLatestDialog() as BottomSheetDialog
+        assertEquals(
+            activity.getString(R.string.frame_rate_value, 60),
+            dialog.findViewById<AutoCompleteTextView>(R.id.frameRateDropdown)!!.text.toString(),
+        )
+        dialog.dismiss()
         assertEquals(CameraSettings.DEFAULT, CameraSettingsPreferences(context).load())
     }
 

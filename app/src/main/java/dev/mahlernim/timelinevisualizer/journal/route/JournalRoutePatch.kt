@@ -56,8 +56,8 @@ fun JournalRoute.expandedRefreshWindow(
     var first = ordered.indexOfFirst { it.end > start && it.start < endExclusive }
     var last = ordered.indexOfLast { it.end > start && it.start < endExclusive }
     if (first < 0) {
-        val nearestBefore = ordered.indexOfLast { it.source != RouteSource.GAP && it.end <= start }
-        val nearestAfter = ordered.indexOfFirst { it.source != RouteSource.GAP && it.start >= endExclusive }
+        val nearestBefore = ordered.indexOfLast { !it.isRefreshBoundary() && it.end <= start }
+        val nearestAfter = ordered.indexOfFirst { !it.isRefreshBoundary() && it.start >= endExclusive }
         first = when {
             nearestBefore >= 0 -> nearestBefore
             nearestAfter >= 0 -> nearestAfter
@@ -71,8 +71,8 @@ fun JournalRoute.expandedRefreshWindow(
 
     // A gap affected by new observations needs both neighboring components present so the
     // replacement fusion can decide whether the gap remains. Otherwise stop at existing gaps.
-    while (first > 0 && ordered[first - 1].source != RouteSource.GAP) first -= 1
-    while (last < ordered.lastIndex && ordered[last + 1].source != RouteSource.GAP) last += 1
+    while (first > 0 && !ordered[first - 1].isRefreshBoundary()) first -= 1
+    while (last < ordered.lastIndex && !ordered[last + 1].isRefreshBoundary()) last += 1
 
     val expandedStart = minOf(start, ordered[first].start)
     val lastEndMillis = ordered[last].end.toEpochMilli()
@@ -90,6 +90,9 @@ private fun List<GeoPoint>.toSpanOrNull(source: RouteSpan): RouteSpan? =
             points = points,
         )
     }
+
+private fun RouteSpan.isRefreshBoundary(): Boolean =
+    source == RouteSource.GAP || source == RouteSource.INFERRED_TRANSFER
 
 private fun routePointKey(point: GeoPoint): Triple<Long, Long, Long> = Triple(
     point.instant.toEpochMilli(),

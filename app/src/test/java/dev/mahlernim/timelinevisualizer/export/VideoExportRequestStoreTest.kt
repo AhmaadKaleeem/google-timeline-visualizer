@@ -136,6 +136,7 @@ class VideoExportRequestStoreTest {
                     ),
                 ),
                 TimelinePeriod.sameYear(2026),
+                inferredTransferBeforePointIndices = listOf(1),
             ),
             title = "Travel Journal",
             durationSeconds = 30,
@@ -147,7 +148,9 @@ class VideoExportRequestStoreTest {
 
         assertEquals(request.journey.points, restored.journey.points)
         assertEquals(listOf(2), restored.journey.breakBeforePointIndices)
+        assertEquals(listOf(1), restored.journey.inferredTransferBeforePointIndices)
         assertEquals(request.journey.totalDistanceKm, restored.journey.totalDistanceKm, 0.001)
+        assertEquals(request.journey.knownDistanceKm, restored.journey.knownDistanceKm, 0.001)
     }
 
     @Test

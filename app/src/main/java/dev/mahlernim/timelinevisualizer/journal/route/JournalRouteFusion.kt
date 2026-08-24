@@ -8,6 +8,8 @@ enum class RouteSource {
     DETAILED,
     SEMANTIC_PATH,
     SEMANTIC_ENDPOINTS,
+    /** A presentation-safe connection between the nearest available observations. */
+    INFERRED_TRANSFER,
     GAP,
 }
 
@@ -39,7 +41,7 @@ data class SemanticRoutePath(
     }
 }
 
-/** Builds a detailed-first route while retaining unsupported semantic boundaries as gaps. */
+/** Builds a detailed-first route and connects unsupported intervals as inferred transfers. */
 object JournalRouteFusion {
     val DEFAULT_DISCONTINUITY: Duration = Duration.ofMinutes(30)
 
@@ -97,11 +99,11 @@ object JournalRouteFusion {
                 .thenBy { if (it.span.source == RouteSource.DETAILED) 0 else 1 }
                 .thenBy { it.span.end },
         )
-        return insertUnsupportedGaps(candidates, connections)
+        return insertInferredTransfers(candidates, connections)
     }
 
     private fun detailedOnlySpans(islands: List<DetailedIsland>): List<RouteSpan> =
-        insertUnsupportedGaps(
+        insertInferredTransfers(
             islands.mapIndexed { index, island ->
                 CandidateSpan(
                     RouteSpan(island.start, island.end, RouteSource.DETAILED, island.points),
@@ -194,7 +196,7 @@ object JournalRouteFusion {
         points = points,
     )
 
-    private fun insertUnsupportedGaps(
+    private fun insertInferredTransfers(
         candidates: List<CandidateSpan>,
         connections: DisjointSet,
     ): List<RouteSpan> {
@@ -204,17 +206,19 @@ object JournalRouteFusion {
         candidates.forEach { next ->
             val prior = previous
             if (prior != null && connections.find(prior.node) != connections.find(next.node)) {
+                val from = prior.span.points.last()
+                val to = next.span.points.first()
                 result += RouteSpan(
-                    start = minOf(prior.span.end, next.span.start),
-                    end = maxOf(prior.span.end, next.span.start),
-                    source = RouteSource.GAP,
-                    points = emptyList(),
+                    start = minOf(from.instant, to.instant),
+                    end = maxOf(from.instant, to.instant),
+                    source = RouteSource.INFERRED_TRANSFER,
+                    points = listOf(from, to).distinctBy(::pointKey),
                     transitionReason = if (
                         prior.span.source == RouteSource.DETAILED && next.span.source == RouteSource.DETAILED
                     ) {
-                        "No supported route observations"
+                        "Inferred between detailed observation islands"
                     } else {
-                        "No supported route continuity"
+                        "Inferred between available Timeline records"
                     },
                 )
             }

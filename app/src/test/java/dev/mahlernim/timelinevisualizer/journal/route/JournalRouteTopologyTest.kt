@@ -37,6 +37,24 @@ class JournalRouteTopologyTest {
     }
 
     @Test
+    fun inferredTransferRemainsSeparateForAnalyticsAndIsCounted() {
+        val before = point(10, 0.1)
+        val after = point(20, 20.0)
+        val route = route(
+            RouteSpan(point(0).instant, before.instant, RouteSource.SEMANTIC_PATH, listOf(point(0), before)),
+            RouteSpan(before.instant, after.instant, RouteSource.INFERRED_TRANSFER, listOf(before, after)),
+            RouteSpan(after.instant, point(30, 20.1).instant, RouteSource.SEMANTIC_PATH, listOf(after, point(30, 20.1))),
+        )
+
+        val summary = route.summary()
+
+        assertEquals(2, route.connectedTimelines().size)
+        assertEquals(0, summary.gapCount)
+        assertEquals(1, summary.inferredTransferCount)
+        assertTrue(summary.connectedDistanceKm < 50.0)
+    }
+
+    @Test
     fun summaryExcludesDistanceAcrossGap() {
         val route = route(
             RouteSpan(point(0, 0.0).instant, point(10, 0.1).instant, RouteSource.DETAILED, listOf(point(0, 0.0), point(10, 0.1))),
@@ -47,6 +65,7 @@ class JournalRouteTopologyTest {
         val summary = route.summary()
 
         assertEquals(1, summary.gapCount)
+        assertEquals(0, summary.inferredTransferCount)
         assertEquals(2, summary.connectedSegmentCount)
         assertTrue(summary.connectedDistanceKm in 20.0..30.0)
     }

@@ -78,6 +78,8 @@ class VideoExportRequestStore(context: Context) {
             }
             output.writeInt(request.journey.breakBeforePointIndices.size)
             request.journey.breakBeforePointIndices.forEach(output::writeInt)
+            output.writeInt(request.journey.inferredTransferBeforePointIndices.size)
+            request.journey.inferredTransferBeforePointIndices.forEach(output::writeInt)
         }
         if (!temporaryFile.renameTo(requestFile)) {
             temporaryFile.copyTo(requestFile, overwrite = true)
@@ -204,6 +206,12 @@ class VideoExportRequestStore(context: Context) {
                 } else {
                     emptyList()
                 }
+                val inferredTransferBeforePointIndices = if (version >= 13) {
+                    val transferCount = input.readInt().coerceIn(0, pointCount)
+                    List(transferCount) { input.readInt() }
+                } else {
+                    emptyList()
+                }
                 VideoExportRequest(
                     outputUri = outputUri,
                     journey = Journey.fromBreakIndices(
@@ -213,6 +221,7 @@ class VideoExportRequestStore(context: Context) {
                             endInclusive = java.time.YearMonth.of(endYear, endMonth),
                         ),
                         breakBeforePointIndices,
+                        inferredTransferBeforePointIndices,
                     ),
                     title = title,
                     durationSeconds = durationSeconds,
@@ -233,7 +242,7 @@ class VideoExportRequestStore(context: Context) {
     }
 
     companion object {
-        private const val CURRENT_FILE_VERSION = 12
+        private const val CURRENT_FILE_VERSION = 13
         private const val MAX_POINT_COUNT = 2_000_000
         private const val REQUEST_FILE = "pending-video-export.bin"
         private const val TEMPORARY_FILE = "pending-video-export.tmp"

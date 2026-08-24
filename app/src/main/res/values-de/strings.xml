@@ -11,8 +11,8 @@
     <string name="preview">Vorschau</string>
     <string name="pause_preview">Vorschau anhalten</string>
     <string name="export_video">Video erstellen</string>
-    <string name="video_title_template">Videotitel</string>
-    <string name="title_template_help">Verwenden Sie {year} und {name}. Für Ihr nächstes Video gespeichert.</string>
+    <string name="video_title_template">Im Video angezeigter Titel</string>
+    <string name="title_template_help">Bearbeiten Sie den Titel, der in diesem Video angezeigt wird.</string>
     <string name="start_year">Startjahr</string>
     <string name="end_year">Jahresende</string>
     <string name="duration">Länge der Routenanimation</string>
@@ -400,7 +400,7 @@
     <string name="semantic_data_unavailable">Diese Timeline-Datei enthält nur Rohstandorte.</string>
     <string name="settings_details">Einzelheiten zu den Einstellungen</string>
     <string name="settings_unavailable">Für dieses ältere Video wurden keine Einstellungen aufgezeichnet.</string>
-    <string name="show_all_suggestions">Alle anzeigen (%1$d)</string>
+    <string name="show_all_suggestions">%1$d weitere anzeigen</string>
     <string name="show_fewer_suggestions">Weniger anzeigen</string>
     <string name="strong_match">Starke Übereinstimmung</string>
     <string name="suggested_trips">Empfohlene Ausflüge</string>

@@ -11,8 +11,8 @@
     <string name="preview">預覽</string>
     <string name="pause_preview">暫停預覽</string>
     <string name="export_video">建立影片</string>
-    <string name="video_title_template">影片標題</string>
-    <string name="title_template_help">使用 {year} 和 {name}。已儲存以供您的下一個影片使用。</string>
+    <string name="video_title_template">影片中顯示的標題</string>
+    <string name="title_template_help">編輯此影片中顯示的標題。</string>
     <string name="start_year">開始年份</string>
     <string name="end_year">結束年份</string>
     <string name="duration">影片長度</string>
@@ -396,7 +396,7 @@
     <string name="semantic_data_unavailable">此時間軸檔案僅包含原始位置。</string>
     <string name="settings_details">設定詳情</string>
     <string name="settings_unavailable">未記錄該舊影片的設定。</string>
-    <string name="show_all_suggestions">顯示全部 (%1$d)</string>
+    <string name="show_all_suggestions">再顯示 %1$d 個</string>
     <string name="show_fewer_suggestions">顯示較少</string>
     <string name="strong_match">高度符合</string>
     <string name="suggested_trips">建議行程</string>

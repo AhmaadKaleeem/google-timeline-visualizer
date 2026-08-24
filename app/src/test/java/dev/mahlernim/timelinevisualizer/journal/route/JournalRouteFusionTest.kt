@@ -42,17 +42,52 @@ class JournalRouteFusionTest {
     }
 
     @Test
-    fun detailedOnlyDiscontinuityRemainsAnExplicitGap() {
+    fun detailedOnlyDiscontinuityBecomesAnInferredTransfer() {
         val result = JournalRouteFusion.fuse(
             semanticPoints = emptyList(),
             detailedPoints = listOf(point(0, 0.0), point(10, 1.0), point(50, 2.0), point(55, 3.0)),
         )
 
         assertEquals(
-            listOf(RouteSource.DETAILED, RouteSource.GAP, RouteSource.DETAILED),
+            listOf(RouteSource.DETAILED, RouteSource.INFERRED_TRANSFER, RouteSource.DETAILED),
             result.map(RouteSpan::source),
         )
-        assertEquals(0, result[1].points.size)
+        assertEquals(listOf(1.0, 2.0), result[1].points.map(GeoPoint::latitude))
+        assertEquals("Inferred between detailed observation islands", result[1].transitionReason)
+    }
+
+    @Test
+    fun significantSemanticGapStillProducesAConnectedVideoTransition() {
+        val result = JournalRouteFusion.fuseSemanticPaths(
+            semanticPaths = listOf(
+                SemanticRoutePath("before", instant(0), instant(10), listOf(point(0, 0.0), point(10, 0.1))),
+                SemanticRoutePath("after", instant(8 * 60), instant(8 * 60 + 10), listOf(point(8 * 60, 20.0), point(8 * 60 + 10, 20.1))),
+            ),
+            detailedPoints = emptyList(),
+        )
+
+        assertEquals(
+            listOf(RouteSource.SEMANTIC_PATH, RouteSource.INFERRED_TRANSFER, RouteSource.SEMANTIC_PATH),
+            result.map(RouteSpan::source),
+        )
+        assertEquals(2, result[1].points.size)
+        assertEquals("Inferred between available Timeline records", result[1].transitionReason)
+    }
+
+    @Test
+    fun adjacentSemanticRecordsWithMismatchedEndpointsRemainConnected() {
+        val boundary = instant(10)
+        val result = JournalRouteFusion.fuseSemanticPaths(
+            semanticPaths = listOf(
+                SemanticRoutePath("visit", instant(0), boundary, listOf(point(0, 0.0), point(10, 0.1))),
+                SemanticRoutePath("activity", boundary, instant(20), listOf(point(10, 15.0), point(20, 15.1))),
+            ),
+            detailedPoints = emptyList(),
+        )
+
+        assertEquals(RouteSource.INFERRED_TRANSFER, result[1].source)
+        assertEquals(boundary, result[1].start)
+        assertEquals(boundary, result[1].end)
     }
 
     @Test
@@ -94,8 +129,11 @@ class JournalRouteFusionTest {
     }
 
     private fun point(minutes: Long, latitude: Double): GeoPoint = GeoPoint(
-        instant = Instant.parse("2026-01-01T00:00:00Z").plusSeconds(minutes * 60),
+        instant = instant(minutes),
         latitude = latitude,
         longitude = latitude,
     )
+
+    private fun instant(minutes: Long): Instant =
+        Instant.parse("2026-01-01T00:00:00Z").plusSeconds(minutes * 60)
 }

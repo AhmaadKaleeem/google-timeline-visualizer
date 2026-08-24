@@ -91,7 +91,7 @@ class JournalRoutePatchTest {
         assertEquals(instant(0), expanded.first)
         assertEquals(fullReplacement.spans.map { it.source }, patched.spans.map { it.source })
         assertEquals(
-            listOf(RouteSource.DETAILED, RouteSource.GAP, RouteSource.DETAILED),
+            listOf(RouteSource.DETAILED, RouteSource.INFERRED_TRANSFER, RouteSource.DETAILED),
             patched.spans.map { it.source },
         )
     }

@@ -10,8 +10,8 @@
     <string name="preview">プレビュー</string>
     <string name="pause_preview">プレビューを一時停止</string>
     <string name="export_video">動画を作成</string>
-    <string name="video_title_template">動画タイトル</string>
-    <string name="title_template_help">{year}と{name}を使用できます。次回の動画にも保存されます。</string>
+    <string name="video_title_template">動画に表示するタイトル</string>
+    <string name="title_template_help">この動画に表示するタイトルを編集します。</string>
     <string name="start_year">開始年</string>
     <string name="end_year">終了年</string>
     <string name="duration">経路の再生時間</string>
@@ -403,7 +403,7 @@
     <string name="semantic_data_unavailable">このタイムライン ファイルには生の場所のみが含まれています。</string>
     <string name="settings_details">設定内容</string>
     <string name="settings_unavailable">この古いビデオには設定が記録されていませんでした。</string>
-    <string name="show_all_suggestions">すべて表示 (%1$d)</string>
+    <string name="show_all_suggestions">あと%1$d件表示</string>
     <string name="show_fewer_suggestions">表示数を減らす</string>
     <string name="strong_match">強い一致</string>
     <string name="suggested_trips">おすすめの旅行</string>

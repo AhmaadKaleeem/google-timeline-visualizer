@@ -64,6 +64,33 @@ class JournalJourneySelectionTest {
         assertEquals(listOf(1), journey.breakBeforePointIndices)
     }
 
+    @Test
+    fun inferredTransferConnectsVideoSectionsInsteadOfCreatingABreak() {
+        val before = point(0, 0.0)
+        val after = point(8 * 60, 20.0)
+        val route = JournalRoute(
+            timeline = Timeline(listOf(before, after)),
+            spans = listOf(
+                span(RouteSource.SEMANTIC_PATH, before),
+                span(RouteSource.INFERRED_TRANSFER, before, after),
+                span(RouteSource.SEMANTIC_PATH, after),
+            ),
+            detailedInputCount = 0,
+            detailedUsableCount = 0,
+            semanticUsableCount = 2,
+        )
+
+        val journey = route.journeyForRange(TimelinePeriod.sameYear(2026), ZoneOffset.UTC)
+
+        assertEquals(emptyList<Int>(), journey.breakBeforePointIndices)
+        assertEquals(listOf(1), journey.inferredTransferBeforePointIndices)
+        assertTrue(journey.isConnectedToPrevious(1))
+        assertTrue(journey.isInferredTransferFromPrevious(1))
+        assertEquals(listOf(0.0, 20.0), journey.points.map(GeoPoint::latitude))
+        assertTrue(journey.totalDistanceKm > 100.0)
+        assertEquals(0.0, journey.knownDistanceKm, 0.0)
+    }
+
     private fun span(source: RouteSource, vararg points: GeoPoint) = RouteSpan(
         start = points.first().instant,
         end = points.last().instant,

@@ -11,8 +11,8 @@
     <string name="preview">预览</string>
     <string name="pause_preview">暂停预览</string>
     <string name="export_video">创建视频</string>
-    <string name="video_title_template">视频标题</string>
-    <string name="title_template_help">使用 {year} 和 {name}。已保存以供您的下一个视频使用。</string>
+    <string name="video_title_template">视频中显示的标题</string>
+    <string name="title_template_help">编辑此视频中显示的标题。</string>
     <string name="start_year">开始年份</string>
     <string name="end_year">年底</string>
     <string name="duration">路线动画长度</string>
@@ -396,7 +396,7 @@
     <string name="semantic_data_unavailable">该时间轴文件仅包含原始位置。</string>
     <string name="settings_details">设置详情</string>
     <string name="settings_unavailable">未记录该旧视频的设置。</string>
-    <string name="show_all_suggestions">显示全部 (%1$d)</string>
+    <string name="show_all_suggestions">再显示 %1$d 个</string>
     <string name="show_fewer_suggestions">显示较少</string>
     <string name="strong_match">高度匹配</string>
     <string name="suggested_trips">建议行程</string>

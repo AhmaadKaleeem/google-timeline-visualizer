@@ -11,8 +11,8 @@
     <string name="preview">Aperçu</string>
     <string name="pause_preview">Suspendre l\'aperçu</string>
     <string name="export_video">Créer une vidéo</string>
-    <string name="video_title_template">Titre de la vidéo</string>
-    <string name="title_template_help">Utilisez {year} et {name}. Enregistré pour votre prochaine vidéo.</string>
+    <string name="video_title_template">Titre affiché dans la vidéo</string>
+    <string name="title_template_help">Modifiez le titre affiché dans cette vidéo.</string>
     <string name="start_year">Année de début</string>
     <string name="end_year">Fin d\'année</string>
     <string name="duration">Durée de l\'animation de l\'itinéraire</string>
@@ -405,7 +405,7 @@
     <string name="semantic_data_unavailable">Ce fichier Timeline contient uniquement des emplacements bruts.</string>
     <string name="settings_details">Détails des paramètres</string>
     <string name="settings_unavailable">Les paramètres n\'ont pas été enregistrés pour cette ancienne vidéo.</string>
-    <string name="show_all_suggestions">Afficher tout (%1$d)</string>
+    <string name="show_all_suggestions">Afficher %1$d de plus</string>
     <string name="show_fewer_suggestions">Afficher moins</string>
     <string name="strong_match">Forte correspondance</string>
     <string name="suggested_trips">Voyages suggérés</string>

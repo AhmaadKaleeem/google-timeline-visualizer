@@ -76,7 +76,7 @@ class JournalRouteServiceTest {
     }
 
     @Test
-    fun detailedDiscontinuityWithoutSemanticCoverageRemainsAGap() = runBlocking {
+    fun detailedDiscontinuityWithoutSemanticCoverageBecomesAnInferredTransfer() = runBlocking {
         repository.import(
             JOURNAL_ID,
             importInput(
@@ -94,10 +94,10 @@ class JournalRouteServiceTest {
         val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(61)))
 
         assertEquals(
-            listOf(RouteSource.DETAILED, RouteSource.GAP, RouteSource.DETAILED),
+            listOf(RouteSource.DETAILED, RouteSource.INFERRED_TRANSFER, RouteSource.DETAILED),
             route.spans.map(RouteSpan::source),
         )
-        assertEquals("No supported route observations", route.spans[1].transitionReason)
+        assertEquals("Inferred between detailed observation islands", route.spans[1].transitionReason)
     }
 
     @Test
@@ -160,7 +160,7 @@ class JournalRouteServiceTest {
     }
 
     @Test
-    fun adjacentStructuredSemanticRecordsRemainSeparatedWithoutContinuityEvidence() = runBlocking {
+    fun adjacentStructuredSemanticRecordsUseAnInferredVideoTransition() = runBlocking {
         repository.import(
             JOURNAL_ID,
             importInput(
@@ -176,10 +176,10 @@ class JournalRouteServiceTest {
         val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(21)))
 
         assertEquals(
-            listOf(RouteSource.SEMANTIC_PATH, RouteSource.GAP, RouteSource.SEMANTIC_PATH),
+            listOf(RouteSource.SEMANTIC_PATH, RouteSource.INFERRED_TRANSFER, RouteSource.SEMANTIC_PATH),
             route.spans.map(RouteSpan::source),
         )
-        assertEquals("No supported route continuity", route.spans[1].transitionReason)
+        assertEquals("Inferred between available Timeline records", route.spans[1].transitionReason)
     }
 
     @Test
@@ -246,7 +246,7 @@ class JournalRouteServiceTest {
         val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(31)))
 
         assertEquals(listOf(9.0, 5.0, 5.1, 9.3), route.timeline.points.map(GeoPoint::latitude))
-        assertEquals(2, route.spans.count { it.source == RouteSource.GAP })
+        assertEquals(2, route.spans.count { it.source == RouteSource.INFERRED_TRANSFER })
     }
 
     @Test

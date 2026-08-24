@@ -10,8 +10,8 @@
     <string name="preview">미리보기</string>
     <string name="pause_preview">미리보기 일시정지</string>
     <string name="export_video">영상 만들기</string>
-    <string name="video_title_template">영상 제목</string>
-    <string name="title_template_help">{year}와 {name}을 사용할 수 있으며 다음 영상에도 저장됩니다.</string>
+    <string name="video_title_template">영상에 표시할 제목</string>
+    <string name="title_template_help">이 영상에 표시할 제목을 수정하세요.</string>
     <string name="start_year">시작 연도</string>
     <string name="end_year">종료 연도</string>
     <string name="duration">경로 재생 시간</string>
@@ -426,7 +426,7 @@
     <string name="saved_trips_empty">아직 저장된 여행이 없습니다.</string>
     <string name="settings_details">설정 세부정보</string>
     <string name="settings_unavailable">이전 동영상에 대한 설정이 기록되지 않았습니다.</string>
-    <string name="show_all_suggestions">모두 표시 (%1$d)</string>
+    <string name="show_all_suggestions">%1$d개 더 보기</string>
     <string name="show_fewer_suggestions">간략히 표시</string>
     <string name="strong_match">강한 일치</string>
     <string name="suggested_trips">추천 여행</string>

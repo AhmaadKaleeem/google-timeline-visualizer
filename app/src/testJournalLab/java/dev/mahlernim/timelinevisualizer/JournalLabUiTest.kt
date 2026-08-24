@@ -58,10 +58,16 @@ class JournalLabUiTest {
         assertEquals("Travel Journal", context.getString(R.string.timeline_data))
         assertEquals("Grow Travel Journal", context.getString(R.string.import_or_update))
         assertTrue(context.getString(R.string.timeline_not_imported).contains("ready to grow"))
+        assertEquals("Title shown in video", context.getString(R.string.video_title_template))
+        assertEquals(
+            "Edit the title that appears in this video.",
+            context.getString(R.string.title_template_help),
+        )
+        assertFalse(context.getString(R.string.title_template_help).contains("{year}"))
     }
 
     @Test
-    fun settingsShowVisibleWorkWhileTheJournalIsGrowing() {
+    fun firstImportShowsThatTheTravelJournalIsBeingCreated() {
         val source = rawTimeline("progress", 37.5, 127.0, "2026-08-01T00:00:00Z")
         val activity = launchActivity()
         activity.findViewById<View>(R.id.navigationSettings).performClick()
@@ -69,10 +75,12 @@ class JournalLabUiTest {
         activity.importTimeline(Uri.fromFile(source))
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsTimelineProgressGroup).visibility)
-        assertEquals(
-            activity.getString(R.string.journal_import_in_progress),
-            activity.findViewById<TextView>(R.id.settingsImportTimelineButton).text.toString(),
+        val firstImportText = activity.findViewById<TextView>(R.id.settingsImportTimelineButton).text.toString()
+        assertTrue(
+            firstImportText == activity.getString(R.string.journal_import_preparing) ||
+                firstImportText == activity.getString(R.string.journal_import_creating),
         )
+        assertFalse(firstImportText == activity.getString(R.string.journal_import_in_progress))
         waitUntil {
             activity.findViewById<View>(R.id.settingsTimelineProgressGroup).visibility == View.GONE
         }
@@ -152,7 +160,7 @@ class JournalLabUiTest {
     }
 
     @Test
-    fun explicitJournalGapIsNotCountedAsTravelDistance() {
+    fun detailedObservationGapBecomesAConnectedInferredTransfer() {
         val source = File.createTempFile("gapped", ".json", context.cacheDir).apply {
             writeText(
                 """
@@ -170,12 +178,12 @@ class JournalLabUiTest {
         activity.importTimeline(Uri.fromFile(source))
         waitForImportedRoute(activity)
 
-        assertEquals(listOf(2), activity.currentJourneyBreakIndices())
+        assertEquals(emptyList<Int>(), activity.currentJourneyBreakIndices())
         assertTrue(activity.currentJourneyDistanceKm() < 5.0)
     }
 
     @Test
-    fun independentSemanticRecordsRemainAGapInTheJourney() {
+    fun independentSemanticRecordsRemainConnectedForVideo() {
         val source = File.createTempFile("semantic-gap", ".json", context.cacheDir).apply {
             writeText(
                 """
@@ -191,7 +199,7 @@ class JournalLabUiTest {
         activity.importTimeline(Uri.fromFile(source))
         waitForImportedRoute(activity)
 
-        assertEquals(listOf(2), activity.currentJourneyBreakIndices())
+        assertEquals(emptyList<Int>(), activity.currentJourneyBreakIndices())
         assertTrue(activity.currentJourneyDistanceKm() < 5.0)
     }
 

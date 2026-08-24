@@ -300,6 +300,7 @@ class MainActivity : AppCompatActivity() {
     private var activeJournalRoute: JournalRoute? = null
     private var journalLoaded = false
     private var journalLoadJob: Job? = null
+    private var journalImportIsInitial: Boolean? = null
 
     private val openTimeline = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importTimeline(uri)
@@ -866,6 +867,15 @@ class MainActivity : AppCompatActivity() {
             val format = working.activeVideoFormat
             resolutionLabels += getString(R.string.custom_resolution_selected, format.width, format.height)
         }
+        val presetFrameRates = listOf(24, 30, 60)
+        val frameRateLabels = presetFrameRates.map { getString(R.string.frame_rate_value, it) }.toMutableList()
+        val currentFrameRateIndex = presetFrameRates.indexOf(working.effectiveExportFormat.frameRate)
+        if (currentFrameRateIndex < 0 || working.effectiveExportFormat.customFrameRate) {
+            frameRateLabels += getString(
+                R.string.custom_frame_rate_selected,
+                working.effectiveExportFormat.frameRate,
+            )
+        }
 
         listOf(
             sheet.aspectRatioDropdown to aspectLabels,
@@ -874,6 +884,7 @@ class MainActivity : AppCompatActivity() {
             sheet.localFramingDropdown to framingLabels,
             sheet.longTripDropdown to pacingLabels,
             sheet.videoQualityDropdown to resolutionLabels,
+            sheet.frameRateDropdown to frameRateLabels,
         ).forEach { (dropdown, labels) ->
             dropdown.setAdapter(SelectionArrayAdapter(this, labels))
             makeDropdownOpenReliably(dropdown)
@@ -885,6 +896,12 @@ class MainActivity : AppCompatActivity() {
         sheet.longTripDropdown.setText(pacingLabels[working.longTripCompression.ordinal], false)
         sheet.videoQualityDropdown.setText(
             resolutionLabels[currentResolutionIndex.takeIf { it >= 0 } ?: resolutionLabels.lastIndex],
+            false,
+        )
+        sheet.frameRateDropdown.setText(
+            frameRateLabels[currentFrameRateIndex.takeIf {
+                it >= 0 && !working.effectiveExportFormat.customFrameRate
+            } ?: frameRateLabels.lastIndex],
             false,
         )
 
@@ -909,6 +926,16 @@ class MainActivity : AppCompatActivity() {
                     exportFormat = working.effectiveExportFormat.copy(
                         shortEdge = resolution.shortEdge,
                         customResolution = false,
+                    ),
+                )
+            }
+        }
+        sheet.frameRateDropdown.setOnItemClickListener { _, _, position, _ ->
+            presetFrameRates.getOrNull(position)?.let { frameRate ->
+                working = working.copy(
+                    exportFormat = working.effectiveExportFormat.copy(
+                        frameRate = frameRate,
+                        customFrameRate = false,
                     ),
                 )
             }
@@ -1325,12 +1352,15 @@ class MainActivity : AppCompatActivity() {
         if (importJob?.isActive == true) return
         if (currentScreen == Screen.VIDEOS) showNewVideo(loadRemembered = false)
         animation?.cancel()
+        journalImportIsInitial = null
         setTimelineLoading(true, R.string.opening_timeline)
         importJob = lifecycleScope.launch {
             try {
                 val sourceSize = timelineFileSize(uri)
                 showJournalImportStage(R.string.reading_timeline, bytesRead = 0L, totalBytes = sourceSize)
                 val existing = withContext(Dispatchers.IO) { journalRepository.primaryJournal() }
+                journalImportIsInitial = existing == null
+                updateSettingsImportButton(loading = true)
                 val adapted = withContext(Dispatchers.IO) {
                     contentResolver.openInputStream(uri)?.buffered()?.use { input ->
                         journalImportAdapter.adapt(
@@ -1403,6 +1433,32 @@ class MainActivity : AppCompatActivity() {
                     is JournalImportResult.Committed -> Snackbar.make(
                         binding.root,
                         when {
+                            result.changeKind == JournalImportResult.ChangeKind.INITIAL &&
+                                result.insertedObservationCount > 0 -> {
+                                val detailedDays = classified.detailedObservations.asSequence()
+                                    .map { observation ->
+                                        Instant.ofEpochMilli(observation.instantEpochMillis)
+                                            .atZone(ZoneId.systemDefault())
+                                            .toLocalDate()
+                                    }
+                                    .distinct()
+                                    .count()
+                                getString(
+                                    R.string.journal_import_created,
+                                    resources.getQuantityString(
+                                        R.plurals.journal_days_count,
+                                        detailedDays,
+                                        detailedDays,
+                                    ),
+                                    resources.getQuantityString(
+                                        R.plurals.journal_detailed_locations_count,
+                                        result.insertedObservationCount,
+                                        result.insertedObservationCount,
+                                    ),
+                                )
+                            }
+                            result.changeKind == JournalImportResult.ChangeKind.INITIAL ->
+                                getString(R.string.journal_import_created_timeline)
                             !result.needsRouteRefresh -> getString(R.string.journal_import_no_changes)
                             result.insertedObservationCount == 0 && result.semanticSegmentCount > 0 ->
                                 getString(R.string.journal_import_added_timeline)
@@ -1432,6 +1488,7 @@ class MainActivity : AppCompatActivity() {
                 Snackbar.make(binding.root, R.string.journal_import_failed_preserved, Snackbar.LENGTH_LONG).show()
             } finally {
                 setTimelineLoading(false)
+                journalImportIsInitial = null
                 importJob = null
             }
         }
@@ -1673,9 +1730,7 @@ class MainActivity : AppCompatActivity() {
             settingsScreen.settingsTimelineProgressGroup.visibility = if (loading) View.VISIBLE else View.GONE
             settingsScreen.settingsImportTimelineButton.isEnabled = !loading
             settingsScreen.settingsTimelineHelpButton.isEnabled = !loading
-            settingsScreen.settingsImportTimelineButton.setText(
-                if (loading) R.string.journal_import_in_progress else R.string.import_or_update,
-            )
+            updateSettingsImportButton(loading)
             if (loading) {
                 showJournalImportStage(stage)
             } else {
@@ -1684,6 +1739,23 @@ class MainActivity : AppCompatActivity() {
                 settingsScreen.settingsTimelineProgressDetail.setText(R.string.journal_import_working_detail)
             }
         }
+    }
+
+    private fun updateSettingsImportButton(loading: Boolean) {
+        if (!::settingsScreen.isInitialized) return
+        settingsScreen.settingsImportTimelineButton.setText(
+            if (!loading) {
+                R.string.import_or_update
+            } else if (!BuildConfig.IS_JOURNAL_LAB) {
+                R.string.journal_import_in_progress
+            } else {
+                when (journalImportIsInitial) {
+                    true -> R.string.journal_import_creating
+                    false -> R.string.journal_import_in_progress
+                    null -> R.string.journal_import_preparing
+                }
+            },
+        )
     }
 
     private fun showJournalImportStage(
@@ -1970,12 +2042,12 @@ class MainActivity : AppCompatActivity() {
             return getString(
                 R.string.raw_location_summary,
                 number.format(selected.points.size),
-                number.format(unit.fromKilometers(selected.totalDistanceKm)),
+                number.format(unit.fromKilometers(selected.knownDistanceKm)),
                 unit.symbol,
                 number.format(rawSignalProcessing?.rejectedCount ?: ignoredCount),
             )
         }
-        if (selected.totalDistanceKm <= 0) {
+        if (selected.knownDistanceKm <= 0) {
             return withOutlierSummary(
                 getString(R.string.selected_period_no_movement, number.format(selected.points.size)),
                 ignoredCount,
@@ -2014,7 +2086,7 @@ class MainActivity : AppCompatActivity() {
             getString(
                 R.string.selected_period_summary,
                 number.format(selected.points.size),
-                number.format(unit.fromKilometers(selected.totalDistanceKm)),
+                number.format(unit.fromKilometers(selected.knownDistanceKm)),
                 unit.symbol,
                 period,
             ),
@@ -3757,7 +3829,7 @@ class MainActivity : AppCompatActivity() {
         editor.showAllSuggestionsButton.text = if (suggestionsExpanded) {
             getString(R.string.show_fewer_suggestions)
         } else {
-            getString(R.string.show_all_suggestions, suggestions.size)
+            getString(R.string.show_all_suggestions, suggestions.size - COLLAPSED_CREATION_COUNT)
         }
         editor.suggestionsList.removeAllViews()
         (if (suggestionsExpanded) suggestions else suggestions.take(COLLAPSED_CREATION_COUNT)).forEach { suggestion ->
@@ -4894,7 +4966,7 @@ class MainActivity : AppCompatActivity() {
 
     internal fun currentJourneyBreakIndices(): List<Int> = journey?.breakBeforePointIndices.orEmpty()
 
-    internal fun currentJourneyDistanceKm(): Double = journey?.totalDistanceKm ?: 0.0
+    internal fun currentJourneyDistanceKm(): Double = journey?.knownDistanceKm ?: 0.0
 
     internal fun currentVideoDataSource(): VideoDataSource = when {
         BuildConfig.IS_JOURNAL_LAB -> VideoDataSource.JOURNAL

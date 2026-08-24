@@ -10,8 +10,8 @@
     <string name="preview">Preview</string>
     <string name="pause_preview">Pause preview</string>
     <string name="export_video">Create video</string>
-    <string name="video_title_template">Video title</string>
-    <string name="title_template_help">You can use {year} and {name}. Saved for your next video.</string>
+    <string name="video_title_template">Title shown in video</string>
+    <string name="title_template_help">Edit the title that appears in this video.</string>
     <string name="start_year">Start year</string>
     <string name="end_year">End year</string>
     <string name="duration">Route animation length</string>
@@ -348,6 +348,18 @@
     <string name="journal_import_read_progress" translatable="false">%1$s of %2$s read</string>
     <string name="journal_import_save_progress" translatable="false">%1$d of %2$d Journal records saved</string>
     <string name="journal_import_in_progress" translatable="false">Growing Travel Journal…</string>
+    <string name="journal_import_creating" translatable="false">Creating your Travel Journal…</string>
+    <string name="journal_import_preparing" translatable="false">Preparing Travel Journal…</string>
+    <string name="journal_import_created" translatable="false">Travel Journal created. %1$s and %2$s are ready.</string>
+    <string name="journal_import_created_timeline" translatable="false">Travel Journal created with the available Timeline history.</string>
+    <plurals name="journal_days_count" translatable="false">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <plurals name="journal_detailed_locations_count" translatable="false">
+        <item quantity="one">%d detailed location</item>
+        <item quantity="other">%d detailed locations</item>
+    </plurals>
     <string name="journal_import_no_changes" translatable="false">Your Travel Journal already contains newer or matching data. Nothing needed updating.</string>
     <string name="journal_import_mismatch_title" translatable="false">This may be a different Travel Journal</string>
     <string name="journal_import_mismatch_message" translatable="false">This file does not have enough detailed locations in common with your saved Travel Journal. Nothing was changed. A different person’s Timeline cannot be added to the same Journal.</string>
@@ -368,7 +380,7 @@
     <string name="import_or_update">Import or update Timeline</string>
     <string name="suggested_trips">Suggested trips</string>
     <string name="suggested_trips_empty">No trip suggestions yet. Confirmed trips are never removed by a new import.</string>
-    <string name="show_all_suggestions">Show all (%1$d)</string>
+    <string name="show_all_suggestions">Show %1$d more</string>
     <string name="show_fewer_suggestions">Show fewer</string>
     <string name="confirmed_trips">Your trips</string>
     <string name="recaps">Recaps</string>
