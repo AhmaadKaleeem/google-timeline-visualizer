@@ -74,6 +74,7 @@ export const de: Strings = {
   cameraFixed: 'Fester Zoom',
   cameraSteady: 'Stetiges Folgen',
   cameraDynamic: 'Dynamisches Folgen',
+  cameraCloseUp: 'Nah',
   videoFormatLabel: 'Videoformat',
   formatSquare480: 'Quadratisch · 480p',
   formatSquare720: 'Quadratisch · 720p',

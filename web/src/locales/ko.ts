@@ -75,6 +75,7 @@ export const ko: Strings = {
   cameraFixed: '고정 줌',
   cameraSteady: '안정적 따라가기',
   cameraDynamic: '역동적 따라가기',
+  cameraCloseUp: '근접',
   videoFormatLabel: '영상 형식',
   formatSquare480: '정사각형 · 480p',
   formatSquare720: '정사각형 · 720p',

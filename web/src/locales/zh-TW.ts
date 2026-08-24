@@ -70,6 +70,7 @@ export const zhTW: Strings = {
   cameraFixed: '固定縮放',
   cameraSteady: '穩定跟隨',
   cameraDynamic: '動態跟隨',
+  cameraCloseUp: '近距離',
   videoFormatLabel: '影片格式',
   formatSquare480: '正方形 · 480p',
   formatSquare720: '正方形 · 720p',

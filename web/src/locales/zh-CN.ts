@@ -75,6 +75,7 @@ export const zhCN: Strings = {
   cameraFixed: '固定缩放',
   cameraSteady: '平稳跟随',
   cameraDynamic: '动态跟随',
+  cameraCloseUp: '近距离',
   videoFormatLabel: '视频格式',
   formatSquare480: '正方形 · 480p',
   formatSquare720: '正方形 · 720p',

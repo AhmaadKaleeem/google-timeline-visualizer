@@ -73,6 +73,7 @@ export const ja: Strings = {
   cameraFixed: '固定ズーム',
   cameraSteady: '安定追従',
   cameraDynamic: 'ダイナミック追従',
+  cameraCloseUp: 'クローズアップ',
   videoFormatLabel: '動画形式',
   formatSquare480: '正方形 · 480p',
   formatSquare720: '正方形 · 720p',

@@ -76,6 +76,7 @@ export const ptBR: Strings = {
   cameraFixed: 'Zoom fixo',
   cameraSteady: 'Acompanhamento estável',
   cameraDynamic: 'Acompanhamento dinâmico',
+  cameraCloseUp: 'Próximo',
   videoFormatLabel: 'Formato de vídeo',
   formatSquare480: 'Quadrado · 480p',
   formatSquare720: 'Quadrado · 720p',

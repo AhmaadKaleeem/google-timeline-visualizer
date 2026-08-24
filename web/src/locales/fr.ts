@@ -76,6 +76,7 @@ export const fr: Strings = {
   cameraFixed: 'Zoom fixe',
   cameraSteady: 'Suivi fluide',
   cameraDynamic: 'Suivi dynamique',
+  cameraCloseUp: 'Rapproché',
   videoFormatLabel: 'Format vidéo',
   formatSquare480: 'Carré · 480p',
   formatSquare720: 'Carré · 720p',

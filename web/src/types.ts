@@ -29,7 +29,7 @@ export interface Viewport {
   zoom: number;
 }
 
-export type CameraMovement = 'fixed' | 'steady' | 'dynamic';
+export type CameraMovement = 'fixed' | 'steady' | 'dynamic' | 'close-up';
 
 export interface CameraFrame {
   centerX: number;
