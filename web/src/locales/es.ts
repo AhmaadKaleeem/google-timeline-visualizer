@@ -45,6 +45,11 @@ export const es: Strings = {
   languageSystemDefault: 'Predeterminado del sistema',
   languageLockedExporting: 'No se puede cambiar el idioma mientras se crea un vídeo.',
   languageLockedPreparing: 'No se puede cambiar el idioma mientras se prepara el mapa.',
+  distanceUnitLabel: 'Unidad de distancia',
+  distanceUnitAutomatic: 'Automático',
+  distanceUnitKilometers: 'Kilómetros',
+  distanceUnitMiles: 'Millas',
+  distanceUnitAutomaticResolved: '{automatic} · {resolved}',
 
   settingsTitle: 'Crea tu viaje',
   rawSignalsToggle: 'Usar datos de ubicación sin procesar',

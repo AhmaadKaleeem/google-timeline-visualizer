@@ -41,6 +41,11 @@ export const zhTW: Strings = {
   languageSystemDefault: '系統預設值',
   languageLockedExporting: '建立影片時無法變更語言。',
   languageLockedPreparing: '準備地圖時無法變更語言。',
+  distanceUnitLabel: '距離單位',
+  distanceUnitAutomatic: '自動',
+  distanceUnitKilometers: '公里',
+  distanceUnitMiles: '英里',
+  distanceUnitAutomaticResolved: '{automatic} · {resolved}',
 
   settingsTitle: '建立您的行程',
   rawSignalsToggle: '使用原始定位資料',

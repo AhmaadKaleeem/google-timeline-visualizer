@@ -269,10 +269,11 @@ describe('formatting', () => {
   });
 
   it('formats a distance with the locale unit pattern', () => {
-    const options = { style: 'unit', unit: 'kilometer', maximumFractionDigits: 0 } as const;
-    expect(createI18n('fr').formatDistanceKm(12345))
-      .toBe(new Intl.NumberFormat('fr', options).format(12345));
-    expect(createI18n('en').formatDistanceKm(12345.4)).toBe('12,345 km');
+    const kilometers = { style: 'unit', unit: 'kilometer', maximumFractionDigits: 0 } as const;
+    expect(createI18n('fr').formatDistance(12345, 'kilometers'))
+      .toBe(new Intl.NumberFormat('fr', kilometers).format(12345));
+    expect(createI18n('en').formatDistance(12345.4, 'kilometers')).toBe('12,345 km');
+    expect(createI18n('en').formatDistance(12345.4, 'miles')).toBe('7,671 mi');
   });
 
   it('formats a percent with the locale spacing rule', () => {
@@ -496,6 +497,14 @@ describe('index.html i18n keys', () => {
     }
   });
 
+  it('offers the three Android distance-unit preferences with Automatic selected', () => {
+    const block = /<select id="distance-unit">([\s\S]*?)<\/select>/.exec(html);
+    expect(block).not.toBeNull();
+    const options = [...(block?.[1] ?? '').matchAll(/<option value="([^"]*)"([^>]*)>/g)];
+    expect(options.map((option) => option[1])).toEqual(['automatic', 'kilometers', 'miles']);
+    expect(options[0][2]).toContain('selected');
+  });
+
   it('renders exactly the text the markup already carries', () => {
     // The HTML text is the English source and the catalog is what replaces it, so the two
     // drifting apart would change what an English user sees between first paint and
@@ -542,12 +551,12 @@ describe('English rendering', () => {
     expect(en.join(en.t('summaryNoMovement', { count: 1234 }), ''))
       .toBe('1,234 location points · No movement');
     expect(en.join(
-      en.t('summaryDistanceAbout', { count: 1234, distance: en.formatDistanceKm(12345.4) }),
+      en.t('summaryDistanceAbout', { count: 1234, distance: en.formatDistance(12345.4, 'kilometers') }),
       '',
       en.t('summaryOutliersIgnored', { count: 2 }),
     )).toBe('1,234 location points · About 12,345 km · 2 suspicious locations ignored');
     expect(en.join(
-      en.t('summaryDistanceEstimated', { count: 40, distance: en.formatDistanceKm(3) }),
+      en.t('summaryDistanceEstimated', { count: 40, distance: en.formatDistance(3, 'kilometers') }),
       en.t('summaryRawRejected', { count: 2000 }),
     )).toBe('40 location points · Estimated 3 km · 2,000 noisy or inaccurate points ignored');
   });

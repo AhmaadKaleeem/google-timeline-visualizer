@@ -34,6 +34,8 @@ export interface OverlayText {
   /** Already resolved and guaranteed non-empty by the caller. */
   readonly title: string;
   readonly periodLabel: string;
+  readonly separator: string;
+  readonly formatDistance: (kilometers: number) => string;
 }
 
 /**
@@ -395,7 +397,13 @@ export function drawFrame(
   context.fillText(text.title, card.centerX, 72 * scale, card.width - 36 * scale);
   context.fillStyle = '#5c4b52';
   context.font = `${20 * scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
-  context.fillText(text.periodLabel, card.centerX, 108 * scale);
+  const distanceLabel = text.formatDistance(currentDistance);
+  context.fillText(
+    `${text.periodLabel}${text.separator}${distanceLabel}`,
+    card.centerX,
+    108 * scale,
+    card.width - 36 * scale,
+  );
 
   context.textAlign = 'right';
   context.fillStyle = 'rgba(36, 25, 29, 0.78)';

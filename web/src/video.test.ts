@@ -275,7 +275,12 @@ describe('createJourneyMp4', () => {
   const canvas = { width: format.width, height: format.height } as HTMLCanvasElement;
   const options = {
     durationSeconds: 1,
-    overlay: { title: 'Trip', periodLabel: 'March 2026' },
+    overlay: {
+      title: 'Trip',
+      periodLabel: 'March 2026',
+      separator: ' · ',
+      formatDistance: (kilometers: number) => `${Math.round(kilometers)} km`,
+    },
     format,
   };
 

@@ -44,6 +44,11 @@ export const en: Strings = {
   languageSystemDefault: 'System default',
   languageLockedExporting: 'Language cannot change while a video is being created.',
   languageLockedPreparing: 'Language cannot change while the map is being prepared.',
+  distanceUnitLabel: 'Distance unit',
+  distanceUnitAutomatic: 'Automatic',
+  distanceUnitKilometers: 'Kilometers',
+  distanceUnitMiles: 'Miles',
+  distanceUnitAutomaticResolved: '{automatic} · {resolved}',
 
   settingsTitle: 'Create your journey',
   rawSignalsToggle: 'Use raw location data',

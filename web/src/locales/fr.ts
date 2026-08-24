@@ -45,6 +45,11 @@ export const fr: Strings = {
   languageSystemDefault: 'Valeur par défaut du système',
   languageLockedExporting: 'La langue ne peut pas être modifiée pendant la création d’une vidéo.',
   languageLockedPreparing: 'La langue ne peut pas être modifiée pendant la préparation de la carte.',
+  distanceUnitLabel: 'Unité de distance',
+  distanceUnitAutomatic: 'Automatique',
+  distanceUnitKilometers: 'Kilomètres',
+  distanceUnitMiles: 'Miles',
+  distanceUnitAutomaticResolved: '{automatic} · {resolved}',
 
   settingsTitle: 'Créez votre voyage',
   rawSignalsToggle: 'Utiliser les données de localisation brutes',

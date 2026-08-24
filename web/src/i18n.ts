@@ -7,6 +7,8 @@ import { ko } from './locales/ko';
 import { ptBR } from './locales/pt-BR';
 import { zhCN } from './locales/zh-CN';
 import { zhTW } from './locales/zh-TW';
+import { convertDistanceFromKilometers } from './distance-unit';
+import type { DistanceUnit } from './distance-unit';
 
 export type LocaleTag =
   | 'en'
@@ -77,7 +79,7 @@ export type PluralEntry =
  *   'Add to Home Screen' and 'Files app' are official Google Maps and iOS labels. Use the
  *   official localized label for each platform, never a literal translation.
  * - Frozen tokens inside translated sentences: Timeline.json, semanticSegments, rawSignals,
- *   CARTO, OpenStreetMap, Google Maps, Safari, H.264, MP4, MB, km, iPhone.
+ *   CARTO, OpenStreetMap, Google Maps, Safari, H.264, MP4, MB, km, mi, iPhone.
  */
 export interface Strings {
   // --- app shell and document metadata ---
@@ -112,6 +114,12 @@ export interface Strings {
   languageSystemDefault: string;
   languageLockedExporting: string;
   languageLockedPreparing: string;
+  distanceUnitLabel: string;
+  distanceUnitAutomatic: string;
+  distanceUnitKilometers: string;
+  distanceUnitMiles: string;
+  /** {automatic} {resolved} */
+  distanceUnitAutomaticResolved: string;
 
   // --- settings card ---
   settingsTitle: string;
@@ -406,7 +414,7 @@ export interface I18n {
   /** `count` is required by the type system for plural keys and optional for text keys. */
   t<K extends StringKey>(key: K, ...args: TranslateArgs<K>): string;
   formatNumber(value: number, options?: Intl.NumberFormatOptions): string;
-  formatDistanceKm(kilometers: number): string;
+  formatDistance(kilometers: number, unit: DistanceUnit): string;
   formatPercent(fraction: number): string;
   formatMonth(date: Date): string;
   formatMediumDate(date: Date): string;
@@ -447,11 +455,18 @@ export function createI18n(locale: LocaleTag, formatLocale: string = locale): I1
     }
     return format;
   };
-  const distanceFormat = new Intl.NumberFormat(formatLocale, {
-    style: 'unit',
-    unit: 'kilometer',
-    maximumFractionDigits: 0,
-  });
+  const distanceFormats: Readonly<Record<DistanceUnit, Intl.NumberFormat>> = {
+    kilometers: new Intl.NumberFormat(formatLocale, {
+      style: 'unit',
+      unit: 'kilometer',
+      maximumFractionDigits: 0,
+    }),
+    miles: new Intl.NumberFormat(formatLocale, {
+      style: 'unit',
+      unit: 'mile',
+      maximumFractionDigits: 0,
+    }),
+  };
   const percentFormat = new Intl.NumberFormat(formatLocale, {
     style: 'percent',
     maximumFractionDigits: 0,
@@ -478,8 +493,10 @@ export function createI18n(locale: LocaleTag, formatLocale: string = locale): I1
     strings,
     t: translate as I18n['t'],
     formatNumber,
-    // Rounded before formatting so the digits match the previous Math.round exactly.
-    formatDistanceKm: (kilometers) => distanceFormat.format(Math.round(kilometers)),
+    // Rounded before formatting so the digits retain the previous Math.round behavior.
+    formatDistance: (kilometers, unit) => distanceFormats[unit].format(
+      Math.round(convertDistanceFromKilometers(kilometers, unit)),
+    ),
     // Rounded to whole percent first: Intl rounds the shortest decimal of the double while
     // Math.round rounds the double itself, and the two disagree on values such as 0.575.
     formatPercent: (fraction) => percentFormat.format(Math.round(fraction * 100) / 100),

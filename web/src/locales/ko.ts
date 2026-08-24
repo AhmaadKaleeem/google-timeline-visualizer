@@ -46,6 +46,11 @@ export const ko: Strings = {
   languageSystemDefault: '시스템 기본값',
   languageLockedExporting: '영상을 만드는 중에는 언어를 변경할 수 없습니다.',
   languageLockedPreparing: '지도를 준비하는 중에는 언어를 변경할 수 없습니다.',
+  distanceUnitLabel: '거리 단위',
+  distanceUnitAutomatic: '자동',
+  distanceUnitKilometers: '킬로미터',
+  distanceUnitMiles: '마일',
+  distanceUnitAutomaticResolved: '{automatic} · {resolved}',
 
   settingsTitle: '이동 경로 만들기',
   rawSignalsToggle: '원시 위치 데이터 사용',

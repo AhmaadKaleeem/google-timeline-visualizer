@@ -44,6 +44,11 @@ export const ja: Strings = {
   languageSystemDefault: 'システムのデフォルト',
   languageLockedExporting: '動画の作成中は言語を変更できません。',
   languageLockedPreparing: '地図の準備中は言語を変更できません。',
+  distanceUnitLabel: '距離の単位',
+  distanceUnitAutomatic: '自動',
+  distanceUnitKilometers: 'キロメートル',
+  distanceUnitMiles: 'マイル',
+  distanceUnitAutomaticResolved: '{automatic} · {resolved}',
 
   settingsTitle: '移動経路を作成',
   rawSignalsToggle: '未処理の位置情報を使用',
