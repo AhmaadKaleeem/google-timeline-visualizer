@@ -308,6 +308,8 @@
     <string name="backup_restore_timeline">Copia de seguridad y restauración de Timeline</string>
     <string name="raw_data_retention_explanation">Solo los datos más recientes, normalmente hasta 30 días, permanecen como ubicaciones sin procesar antes de que la actividad anterior se represente en formato Timeline.</string>
     <string name="raw_data_available_range">Datos sin procesar disponibles del %1$s al %2$s</string>
+    <string name="raw_data_available_one_day">Datos sin procesar disponibles el %1$s</string>
+    <string name="raw_data_available_one_point">1 ubicación sin procesar disponible el %1$s</string>
     <string name="raw_data_range_conflict">Este proyecto usa fechas fuera de los datos sin procesar disponibles. Elige un intervalo válido.</string>
     <string name="use_available_range">Usar intervalo disponible</string>
     <string name="save_preset_choice_title">Guardar cambios del ajuste</string>

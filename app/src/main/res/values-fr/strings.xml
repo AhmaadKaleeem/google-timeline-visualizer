@@ -308,6 +308,8 @@
     <string name="backup_restore_timeline">Sauvegarder et restaurer Timeline</string>
     <string name="raw_data_retention_explanation">Seules les données les plus récentes, généralement jusqu’à 30 jours, restent sous forme brute avant que l’activité plus ancienne soit représentée au format Timeline.</string>
     <string name="raw_data_available_range">Données brutes disponibles du %1$s au %2$s</string>
+    <string name="raw_data_available_one_day">Données brutes disponibles le %1$s</string>
+    <string name="raw_data_available_one_point">1 position brute disponible le %1$s</string>
     <string name="raw_data_range_conflict">Ce projet utilise des dates hors des données brutes disponibles. Choisissez une plage valide.</string>
     <string name="use_available_range">Utiliser la plage disponible</string>
     <string name="save_preset_choice_title">Enregistrer les modifications</string>

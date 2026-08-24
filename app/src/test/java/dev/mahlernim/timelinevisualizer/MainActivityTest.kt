@@ -1243,7 +1243,10 @@ class MainActivityTest {
 
         waitUntil { activity.findViewById<View>(R.id.rawDataAvailabilityGroup).visibility == View.VISIBLE }
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.rawDataAvailabilityGroup).visibility)
-        assertTrue(activity.findViewById<TextView>(R.id.rawDataAvailabilityText).text.toString().contains("Feb"))
+        assertEquals(
+            "Raw data available from Feb 1, 2026 to Feb 5, 2026",
+            activity.findViewById<TextView>(R.id.rawDataAvailabilityText).text.toString(),
+        )
         assertEquals("Recent 5-day recap", activity.findViewById<TextView>(R.id.projectTitleInput).text.toString())
         assertEquals("Recent 5-day recap", activity.findViewById<TextView>(R.id.titleInput).text.toString())
         activity.findViewById<TextView>(R.id.ownerInput).text = "Mina"
@@ -1253,6 +1256,17 @@ class MainActivityTest {
         assertEquals("Recent 3-day recap", activity.findViewById<TextView>(R.id.projectTitleInput).text.toString())
         assertTrue(!activity.applyExactDateRange(LocalDate.parse("2026-01-30"), LocalDate.parse("2026-02-04")))
         assertEquals("Recent 3-day recap", activity.findViewById<TextView>(R.id.projectTitleInput).text.toString())
+    }
+
+    @Test
+    @Config(sdk = [35], qualifiers = "en-rUS")
+    fun rawDataAvailabilityDistinguishesOnePointAndOneDay() {
+        val activity = launchActivity()
+        val first = GeoPoint(Instant.parse("2026-02-03T12:00:00Z"), 37.5, 127.0)
+        val second = GeoPoint(Instant.parse("2026-02-03T13:00:00Z"), 37.6, 127.1)
+
+        assertEquals("1 raw location available on Feb 3, 2026", activity.rawDataAvailability(listOf(first)))
+        assertEquals("Raw data available on Feb 3, 2026", activity.rawDataAvailability(listOf(first, second)))
     }
 
     @Test
