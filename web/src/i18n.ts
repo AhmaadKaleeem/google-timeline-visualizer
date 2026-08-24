@@ -151,6 +151,10 @@ export interface Strings {
   formatPortrait: string;
   formatLandscape: string;
   videoFormatHelp: string;
+  frameRateLabel: string;
+  frameRateRecommended: string;
+  frameRateValue: string;
+  frameRateHelp: string;
   privacyNoticeTitle: string;
   privacyNoticeBody: string;
   mapConsentLabel: string;

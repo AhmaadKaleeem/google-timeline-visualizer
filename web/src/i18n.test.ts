@@ -133,8 +133,8 @@ describe('translate', () => {
   });
 
   it('renders a numeric param that is not count without group separators', () => {
-    expect(en.t('errorFormatUnsupported', { width: 1080, height: 1920 }))
-      .toBe('This browser cannot create 1080×1920 videos. Choose another format.');
+    expect(en.t('errorFormatUnsupported', { width: 1080, height: 1920, fps: 60 }))
+      .toBe('This browser cannot create 1080×1920 video at 60 fps. Choose another format or frame rate.');
     expect(en.t('hintFormatUnsupported', { width: 480, height: 480 }))
       .toBe('This browser cannot create 480×480 videos. Choose another format.');
   });

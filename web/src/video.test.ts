@@ -1,14 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  ALL_VIDEO_FORMATS,
   createJourneyMp4,
   DEFAULT_VIDEO_FORMAT_KEY,
   isMp4,
   probeVideoFormats,
   resolveVideoFormat,
+  VIDEO_FRAME_RATES,
   VIDEO_FORMATS,
+  videoFormatAtFrameRate,
   videoFormatByKey,
+  videoFormatSupportKey,
 } from './video';
-import type { ResolvedVideoFormat, VideoFormat, VideoFormatKey } from './video';
+import type { ResolvedVideoFormat, VideoFormat, VideoFrameRate } from './video';
 import type { PreparedJourney } from './types';
 
 // The encoder is the resource under test, so mediabunny is replaced by a recorder that
@@ -130,6 +134,30 @@ describe('video format table', () => {
   it('counts the macroblocks that force the 1080 formats above level 3.1', () => {
     expect(VIDEO_FORMATS.map(macroblocks)).toEqual([900, 2025, 4624, 8160, 8160]);
   });
+
+  it('builds 24, 30 and 60 fps variants for every size without changing legacy defaults', () => {
+    expect(VIDEO_FRAME_RATES).toEqual([24, 30, 60]);
+    expect(ALL_VIDEO_FORMATS).toHaveLength(15);
+    VIDEO_FORMATS.forEach((format) => {
+      expect(videoFormatAtFrameRate(format, format.frameRate as VideoFrameRate)).toBe(format);
+    });
+  });
+
+  it('scales bitrate with frame rate within the Android bounds', () => {
+    expect(videoFormatAtFrameRate(VIDEO_FORMATS[0], 60).bitrate).toBe(6_250_000);
+    expect(videoFormatAtFrameRate(VIDEO_FORMATS[3], 24).bitrate).toBe(9_600_000);
+    expect(videoFormatAtFrameRate(VIDEO_FORMATS[3], 60).bitrate).toBe(24_000_000);
+  });
+
+  it('assigns an AVC level that clears every generated combination', () => {
+    ALL_VIDEO_FORMATS.forEach((format) => {
+      const level = AVC_LEVELS[format.codecCandidates[0].slice(-2)];
+      expect(level).toBeDefined();
+      expect(level.maxFs).toBeGreaterThanOrEqual(macroblocks(format));
+      expect(level.maxMbps).toBeGreaterThanOrEqual(macroblocks(format) * format.frameRate);
+      expect(level.maxBr).toBeGreaterThanOrEqual(format.bitrate);
+    });
+  });
 });
 
 describe('probeVideoFormats', () => {
@@ -139,9 +167,9 @@ describe('probeVideoFormats', () => {
 
     const support = await probeVideoFormats();
 
-    expect(isConfigSupported).toHaveBeenCalledTimes(5);
-    VIDEO_FORMATS.forEach((format) => {
-      expect(support.get(format.key)).toBe(format.codecCandidates[0]);
+    expect(isConfigSupported).toHaveBeenCalledTimes(15);
+    ALL_VIDEO_FORMATS.forEach((format) => {
+      expect(support.get(videoFormatSupportKey(format))).toBe(format.codecCandidates[0]);
     });
   });
 
@@ -152,8 +180,8 @@ describe('probeVideoFormats', () => {
 
     const support = await probeVideoFormats();
 
-    expect(support.get('ultra')).toBe(VIDEO_FORMATS[2].codecCandidates[1]);
-    expect(support.get('standard')).toBe(VIDEO_FORMATS[0].codecCandidates[0]);
+    expect(support.get(videoFormatSupportKey(VIDEO_FORMATS[2]))).toBe(VIDEO_FORMATS[2].codecCandidates[1]);
+    expect(support.get(videoFormatSupportKey(VIDEO_FORMATS[0]))).toBe(VIDEO_FORMATS[0].codecCandidates[0]);
   });
 
   it('reports null for a format whose candidates all fail, leaving others intact', async () => {
@@ -164,8 +192,8 @@ describe('probeVideoFormats', () => {
 
     const support = await probeVideoFormats();
 
-    expect(support.get('landscape')).toBeNull();
-    expect(support.get('portrait')).toBe(VIDEO_FORMATS[3].codecCandidates[0]);
+    expect(support.get(videoFormatSupportKey(VIDEO_FORMATS[4]))).toBeNull();
+    expect(support.get(videoFormatSupportKey(VIDEO_FORMATS[3]))).toBe(VIDEO_FORMATS[3].codecCandidates[0]);
   });
 
   it('treats a throwing isConfigSupported as unsupported without rejecting', async () => {
@@ -175,7 +203,7 @@ describe('probeVideoFormats', () => {
 
     const support = await probeVideoFormats();
 
-    expect([...support.values()]).toEqual([null, null, null, null, null]);
+    expect([...support.values()]).toEqual(Array(15).fill(null));
   });
 
   it('treats an undefined supported flag as unsupported', async () => {
@@ -183,7 +211,7 @@ describe('probeVideoFormats', () => {
 
     const support = await probeVideoFormats();
 
-    expect([...support.values()]).toEqual([null, null, null, null, null]);
+    expect([...support.values()]).toEqual(Array(15).fill(null));
   });
 
   it('reports every format as unavailable without touching a missing VideoEncoder', async () => {
@@ -191,11 +219,11 @@ describe('probeVideoFormats', () => {
 
     const support = await probeVideoFormats();
 
-    expect(support.size).toBe(5);
-    expect([...support.values()]).toEqual([null, null, null, null, null]);
+    expect(support.size).toBe(15);
+    expect([...support.values()]).toEqual(Array(15).fill(null));
   });
 
-  it('probes the five formats in parallel', async () => {
+  it('probes all size and frame-rate combinations in parallel', async () => {
     const started: number[] = [];
     let release = (): void => undefined;
     const gate = new Promise<void>((resolve) => {
@@ -209,7 +237,7 @@ describe('probeVideoFormats', () => {
 
     const pending = probeVideoFormats();
     await Promise.resolve();
-    expect(started).toHaveLength(5);
+    expect(started).toHaveLength(15);
 
     release();
     await pending;
@@ -217,27 +245,27 @@ describe('probeVideoFormats', () => {
 });
 
 describe('resolveVideoFormat', () => {
-  const support = new Map<VideoFormatKey, string | null>([
-    ['standard', 'avc1.42001f'],
-    ['high', 'avc1.42001f'],
-    ['ultra', null],
-    ['portrait', 'avc1.420028'],
-    ['landscape', 'avc1.420028'],
+  const support = new Map<string, string | null>([
+    ['standard@24', 'avc1.42001f'],
+    ['high@24', 'avc1.42001f'],
+    ['ultra@24', null],
+    ['portrait@30', 'avc1.420028'],
+    ['landscape@30', 'avc1.420028'],
   ]);
 
-  it('returns null for an unknown key', () => {
-    expect(resolveVideoFormat('cinema', support)).toBeNull();
-  });
-
-  it('returns null for a known key the browser cannot encode', () => {
-    expect(resolveVideoFormat('ultra', support)).toBeNull();
+  it('returns null for a combination the browser cannot encode', () => {
+    expect(resolveVideoFormat(VIDEO_FORMATS[2], support)).toBeNull();
   });
 
   it('carries the table values plus the probed codec', () => {
-    expect(resolveVideoFormat('portrait', support)).toEqual({
+    expect(resolveVideoFormat(VIDEO_FORMATS[3], support)).toEqual({
       ...VIDEO_FORMATS[3],
       codec: 'avc1.420028',
     });
+  });
+
+  it('does not silently reuse support from a different frame rate', () => {
+    expect(resolveVideoFormat(videoFormatAtFrameRate(VIDEO_FORMATS[3], 60), support)).toBeNull();
   });
 });
 

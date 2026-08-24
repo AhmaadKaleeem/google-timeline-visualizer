@@ -145,6 +145,16 @@
           </select>
           <span class="field-help" data-i18n="videoFormatHelp">Larger formats take longer to create and produce larger files.</span>
         </label>
+        <label>
+          <span data-i18n="frameRateLabel">Frame rate</span>
+          <select id="frame-rate" aria-describedby="format-warning">
+            <option value="recommended" selected>Recommended · 24 fps</option>
+            <option value="24">24 fps</option>
+            <option value="30">30 fps</option>
+            <option value="60">60 fps</option>
+          </select>
+          <span class="field-help" data-i18n="frameRateHelp">Higher frame rates look smoother but take longer and create larger files.</span>
+        </label>
         <p id="format-warning" class="status hidden" role="status"></p>
         <p id="selection-summary" class="status"></p>
         <div class="privacy-notice">

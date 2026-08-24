@@ -37,14 +37,18 @@ import type {
   RenderSize,
   TimelineFrame,
 } from './types';
-import type { VideoFormat, VideoFormatSupport } from './video';
+import type { VideoFormat, VideoFormatSupport, VideoFrameRate } from './video';
 import {
+  ALL_VIDEO_FORMATS,
   createJourneyMp4,
   hasVideoEncoder,
   probeVideoFormats,
   resolveVideoFormat,
+  VIDEO_FRAME_RATES,
   VIDEO_FORMATS,
+  videoFormatAtFrameRate,
   videoFormatByKey,
+  videoFormatSupportKey,
 } from './video';
 
 function element<T extends HTMLElement>(id: string): T {
@@ -80,6 +84,7 @@ const titleInput = element<HTMLInputElement>('video-title');
 const durationSelect = element<HTMLSelectElement>('duration');
 const cameraMovementSelect = element<HTMLSelectElement>('camera-movement');
 const formatSelect = element<HTMLSelectElement>('video-format');
+const frameRateSelect = element<HTMLSelectElement>('frame-rate');
 const formatWarning = element<HTMLParagraphElement>('format-warning');
 const selectionSummary = element<HTMLParagraphElement>('selection-summary');
 const mapConsent = element<HTMLInputElement>('map-consent');
@@ -383,8 +388,30 @@ function overlayText(): OverlayText {
   };
 }
 
-function currentFormat(): VideoFormat {
+function baseFormat(): VideoFormat {
   return videoFormatByKey(formatSelect.value) ?? VIDEO_FORMATS[0];
+}
+
+function selectedFrameRate(format = baseFormat()): VideoFrameRate {
+  if (frameRateSelect.value === 'recommended') return format.frameRate as VideoFrameRate;
+  const value = Number(frameRateSelect.value);
+  return VIDEO_FRAME_RATES.includes(value as VideoFrameRate) ? value as VideoFrameRate : 24;
+}
+
+function currentFormat(): VideoFormat {
+  const format = baseFormat();
+  return videoFormatAtFrameRate(format, selectedFrameRate(format));
+}
+
+function renderFrameRateOptions(): void {
+  const recommended = frameRateSelect.querySelector<HTMLOptionElement>('option[value="recommended"]');
+  if (recommended) {
+    recommended.textContent = i18n.t('frameRateRecommended', { fps: baseFormat().frameRate });
+  }
+  VIDEO_FRAME_RATES.forEach((fps) => {
+    const option = frameRateSelect.querySelector<HTMLOptionElement>(`option[value="${fps}"]`);
+    if (option) option.textContent = i18n.t('frameRateValue', { fps });
+  });
 }
 
 function stopPreview(): void {
@@ -474,7 +501,7 @@ function onPixelRatioChange(): void {
 }
 
 function isFormatSupported(format: VideoFormat): boolean {
-  return formatSupport !== null && resolveVideoFormat(format.key, formatSupport) !== null;
+  return formatSupport !== null && resolveVideoFormat(format, formatSupport) !== null;
 }
 
 /**
@@ -488,12 +515,17 @@ function updateFormatWarning(format: VideoFormat, supported: boolean): void {
   if (isExporting) message = i18n.t('warnFormatLockedExporting');
   else if (isPreparing) message = i18n.t('warnFormatLockedPreparing');
   else if (unsupported) {
-    message = i18n.t('errorFormatUnsupported', { width: format.width, height: format.height });
+    message = i18n.t('errorFormatUnsupported', {
+      width: format.width,
+      height: format.height,
+      fps: format.frameRate,
+    });
   }
   formatWarning.textContent = message ?? '';
   formatWarning.classList.toggle('hidden', message === null);
   formatWarning.classList.toggle('error', unsupported);
   formatSelect.setAttribute('aria-invalid', unsupported ? 'true' : 'false');
+  frameRateSelect.setAttribute('aria-invalid', unsupported ? 'true' : 'false');
 }
 
 /**
@@ -540,6 +572,7 @@ function refreshActionAvailability(points = currentPoints()): void {
   previewButton.disabled = isExporting || isPreparing || !hasJourney;
   createButton.disabled = isExporting || isPreparing || !hasJourney || !formatSupported;
   formatSelect.disabled = isExporting || isPreparing;
+  frameRateSelect.disabled = isExporting || isPreparing;
   if (!compatibilityChecked) {
     createButton.title = i18n.t('hintCheckingSupport');
   } else if (!hasEncoder) {
@@ -548,6 +581,7 @@ function refreshActionAvailability(points = currentPoints()): void {
     createButton.title = i18n.t('hintFormatUnsupported', {
       width: format.width,
       height: format.height,
+      fps: format.frameRate,
     });
   } else if (!hasJourney) {
     createButton.title = i18n.t('hintSelectWiderPeriod');
@@ -655,6 +689,7 @@ function requireMapConsent(): boolean {
 function renderLocalizedText(): void {
   applyStrings(document, i18n);
   syncDocumentLang(i18n);
+  renderFrameRateOptions();
   renderCompatibilityStatus();
   renderFileStatus();
   renderProgressLabel();
@@ -819,8 +854,13 @@ cameraMovementSelect.addEventListener('change', updateSelection);
 languageSelect.addEventListener('change', onLanguageChange);
 formatSelect.addEventListener('change', () => {
   stopPreview();
+  renderFrameRateOptions();
   applyVideoFormat();
   updateSelection();
+});
+frameRateSelect.addEventListener('change', () => {
+  stopPreview();
+  renderSelection();
 });
 exactDateToggle.addEventListener('change', () => {
   monthRangeFields.classList.toggle('hidden', exactDateToggle.checked);
@@ -930,7 +970,7 @@ createButton.addEventListener('click', async () => {
   if (!requireMapConsent()) return;
   const format = formatSupport === null
     ? null
-    : resolveVideoFormat(formatSelect.value, formatSupport);
+    : resolveVideoFormat(currentFormat(), formatSupport);
   if (!format) {
     const unsupported = currentFormat();
     setError({
@@ -938,6 +978,7 @@ createButton.addEventListener('click', async () => {
       text: i18n.t('errorFormatUnsupported', {
         width: unsupported.width,
         height: unsupported.height,
+        fps: unsupported.frameRate,
       }),
     });
     return;
@@ -1016,8 +1057,8 @@ shareButton.addEventListener('click', async () => {
 function applyFormatSupport(support: VideoFormatSupport): void {
   compatibilityChecked = true;
   formatSupport = support;
-  const usable = VIDEO_FORMATS.filter((format) => support.get(format.key) != null).length;
-  if (usable === VIDEO_FORMATS.length) {
+  const usable = ALL_VIDEO_FORMATS.filter((format) => support.get(videoFormatSupportKey(format)) != null).length;
+  if (usable === ALL_VIDEO_FORMATS.length) {
     compatibilityKey = 'compatibilityFull';
   } else if (usable > 0) {
     compatibilityKey = 'compatibilityPartial';
