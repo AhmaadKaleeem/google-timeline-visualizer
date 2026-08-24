@@ -470,4 +470,27 @@
     <string name="journal_home_due_detail">旅行記錄已有 %1$d 天未擷取新的詳細路線。請加入時間軸中的最近日期。</string>
     <string name="journal_home_risk_detail">旅行記錄已有 %1$d 天未擷取新的詳細路線。一些尚未保留的詳細資料可能很快會從未來的匯出檔中消失。</string>
     <string name="journal_home_overdue_detail">旅行記錄已有 %1$d 天未擷取新的詳細路線。請在方便時更新。先前缺少的詳細資料可能無法復原。</string>
+    <string name="onboarding_skip_to_choices">跳到選項</string>
+    <string name="onboarding_journal_title">建立你的私人旅行記錄</string>
+    <string name="onboarding_journal_body">Google 地圖時間軸可以記住你去過的地點和走過的路線。\n\nTimeline Visualizer 會將匯出的這段歷史轉換成你的私人旅行記錄和動態旅行影片。</string>
+    <string name="onboarding_source_title">旅程由 Google 地圖記錄</string>
+    <string name="onboarding_source_body">Timeline Visualizer 不會追蹤你的位置。你的旅程必須先由 Google 地圖時間軸記錄。\n\n時間軸預設為關閉。你需要先啟用，才能開始累積新的旅程。</string>
+    <string name="onboarding_source_note">Timeline Visualizer 只會讀取你選擇的檔案。你的時間軸匯出檔不會上傳給開發者。</string>
+    <string name="onboarding_layers_title">一段旅程，兩種詳細程度</string>
+    <string name="onboarding_layers_body">詳細路線會逐點顯示你走過的路徑。旅程歷史則會記錄較概括的造訪地點、活動和旅行。\n\n有詳細路線時，旅行記錄一律優先使用詳細路線，否則會用旅程歷史補足。</string>
+    <string name="onboarding_layers_note">你不需要選擇資料模式。應用程式會自動為旅程的每個部分使用目前可用的最佳資訊。</string>
+    <string name="onboarding_preserve_title">持續豐富你的詳細路線</string>
+    <string name="onboarding_preserve_body">近期的時間軸匯出檔通常包含更豐富的路線詳細資料。這些詳細資料之後可能不會再出現在新的匯出檔中。\n\n定期匯入新的匯出檔，旅行記錄就會在這部裝置上保留每一段新增的詳細路線。</string>
+    <string name="onboarding_preserve_note">Google 沒有公布詳細路線的保證保留期限。建議每 2 至 3 週更新一次，這是根據實際觀察到的匯出檔所提供的審慎建議。</string>
+    <string name="onboarding_start_title">開始你的旅行記錄</string>
+    <string name="onboarding_start_body">已經有匯出檔了嗎？請選擇 Timeline.json、location-history.json，或其他支援的 Google 地圖時間軸 JSON 檔案。</string>
+    <string name="onboarding_start_note">如果尚未啟用時間軸，請先進行設定。Google 地圖只能從啟用時開始記錄新的旅程。</string>
+    <string name="onboarding_choose_export">選擇時間軸匯出檔</string>
+    <string name="onboarding_setup_maps">設定 Google 地圖時間軸</string>
+    <string name="onboarding_page_position">第 %1$d 頁，共 %2$d 頁</string>
+    <string name="onboarding_page_announcement">第 %1$d 頁，共 %2$d 頁。%3$s</string>
+    <string name="journal_how_it_works">旅行記錄的運作方式</string>
+    <string name="journal_setup_card_title">開始你的旅行記錄</string>
+    <string name="journal_setup_card_detail">匯入 Google 地圖時間軸匯出檔，保留你的旅程歷史並開始累積詳細路線。</string>
+    <string name="journal_setup_card_action">設定旅行記錄</string>
 </resources>

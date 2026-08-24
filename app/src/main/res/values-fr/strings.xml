@@ -479,4 +479,27 @@
     <string name="journal_home_due_detail">Cela fait %1$d jours que votre carnet n’a pas enregistré de nouveaux détails d’itinéraire. Ajoutez les derniers jours de Timeline.</string>
     <string name="journal_home_risk_detail">Cela fait %1$d jours que votre carnet n’a pas enregistré de nouveaux détails d’itinéraire. Certains détails non conservés pourraient bientôt disparaître des prochaines exportations.</string>
     <string name="journal_home_overdue_detail">Cela fait %1$d jours que votre carnet n’a pas enregistré de nouveaux détails d’itinéraire. Mettez-le à jour dès que possible. Les détails antérieurs manquants ne pourront peut-être pas être récupérés.</string>
+    <string name="onboarding_skip_to_choices">Passer aux options</string>
+    <string name="onboarding_journal_title">Créez votre carnet de voyage privé</string>
+    <string name="onboarding_journal_body">Timeline de Google Maps peut mémoriser les lieux que vous visitez et les itinéraires que vous parcourez.\n\nTimeline Visualizer transforme une copie exportée de cet historique en carnet de voyage privé et en vidéos de voyage animées.</string>
+    <string name="onboarding_source_title">Google Maps enregistre le voyage</string>
+    <string name="onboarding_source_body">Timeline Visualizer ne suit pas votre position. Vos voyages doivent d’abord être enregistrés par Timeline de Google Maps.\n\nTimeline est désactivé par défaut. Vous devez donc l’activer avant de pouvoir commencer à accumuler de nouveaux voyages.</string>
+    <string name="onboarding_source_note">Timeline Visualizer lit uniquement le fichier que vous choisissez. Votre exportation Timeline n’est pas envoyée au développeur.</string>
+    <string name="onboarding_layers_title">Un voyage, deux niveaux de détail</string>
+    <string name="onboarding_layers_body">Les détails d’itinéraire montrent point par point le trajet que vous avez parcouru. L’historique de voyage mémorise plus largement les visites, les activités et les voyages.\n\nVotre carnet utilise toujours les détails d’itinéraire lorsqu’ils sont disponibles et l’historique de voyage comme solution de secours.</string>
+    <string name="onboarding_layers_note">Vous n’avez pas à choisir de mode de données. L’application utilise automatiquement les meilleures informations disponibles pour chaque partie de votre voyage.</string>
+    <string name="onboarding_preserve_title">Continuez à enrichir vos itinéraires détaillés</string>
+    <string name="onboarding_preserve_body">Les exportations Timeline récentes contiennent souvent des itinéraires plus détaillés. Ces détails peuvent ne plus figurer dans une exportation ultérieure.\n\nImportez régulièrement une nouvelle exportation. Votre carnet conservera chaque nouvelle section détaillée sur cet appareil.</string>
+    <string name="onboarding_preserve_note">Google ne publie aucune durée de conservation garantie pour les détails d’itinéraire. Une mise à jour toutes les 2 à 3 semaines est une recommandation prudente fondée sur les exportations observées.</string>
+    <string name="onboarding_start_title">Commencez votre carnet de voyage</string>
+    <string name="onboarding_start_body">Vous avez déjà une exportation ? Choisissez Timeline.json, location-history.json ou un autre fichier JSON Timeline de Google Maps compatible.</string>
+    <string name="onboarding_start_note">Si Timeline n’est pas encore activé, configurez-le d’abord. Google Maps ne peut enregistrer de nouveaux voyages qu’à partir de ce moment.</string>
+    <string name="onboarding_choose_export">Choisir une exportation Timeline</string>
+    <string name="onboarding_setup_maps">Configurer Timeline de Google Maps</string>
+    <string name="onboarding_page_position">%1$d sur %2$d</string>
+    <string name="onboarding_page_announcement">Page %1$d sur %2$d. %3$s</string>
+    <string name="journal_how_it_works">Fonctionnement du carnet de voyage</string>
+    <string name="journal_setup_card_title">Commencez votre carnet de voyage</string>
+    <string name="journal_setup_card_detail">Importez une exportation Timeline de Google Maps pour conserver votre historique de voyage et commencer à créer des itinéraires détaillés.</string>
+    <string name="journal_setup_card_action">Configurer le carnet</string>
 </resources>

@@ -470,4 +470,27 @@
     <string name="journal_home_due_detail">旅行记录已有 %1$d 天未捕获新的详细路线。请添加时间轴中的最近日期。</string>
     <string name="journal_home_risk_detail">旅行记录已有 %1$d 天未捕获新的详细路线。一些尚未保留的详细信息可能很快会从未来的导出文件中消失。</string>
     <string name="journal_home_overdue_detail">旅行记录已有 %1$d 天未捕获新的详细路线。请在方便时更新。之前缺失的详细信息可能无法恢复。</string>
+    <string name="onboarding_skip_to_choices">跳转到选项</string>
+    <string name="onboarding_journal_title">创建你的私人旅行记录</string>
+    <string name="onboarding_journal_body">Google 地图时间轴可以记住你去过的地点和走过的路线。\n\nTimeline Visualizer 会将导出的这段历史转换成你的私人旅行记录和动态旅行视频。</string>
+    <string name="onboarding_source_title">旅程由 Google 地图记录</string>
+    <string name="onboarding_source_body">Timeline Visualizer 不会跟踪你的位置。你的旅程必须先由 Google 地图时间轴记录。\n\n时间轴默认处于关闭状态。你需要先启用它，才能开始积累新的旅程。</string>
+    <string name="onboarding_source_note">Timeline Visualizer 只会读取你选择的文件。你的时间轴导出文件不会上传给开发者。</string>
+    <string name="onboarding_layers_title">一段旅程，两种详细程度</string>
+    <string name="onboarding_layers_body">详细路线会逐点显示你走过的路径。旅程历史则会记录更概括的到访地点、活动和旅行。\n\n有详细路线时，旅行记录始终优先使用详细路线，否则会用旅程历史补充。</string>
+    <string name="onboarding_layers_note">你无需选择数据模式。应用会自动为旅程的每个部分使用当前可用的最佳信息。</string>
+    <string name="onboarding_preserve_title">不断丰富你的详细路线</string>
+    <string name="onboarding_preserve_body">近期的时间轴导出文件通常包含更丰富的路线详情。这些详情可能不会再出现在之后的导出文件中。\n\n定期导入新的导出文件，旅行记录就会在这台设备上保留每一段新增的详细路线。</string>
+    <string name="onboarding_preserve_note">Google 没有公布详细路线的保证保留期限。建议每 2 至 3 周更新一次，这是根据实际观察到的导出文件给出的谨慎建议。</string>
+    <string name="onboarding_start_title">开始你的旅行记录</string>
+    <string name="onboarding_start_body">已经有导出文件了？请选择 Timeline.json、location-history.json，或其他受支持的 Google 地图时间轴 JSON 文件。</string>
+    <string name="onboarding_start_note">如果尚未启用时间轴，请先进行设置。Google 地图只能从启用时开始记录新的旅程。</string>
+    <string name="onboarding_choose_export">选择时间轴导出文件</string>
+    <string name="onboarding_setup_maps">设置 Google 地图时间轴</string>
+    <string name="onboarding_page_position">第 %1$d 页，共 %2$d 页</string>
+    <string name="onboarding_page_announcement">第 %1$d 页，共 %2$d 页。%3$s</string>
+    <string name="journal_how_it_works">旅行记录的工作原理</string>
+    <string name="journal_setup_card_title">开始你的旅行记录</string>
+    <string name="journal_setup_card_detail">导入 Google 地图时间轴导出文件，保留你的旅程历史并开始积累详细路线。</string>
+    <string name="journal_setup_card_action">设置旅行记录</string>
 </resources>

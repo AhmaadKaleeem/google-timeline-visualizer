@@ -565,4 +565,27 @@
     <string name="journal_home_due_detail">It has been %1$d days since your Journal captured new route detail. Add the latest days from Timeline.</string>
     <string name="journal_home_risk_detail">It has been %1$d days since your Journal captured new route detail. Some unpreserved detail may soon disappear from future exports.</string>
     <string name="journal_home_overdue_detail">It has been %1$d days since your Journal captured new route detail. Update when you can, without assuming earlier missing detail can be recovered.</string>
+    <string name="onboarding_skip_to_choices">Skip to choices</string>
+    <string name="onboarding_journal_title">Build your private Travel Journal</string>
+    <string name="onboarding_journal_body">Google Maps Timeline can remember the places you visit and the routes you travel.\n\nTimeline Visualizer turns an exported copy of that history into a private Travel Journal and animated travel videos.</string>
+    <string name="onboarding_source_title">Google Maps records the journey</string>
+    <string name="onboarding_source_body">Timeline Visualizer does not track your location. Your journeys must first be recorded by Google Maps Timeline.\n\nTimeline is off by default, so you need to enable it before new journeys can accumulate.</string>
+    <string name="onboarding_source_note">Timeline Visualizer reads only the file you choose. Your Timeline export is not uploaded to the developer.</string>
+    <string name="onboarding_layers_title">One journey, two levels of detail</string>
+    <string name="onboarding_layers_body">Route detail shows the point-by-point path you travelled. Journey history remembers broader visits, activities, and trips.\n\nYour Journal always uses route detail when available and Journey history as a fallback.</string>
+    <string name="onboarding_layers_note">You do not need to choose a data mode. The app automatically uses the best information available for each part of your journey.</string>
+    <string name="onboarding_preserve_title">Keep your route detail growing</string>
+    <string name="onboarding_preserve_body">Recent Timeline exports often contain richer route detail. That detail may no longer appear in a later export.\n\nImport a fresh export regularly and your Journal will preserve each new detailed section on this device.</string>
+    <string name="onboarding_preserve_note">Google does not publish a guaranteed retention period for route detail. Updating every 2 to 3 weeks is a cautious recommendation based on observed exports.</string>
+    <string name="onboarding_start_title">Start your Travel Journal</string>
+    <string name="onboarding_start_body">Already have an export? Choose Timeline.json, location-history.json, or another supported Google Maps Timeline JSON file.</string>
+    <string name="onboarding_start_note">If Timeline is not enabled yet, set it up first. Google Maps can only record new journeys from that point forward.</string>
+    <string name="onboarding_choose_export">Choose Timeline export</string>
+    <string name="onboarding_setup_maps">Set up Google Maps Timeline</string>
+    <string name="onboarding_page_position">%1$d of %2$d</string>
+    <string name="onboarding_page_announcement">Page %1$d of %2$d. %3$s</string>
+    <string name="journal_how_it_works">How the Travel Journal works</string>
+    <string name="journal_setup_card_title">Start your Travel Journal</string>
+    <string name="journal_setup_card_detail">Import a Google Maps Timeline export to preserve your journey history and begin building detailed routes.</string>
+    <string name="journal_setup_card_action">Set up Journal</string>
 </resources>

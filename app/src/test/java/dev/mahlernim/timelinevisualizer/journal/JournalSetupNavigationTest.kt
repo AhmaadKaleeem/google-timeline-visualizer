@@ -5,10 +5,14 @@ import org.junit.Test
 
 class JournalSetupNavigationTest {
     @Test
-    fun emptyJournalLabLaunchesFocusedSetup() {
+    fun emptyUnseenJournalLabLaunchesOnboarding() {
         assertEquals(
-            JournalEntryDestination.JOURNAL_SETUP,
-            JournalSetupNavigation.defaultDestination(isJournalLab = true, hasUsableJournal = false),
+            JournalEntryDestination.JOURNAL_ONBOARDING,
+            JournalSetupNavigation.defaultDestination(
+                isJournalLab = true,
+                hasJournal = false,
+                onboardingCompleted = false,
+            ),
         )
     }
 
@@ -16,7 +20,23 @@ class JournalSetupNavigationTest {
     fun existingJournalSkipsLaunchOnboarding() {
         assertEquals(
             JournalEntryDestination.VIDEOS,
-            JournalSetupNavigation.defaultDestination(isJournalLab = true, hasUsableJournal = true),
+            JournalSetupNavigation.defaultDestination(
+                isJournalLab = true,
+                hasJournal = true,
+                onboardingCompleted = false,
+            ),
+        )
+    }
+
+    @Test
+    fun completedOnboardingOpensLibraryWithoutAJournal() {
+        assertEquals(
+            JournalEntryDestination.VIDEOS,
+            JournalSetupNavigation.defaultDestination(
+                isJournalLab = true,
+                hasJournal = false,
+                onboardingCompleted = true,
+            ),
         )
     }
 
@@ -36,7 +56,11 @@ class JournalSetupNavigationTest {
     fun productionNavigationIsUnchanged() {
         assertEquals(
             JournalEntryDestination.VIDEOS,
-            JournalSetupNavigation.defaultDestination(isJournalLab = false, hasUsableJournal = false),
+            JournalSetupNavigation.defaultDestination(
+                isJournalLab = false,
+                hasJournal = false,
+                onboardingCompleted = false,
+            ),
         )
         assertEquals(
             JournalEntryDestination.CREATE,

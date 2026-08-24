@@ -491,4 +491,27 @@
     <string name="journal_home_due_detail">여행 기록에 새로운 상세 경로가 추가된 지 %1$d일이 지났습니다. 타임라인의 최신 날짜를 추가하세요.</string>
     <string name="journal_home_risk_detail">여행 기록에 새로운 상세 경로가 추가된 지 %1$d일이 지났습니다. 아직 보존하지 않은 일부 상세 정보가 향후 내보내기 파일에서 곧 사라질 수 있습니다.</string>
     <string name="journal_home_overdue_detail">여행 기록에 새로운 상세 경로가 추가된 지 %1$d일이 지났습니다. 가능할 때 업데이트하세요. 이전에 누락된 상세 정보는 복구하지 못할 수 있습니다.</string>
+    <string name="onboarding_skip_to_choices">선택 화면으로 건너뛰기</string>
+    <string name="onboarding_journal_title">나만의 여행 기록 만들기</string>
+    <string name="onboarding_journal_body">Google 지도 타임라인은 방문한 장소와 이동한 경로를 기억할 수 있습니다.\n\nTimeline Visualizer는 이 기록을 내보낸 파일로 나만의 여행 기록과 애니메이션 여행 동영상을 만듭니다.</string>
+    <string name="onboarding_source_title">여행은 Google 지도에서 기록합니다</string>
+    <string name="onboarding_source_body">Timeline Visualizer는 위치를 추적하지 않습니다. 먼저 Google 지도 타임라인에서 여행이 기록되어야 합니다.\n\n타임라인은 기본적으로 꺼져 있으므로 새로운 여행을 쌓으려면 먼저 사용 설정해야 합니다.</string>
+    <string name="onboarding_source_note">Timeline Visualizer는 사용자가 선택한 파일만 읽습니다. 타임라인 내보내기 파일은 개발자에게 업로드되지 않습니다.</string>
+    <string name="onboarding_layers_title">하나의 여행, 두 가지 상세 수준</string>
+    <string name="onboarding_layers_body">상세 경로는 이동한 길을 지점별로 보여 줍니다. 여행 이력은 방문, 활동, 여행을 더 큰 단위로 기억합니다.\n\n여행 기록은 상세 경로가 있으면 항상 우선 사용하고, 없는 부분은 여행 이력으로 채웁니다.</string>
+    <string name="onboarding_layers_note">데이터 모드를 선택할 필요가 없습니다. 앱이 여행의 각 구간에 사용할 수 있는 가장 좋은 정보를 자동으로 사용합니다.</string>
+    <string name="onboarding_preserve_title">상세 경로를 꾸준히 쌓아 보세요</string>
+    <string name="onboarding_preserve_body">최근 타임라인 내보내기 파일에는 더 풍부한 상세 경로가 들어 있는 경우가 많습니다. 이 상세 정보는 나중에 내보낸 파일에는 더 이상 나타나지 않을 수 있습니다.\n\n새 내보내기 파일을 정기적으로 가져오면 새로 추가된 상세 구간을 이 기기의 여행 기록에 보존합니다.</string>
+    <string name="onboarding_preserve_note">Google은 상세 경로의 보존 기간을 보장하지 않습니다. 2~3주마다 업데이트하라는 안내는 실제로 관찰한 내보내기 파일을 바탕으로 한 신중한 권장 사항입니다.</string>
+    <string name="onboarding_start_title">여행 기록 시작하기</string>
+    <string name="onboarding_start_body">이미 내보내기 파일이 있나요? Timeline.json, location-history.json 또는 지원되는 다른 Google 지도 타임라인 JSON 파일을 선택하세요.</string>
+    <string name="onboarding_start_note">타임라인을 아직 사용 설정하지 않았다면 먼저 설정하세요. Google 지도는 그 시점부터 새로운 여행을 기록할 수 있습니다.</string>
+    <string name="onboarding_choose_export">타임라인 내보내기 선택</string>
+    <string name="onboarding_setup_maps">Google 지도 타임라인 설정</string>
+    <string name="onboarding_page_position">%2$d개 중 %1$d번째</string>
+    <string name="onboarding_page_announcement">%2$d페이지 중 %1$d페이지. %3$s</string>
+    <string name="journal_how_it_works">여행 기록 이용 방법</string>
+    <string name="journal_setup_card_title">여행 기록 시작하기</string>
+    <string name="journal_setup_card_detail">Google 지도 타임라인 내보내기 파일을 가져와 여행 이력을 보존하고 상세 경로를 쌓기 시작하세요.</string>
+    <string name="journal_setup_card_action">여행 기록 설정</string>
 </resources>

@@ -477,4 +477,27 @@
     <string name="journal_home_due_detail">旅の記録に新しい詳しい経路が追加されてから%1$d日が経過しました。タイムラインの最新の日付を追加してください。</string>
     <string name="journal_home_risk_detail">旅の記録に新しい詳しい経路が追加されてから%1$d日が経過しました。まだ保存されていない詳細の一部は、今後のエクスポートから間もなく消える可能性があります。</string>
     <string name="journal_home_overdue_detail">旅の記録に新しい詳しい経路が追加されてから%1$d日が経過しました。可能なときに更新してください。以前に失われた詳細は復元できない場合があります。</string>
+    <string name="onboarding_skip_to_choices">選択肢に進む</string>
+    <string name="onboarding_journal_title">自分だけの旅の記録を作る</string>
+    <string name="onboarding_journal_body">Google マップのタイムラインは、訪れた場所や移動した経路を記録できます。\n\nTimeline Visualizer は、その履歴を書き出したファイルから、自分だけの旅の記録とアニメーション付きの旅動画を作ります。</string>
+    <string name="onboarding_source_title">旅を記録するのは Google マップです</string>
+    <string name="onboarding_source_body">Timeline Visualizer が現在地を追跡することはありません。旅は、まず Google マップのタイムラインに記録されている必要があります。\n\nタイムラインは初期状態ではオフです。新しい旅を記録するには、あらかじめ有効にしてください。</string>
+    <string name="onboarding_source_note">Timeline Visualizer が読み取るのは、選択したファイルだけです。タイムラインのエクスポートが開発者にアップロードされることはありません。</string>
+    <string name="onboarding_layers_title">ひとつの旅、2つの詳しさ</string>
+    <string name="onboarding_layers_body">詳しい経路は、実際に移動した道のりを地点ごとに示します。旅の履歴は、訪問した場所、アクティビティ、旅行を大まかに記憶しています。\n\n旅の記録では、利用できる場合は常に詳しい経路を使い、ない部分は旅の履歴で補います。</string>
+    <string name="onboarding_layers_note">データの種類を選ぶ必要はありません。旅の各部分に利用できる最適な情報が自動的に使われます。</string>
+    <string name="onboarding_preserve_title">詳しい経路を少しずつ残す</string>
+    <string name="onboarding_preserve_body">最近のタイムラインのエクスポートには、より詳しい経路が含まれていることがあります。その詳細は、後のエクスポートには含まれなくなる可能性があります。\n\n新しいエクスポートを定期的に読み込むと、新たに得られた詳しい区間がこの端末の旅の記録に保存されます。</string>
+    <string name="onboarding_preserve_note">詳しい経路の保存期間は Google から保証されていません。2～3週間ごとの更新は、実際に確認されたエクスポートに基づく慎重な目安です。</string>
+    <string name="onboarding_start_title">旅の記録を始める</string>
+    <string name="onboarding_start_body">エクスポート済みですか？ Timeline.json、location-history.json、または対応している Google マップのタイムラインの JSON ファイルを選択してください。</string>
+    <string name="onboarding_start_note">タイムラインがまだ有効でない場合は、先に設定してください。Google マップが新しい旅を記録できるのは、その時点からです。</string>
+    <string name="onboarding_choose_export">タイムラインのエクスポートを選択</string>
+    <string name="onboarding_setup_maps">Google マップのタイムラインを設定</string>
+    <string name="onboarding_page_position">%2$dページ中%1$dページ</string>
+    <string name="onboarding_page_announcement">%2$dページ中%1$dページ。%3$s</string>
+    <string name="journal_how_it_works">旅の記録の仕組み</string>
+    <string name="journal_setup_card_title">旅の記録を始める</string>
+    <string name="journal_setup_card_detail">Google マップのタイムラインのエクスポートを読み込み、旅の履歴を残して詳しい経路を作り始めましょう。</string>
+    <string name="journal_setup_card_action">旅の記録を設定</string>
 </resources>

@@ -65,11 +65,11 @@ android {
         create("journalLab") {
             dimension = "distribution"
             applicationId = "dev.mahlernim.timelinevisualizer.journallab"
-            versionCode = 8
-            versionName = "3.0.0-journal-lab.8"
+            versionCode = 9
+            versionName = "3.0.0-journal-lab.9"
             manifestPlaceholders["appLabel"] = "Journal Lab"
             buildConfigField("boolean", "IS_JOURNAL_LAB", "true")
-            buildConfigField("String", "UPDATE_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases/tag/journal-lab-8\"")
+            buildConfigField("String", "UPDATE_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases/tag/journal-lab-9\"")
             buildConfigField("String", "UPDATE_FALLBACK_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases\"")
         }
     }
@@ -102,6 +102,7 @@ dependencies {
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")
     implementation("androidx.work:work-runtime:2.11.2")
+    implementation("androidx.viewpager2:viewpager2:1.1.0")
     ksp("androidx.room:room-compiler:2.8.4")
 
     testImplementation("junit:junit:4.13.2")

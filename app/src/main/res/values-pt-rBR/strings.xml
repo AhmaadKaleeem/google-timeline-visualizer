@@ -479,4 +479,27 @@
     <string name="journal_home_due_detail">Já se passaram %1$d dias desde que seu diário registrou novos detalhes de rotas. Adicione os dias mais recentes da Linha do tempo.</string>
     <string name="journal_home_risk_detail">Já se passaram %1$d dias desde que seu diário registrou novos detalhes de rotas. Alguns detalhes ainda não preservados podem desaparecer em breve de futuras exportações.</string>
     <string name="journal_home_overdue_detail">Já se passaram %1$d dias desde que seu diário registrou novos detalhes de rotas. Atualize quando puder. Talvez não seja possível recuperar detalhes anteriores ausentes.</string>
+    <string name="onboarding_skip_to_choices">Ir para as opções</string>
+    <string name="onboarding_journal_title">Crie seu diário de viagem particular</string>
+    <string name="onboarding_journal_body">A Linha do tempo do Google Maps pode lembrar os lugares que você visita e as rotas que percorre.\n\nO Timeline Visualizer transforma uma cópia exportada desse histórico em um diário de viagem particular e em vídeos de viagem animados.</string>
+    <string name="onboarding_source_title">O Google Maps registra a viagem</string>
+    <string name="onboarding_source_body">O Timeline Visualizer não rastreia sua localização. Primeiro, suas viagens precisam ser registradas pela Linha do tempo do Google Maps.\n\nA Linha do tempo vem desativada por padrão. Você precisa ativá-la para começar a acumular novas viagens.</string>
+    <string name="onboarding_source_note">O Timeline Visualizer lê somente o arquivo que você escolher. A exportação da sua Linha do tempo não é enviada ao desenvolvedor.</string>
+    <string name="onboarding_layers_title">Uma viagem, dois níveis de detalhes</string>
+    <string name="onboarding_layers_body">Os detalhes da rota mostram ponto a ponto o caminho que você percorreu. O histórico de viagens guarda visitas, atividades e viagens de forma mais ampla.\n\nSeu diário sempre usa os detalhes da rota quando estão disponíveis e recorre ao histórico de viagens quando necessário.</string>
+    <string name="onboarding_layers_note">Você não precisa escolher um modo de dados. O app usa automaticamente as melhores informações disponíveis para cada parte da sua viagem.</string>
+    <string name="onboarding_preserve_title">Continue ampliando os detalhes das suas rotas</string>
+    <string name="onboarding_preserve_body">Exportações recentes da Linha do tempo costumam incluir detalhes de rota mais completos. Talvez esses detalhes não apareçam mais em uma exportação posterior.\n\nImporte regularmente uma nova exportação. Seu diário preservará cada nova parte detalhada neste dispositivo.</string>
+    <string name="onboarding_preserve_note">O Google não publica um período garantido de retenção dos detalhes de rota. Atualizar a cada 2 ou 3 semanas é uma recomendação cautelosa baseada nas exportações observadas.</string>
+    <string name="onboarding_start_title">Comece seu diário de viagem</string>
+    <string name="onboarding_start_body">Já tem uma exportação? Escolha Timeline.json, location-history.json ou outro arquivo JSON compatível da Linha do tempo do Google Maps.</string>
+    <string name="onboarding_start_note">Se a Linha do tempo ainda não estiver ativada, configure-a primeiro. O Google Maps só poderá registrar novas viagens a partir desse momento.</string>
+    <string name="onboarding_choose_export">Escolher exportação da Linha do tempo</string>
+    <string name="onboarding_setup_maps">Configurar a Linha do tempo do Google Maps</string>
+    <string name="onboarding_page_position">%1$d de %2$d</string>
+    <string name="onboarding_page_announcement">Página %1$d de %2$d. %3$s</string>
+    <string name="journal_how_it_works">Como funciona o diário de viagem</string>
+    <string name="journal_setup_card_title">Comece seu diário de viagem</string>
+    <string name="journal_setup_card_detail">Importe uma exportação da Linha do tempo do Google Maps para preservar seu histórico de viagens e começar a criar rotas detalhadas.</string>
+    <string name="journal_setup_card_action">Configurar o diário</string>
 </resources>

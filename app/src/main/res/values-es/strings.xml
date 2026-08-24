@@ -479,4 +479,27 @@
     <string name="journal_home_due_detail">Han pasado %1$d días desde que tu diario capturó nuevos detalles de rutas. Añade los últimos días de Timeline.</string>
     <string name="journal_home_risk_detail">Han pasado %1$d días desde que tu diario capturó nuevos detalles de rutas. Algunos detalles que aún no se han conservado podrían desaparecer pronto de futuras exportaciones.</string>
     <string name="journal_home_overdue_detail">Han pasado %1$d días desde que tu diario capturó nuevos detalles de rutas. Actualízalo cuando puedas. Es posible que los detalles anteriores que falten no se puedan recuperar.</string>
+    <string name="onboarding_skip_to_choices">Ir a las opciones</string>
+    <string name="onboarding_journal_title">Crea tu diario de viaje privado</string>
+    <string name="onboarding_journal_body">Timeline de Google Maps puede recordar los lugares que visitas y las rutas que recorres.\n\nTimeline Visualizer convierte una copia exportada de ese historial en un diario de viaje privado y en vídeos animados de tus viajes.</string>
+    <string name="onboarding_source_title">Google Maps registra el viaje</string>
+    <string name="onboarding_source_body">Timeline Visualizer no rastrea tu ubicación. Primero, Timeline de Google Maps debe registrar tus viajes.\n\nTimeline está desactivado de forma predeterminada, por lo que debes habilitarlo para empezar a acumular nuevos viajes.</string>
+    <string name="onboarding_source_note">Timeline Visualizer solo lee el archivo que eliges. Tu exportación de Timeline no se sube al desarrollador.</string>
+    <string name="onboarding_layers_title">Un viaje, dos niveles de detalle</string>
+    <string name="onboarding_layers_body">Los detalles de la ruta muestran punto por punto el camino que recorriste. El historial de viajes recuerda visitas, actividades y viajes de forma más general.\n\nTu diario siempre usa los detalles de la ruta cuando están disponibles y recurre al historial de viajes cuando no lo están.</string>
+    <string name="onboarding_layers_note">No necesitas elegir un modo de datos. La aplicación usa automáticamente la mejor información disponible para cada parte de tu viaje.</string>
+    <string name="onboarding_preserve_title">Sigue ampliando los detalles de tus rutas</string>
+    <string name="onboarding_preserve_body">Las exportaciones recientes de Timeline suelen incluir detalles de ruta más completos. Es posible que esos detalles ya no aparezcan en una exportación posterior.\n\nImporta una exportación reciente con regularidad y tu diario conservará cada nueva sección detallada en este dispositivo.</string>
+    <string name="onboarding_preserve_note">Google no publica un periodo de conservación garantizado para los detalles de ruta. Actualizar cada 2 o 3 semanas es una recomendación prudente basada en exportaciones observadas.</string>
+    <string name="onboarding_start_title">Empieza tu diario de viaje</string>
+    <string name="onboarding_start_body">¿Ya tienes una exportación? Elige Timeline.json, location-history.json u otro archivo JSON compatible de Timeline de Google Maps.</string>
+    <string name="onboarding_start_note">Si Timeline aún no está habilitado, configúralo primero. Google Maps solo puede registrar nuevos viajes a partir de ese momento.</string>
+    <string name="onboarding_choose_export">Elegir exportación de Timeline</string>
+    <string name="onboarding_setup_maps">Configurar Timeline de Google Maps</string>
+    <string name="onboarding_page_position">%1$d de %2$d</string>
+    <string name="onboarding_page_announcement">Página %1$d de %2$d. %3$s</string>
+    <string name="journal_how_it_works">Cómo funciona el diario de viaje</string>
+    <string name="journal_setup_card_title">Empieza tu diario de viaje</string>
+    <string name="journal_setup_card_detail">Importa una exportación de Timeline de Google Maps para conservar tu historial de viajes y empezar a crear rutas detalladas.</string>
+    <string name="journal_setup_card_action">Configurar el diario</string>
 </resources>

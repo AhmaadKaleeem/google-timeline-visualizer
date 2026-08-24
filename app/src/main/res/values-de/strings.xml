@@ -474,4 +474,27 @@
     <string name="journal_home_due_detail">Seit %1$d Tagen hat dein Reisetagebuch keine neuen Routendetails erfasst. Füge die neuesten Tage aus der Zeitachse hinzu.</string>
     <string name="journal_home_risk_detail">Seit %1$d Tagen hat dein Reisetagebuch keine neuen Routendetails erfasst. Einige noch nicht gespeicherte Details könnten bald aus künftigen Exporten verschwinden.</string>
     <string name="journal_home_overdue_detail">Seit %1$d Tagen hat dein Reisetagebuch keine neuen Routendetails erfasst. Aktualisiere es, wenn du kannst. Früher fehlende Details lassen sich möglicherweise nicht wiederherstellen.</string>
+    <string name="onboarding_skip_to_choices">Zu den Optionen springen</string>
+    <string name="onboarding_journal_title">Erstelle dein privates Reisetagebuch</string>
+    <string name="onboarding_journal_body">Die Google Maps-Zeitachse kann sich an besuchte Orte und zurückgelegte Routen erinnern.\n\nTimeline Visualizer verwandelt eine exportierte Kopie dieses Verlaufs in ein privates Reisetagebuch und animierte Reisevideos.</string>
+    <string name="onboarding_source_title">Google Maps zeichnet die Reise auf</string>
+    <string name="onboarding_source_body">Timeline Visualizer verfolgt deinen Standort nicht. Deine Reisen müssen zuerst von der Google Maps-Zeitachse aufgezeichnet werden.\n\nDie Zeitachse ist standardmäßig deaktiviert. Du musst sie aktivieren, damit neue Reisen erfasst werden können.</string>
+    <string name="onboarding_source_note">Timeline Visualizer liest nur die von dir ausgewählte Datei. Dein Zeitachsenexport wird nicht an den Entwickler hochgeladen.</string>
+    <string name="onboarding_layers_title">Eine Reise, zwei Detailstufen</string>
+    <string name="onboarding_layers_body">Routendetails zeigen deinen zurückgelegten Weg Punkt für Punkt. Der Reiseverlauf merkt sich übergeordnete Besuche, Aktivitäten und Reisen.\n\nDein Reisetagebuch verwendet immer Routendetails, wenn sie verfügbar sind, und sonst den Reiseverlauf.</string>
+    <string name="onboarding_layers_note">Du musst keinen Datenmodus auswählen. Die App nutzt für jeden Abschnitt deiner Reise automatisch die besten verfügbaren Informationen.</string>
+    <string name="onboarding_preserve_title">Lass deine Routendetails weiterwachsen</string>
+    <string name="onboarding_preserve_body">Aktuelle Zeitachsenexporte enthalten oft ausführlichere Routendetails. In einem späteren Export sind diese Details möglicherweise nicht mehr enthalten.\n\nImportiere regelmäßig einen neuen Export. Dein Reisetagebuch bewahrt jeden neuen detaillierten Abschnitt auf diesem Gerät auf.</string>
+    <string name="onboarding_preserve_note">Google veröffentlicht keine garantierte Aufbewahrungsdauer für Routendetails. Eine Aktualisierung alle 2 bis 3 Wochen ist eine vorsichtige Empfehlung auf Grundlage beobachteter Exporte.</string>
+    <string name="onboarding_start_title">Starte dein Reisetagebuch</string>
+    <string name="onboarding_start_body">Du hast bereits einen Export? Wähle Timeline.json, location-history.json oder eine andere unterstützte JSON-Datei aus der Google Maps-Zeitachse.</string>
+    <string name="onboarding_start_note">Falls die Zeitachse noch nicht aktiviert ist, richte sie zuerst ein. Google Maps kann neue Reisen erst ab diesem Zeitpunkt aufzeichnen.</string>
+    <string name="onboarding_choose_export">Zeitachsenexport auswählen</string>
+    <string name="onboarding_setup_maps">Google Maps-Zeitachse einrichten</string>
+    <string name="onboarding_page_position">%1$d von %2$d</string>
+    <string name="onboarding_page_announcement">Seite %1$d von %2$d. %3$s</string>
+    <string name="journal_how_it_works">So funktioniert das Reisetagebuch</string>
+    <string name="journal_setup_card_title">Starte dein Reisetagebuch</string>
+    <string name="journal_setup_card_detail">Importiere einen Export der Google Maps-Zeitachse, um deinen Reiseverlauf zu bewahren und detaillierte Routen aufzubauen.</string>
+    <string name="journal_setup_card_action">Reisetagebuch einrichten</string>
 </resources>

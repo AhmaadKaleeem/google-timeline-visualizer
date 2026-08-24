@@ -8,6 +8,7 @@ import android.view.View
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
+import dev.mahlernim.timelinevisualizer.journal.JournalOnboardingStore
 import dev.mahlernim.timelinevisualizer.videos.VideoDataSource
 import java.io.File
 import org.junit.After
@@ -34,6 +35,9 @@ class JournalLabUiTest {
     fun resetJournal() {
         TimelineSourceStore(context).clear()
         context.deleteDatabase("travel-journal.db")
+        context.getSharedPreferences(JournalOnboardingStore.PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit().clear().commit()
+        JournalOnboardingStore(context).complete()
     }
 
     @After

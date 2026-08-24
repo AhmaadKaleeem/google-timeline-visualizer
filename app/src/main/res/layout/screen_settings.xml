@@ -85,6 +85,7 @@
                 <com.google.android.material.button.MaterialButton android:id="@+id/settingsImportTimelineButton" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="@string/import_or_update" />
                 <com.google.android.material.button.MaterialButton android:id="@+id/settingsTimelineHelpButton" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="@string/get_timeline_file" />
                 <com.google.android.material.button.MaterialButton android:id="@+id/settingsTimelineRestoreButton" style="@style/Widget.Material3.Button.TextButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="@string/backup_restore_timeline" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/settingsJournalHowItWorksButton" style="@style/Widget.Material3.Button.TextButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/journal_how_it_works" android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

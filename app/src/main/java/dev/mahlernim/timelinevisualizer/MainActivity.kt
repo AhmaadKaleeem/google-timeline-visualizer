@@ -47,6 +47,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.viewpager2.widget.ViewPager2
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -76,6 +77,7 @@ import dev.mahlernim.timelinevisualizer.databinding.ActivityMainBinding
 import dev.mahlernim.timelinevisualizer.databinding.DialogJournalGrowthBinding
 import dev.mahlernim.timelinevisualizer.databinding.ItemVideoBinding
 import dev.mahlernim.timelinevisualizer.databinding.ItemTripBinding
+import dev.mahlernim.timelinevisualizer.databinding.ScreenJournalOnboardingBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenNewVideoBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenPlayerBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenSettingsBinding
@@ -97,11 +99,15 @@ import dev.mahlernim.timelinevisualizer.journal.JournalDatabase
 import dev.mahlernim.timelinevisualizer.journal.JournalEntity
 import dev.mahlernim.timelinevisualizer.journal.JournalImportResult
 import dev.mahlernim.timelinevisualizer.journal.JournalMatchClassification
+import dev.mahlernim.timelinevisualizer.journal.JournalOnboardingStore
 import dev.mahlernim.timelinevisualizer.journal.JournalRepository
 import dev.mahlernim.timelinevisualizer.journal.JournalEntryDestination
 import dev.mahlernim.timelinevisualizer.journal.JournalSetupNavigation
 import dev.mahlernim.timelinevisualizer.journal.JournalStatusSnapshot
 import dev.mahlernim.timelinevisualizer.journal.importer.TimelineJournalImportAdapter
+import dev.mahlernim.timelinevisualizer.journal.onboarding.JournalOnboardingAdapter
+import dev.mahlernim.timelinevisualizer.journal.onboarding.JournalOnboardingIllustration
+import dev.mahlernim.timelinevisualizer.journal.onboarding.JournalOnboardingPages
 import dev.mahlernim.timelinevisualizer.journal.reminder.JournalFreshnessPolicy
 import dev.mahlernim.timelinevisualizer.journal.reminder.JournalFreshnessState
 import dev.mahlernim.timelinevisualizer.journal.reminder.JournalReminderCoordinator
@@ -193,6 +199,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var home: ScreenVideosBinding
     private lateinit var editor: ScreenNewVideoBinding
+    private lateinit var onboarding: ScreenJournalOnboardingBinding
     private lateinit var settingsScreen: ScreenSettingsBinding
     private lateinit var playerScreen: ScreenPlayerBinding
     private var timeline: Timeline? = null
@@ -231,6 +238,7 @@ class MainActivity : AppCompatActivity() {
     private val journalRepository by lazy { JournalRepository(journalDatabase) }
     private val journalRouteService by lazy { JournalRouteService(journalRepository) }
     private val journalImportAdapter by lazy { TimelineJournalImportAdapter() }
+    private val journalOnboardingStore by lazy { JournalOnboardingStore(applicationContext) }
     private val presetRepository by lazy { PresetRepository(applicationContext) }
     private val tripsStore by lazy { TripsStore(applicationContext) }
     private val settingsViewModel by viewModels<SettingsViewModel> {
@@ -311,6 +319,8 @@ class MainActivity : AppCompatActivity() {
     private var journalImportIsInitial: Boolean? = null
     private var updatingJournalReminderSwitch = false
     private var pendingJournalReminderId: String? = null
+    private var onboardingPage = 0
+    private var onboardingReplay = false
 
     private val openTimeline = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importTimeline(uri)
@@ -361,6 +371,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         home = ScreenVideosBinding.bind(findViewById(R.id.videosScreen))
         editor = ScreenNewVideoBinding.bind(findViewById(R.id.newVideoScreen))
+        onboarding = ScreenJournalOnboardingBinding.bind(findViewById(R.id.journalOnboardingScreen))
         settingsScreen = ScreenSettingsBinding.bind(findViewById(R.id.settingsScreen))
         playerScreen = ScreenPlayerBinding.bind(findViewById(R.id.playerScreen))
         val lightSystemBars = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK !=
@@ -481,6 +492,9 @@ class MainActivity : AppCompatActivity() {
         home.deleteAllVideosButton.setOnClickListener { confirmDeleteAllLibraryContent() }
         home.journalFreshnessCard.setOnClickListener { openJournalFromReminder() }
         home.journalFreshnessCardAction.setOnClickListener { openJournalFromReminder() }
+        home.journalSetupCard.setOnClickListener { showJournalSetup(returnToCreate = false) }
+        home.journalSetupCardAction.setOnClickListener { showJournalSetup(returnToCreate = false) }
+        home.journalSetupIllustration.illustration = JournalOnboardingIllustration.START
         settingsScreen.privacyPolicyButton.setOnClickListener { openPrivacyPolicy() }
         settingsScreen.githubProjectButton.setOnClickListener { openWebPage(PROJECT_URL, R.string.web_page_unavailable) }
         settingsScreen.checkUpdatesButton.setOnClickListener { openUpdates() }
@@ -495,6 +509,9 @@ class MainActivity : AppCompatActivity() {
         }
         settingsScreen.settingsTimelineHelpButton.setOnClickListener { showExportHelp() }
         settingsScreen.settingsTimelineRestoreButton.setOnClickListener { openRestoreGuide() }
+        settingsScreen.settingsJournalHowItWorksButton.setOnClickListener {
+            showJournalOnboarding(page = 0, replay = true)
+        }
         settingsScreen.versionText.text = installedVersionLabel()
         playerScreen.playerBackButton.setOnClickListener { showVideos(acknowledgeCompletion = true) }
         playerScreen.playerShareButton.setOnClickListener { playerUri?.let(::shareVideo) }
@@ -504,8 +521,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
         playerScreen.playerExternalButton.setOnClickListener { playerUri?.let(::openExternalVideoPlayer) }
+        configureJournalOnboarding()
         onBackPressedDispatcher.addCallback(this) {
-            if (currentScreen == Screen.NEW_VIDEO) {
+            if (currentScreen == Screen.ONBOARDING) {
+                when {
+                    onboardingPage > 0 -> onboarding.onboardingPager.currentItem = onboardingPage - 1
+                    onboardingReplay -> showSettings(fromCreate = false)
+                    else -> finish()
+                }
+            } else if (currentScreen == Screen.NEW_VIDEO) {
                 if (currentCreateStep == CreateStep.TYPE) showVideos(acknowledgeCompletion = true) else moveCreateStep(-1)
             } else if (currentScreen == Screen.SETTINGS && settingsReturnToCreate) {
                 finishVideoCustomization(apply = false)
@@ -605,6 +629,8 @@ class MainActivity : AppCompatActivity() {
         journalSetupMode = savedInstanceState?.getBoolean(STATE_JOURNAL_SETUP_MODE) ?: false
         journalSetupReturnToCreate = savedInstanceState?.getBoolean(STATE_JOURNAL_SETUP_RETURN_TO_CREATE) ?: false
         pendingJournalReminderId = savedInstanceState?.getString(STATE_PENDING_JOURNAL_REMINDER_ID)
+        onboardingPage = savedInstanceState?.getInt(STATE_JOURNAL_ONBOARDING_PAGE, 0) ?: 0
+        onboardingReplay = savedInstanceState?.getBoolean(STATE_JOURNAL_ONBOARDING_REPLAY) ?: false
         customizationOriginalCamera = restoreCustomizationCamera(savedInstanceState)
         customizationOriginalPresetId = savedInstanceState?.getString(STATE_CUSTOMIZATION_PRESET_ID)
         customizationOriginalModifiedBuiltInId = savedInstanceState?.getString(STATE_CUSTOMIZATION_MODIFIED_ID)
@@ -636,6 +662,8 @@ class MainActivity : AppCompatActivity() {
         } else if (incoming != null) {
             showNewVideo(loadRemembered = false)
             requestTimelineImport(incoming)
+            intent?.data = null
+            intent?.action = null
         } else when (savedInstanceState?.getString(STATE_SCREEN)) {
             Screen.NEW_VIDEO.name -> showNewVideo(loadRemembered = true)
             Screen.VIDEOS.name -> showVideos()
@@ -644,14 +672,30 @@ class MainActivity : AppCompatActivity() {
                 else -> showSettings(fromCreate = settingsReturnToCreate)
             }
             Screen.PLAYER.name -> playerUri?.let { showVideoPlayer(it, resetPosition = false) } ?: showVideos()
+            Screen.ONBOARDING.name -> showJournalOnboarding(onboardingPage, onboardingReplay)
             else -> showDefaultLaunchScreen()
         }
     }
 
     private fun showDefaultLaunchScreen() {
-        when (JournalSetupNavigation.defaultDestination(BuildConfig.IS_JOURNAL_LAB, timeline != null)) {
-            JournalEntryDestination.JOURNAL_SETUP -> showJournalSetup(returnToCreate = false)
-            else -> showVideos()
+        if (!BuildConfig.IS_JOURNAL_LAB) {
+            showVideos()
+            return
+        }
+        showJournalStartupPlaceholder()
+        lifecycleScope.launch {
+            val journal = withContext(Dispatchers.IO) { journalRepository.primaryJournal() }
+            when (JournalSetupNavigation.defaultDestination(
+                isJournalLab = true,
+                hasJournal = journal != null,
+                onboardingCompleted = journalOnboardingStore.isCompleted(),
+            )) {
+                JournalEntryDestination.JOURNAL_ONBOARDING -> showJournalOnboarding(page = 0, replay = false)
+                else -> {
+                    journal?.let { loadJournal(it.id, force = false) }
+                    showVideos()
+                }
+            }
         }
     }
 
@@ -684,6 +728,8 @@ class MainActivity : AppCompatActivity() {
         outState.putBoolean(STATE_JOURNAL_SETUP_MODE, journalSetupMode)
         outState.putBoolean(STATE_JOURNAL_SETUP_RETURN_TO_CREATE, journalSetupReturnToCreate)
         outState.putString(STATE_PENDING_JOURNAL_REMINDER_ID, pendingJournalReminderId)
+        outState.putInt(STATE_JOURNAL_ONBOARDING_PAGE, onboardingPage)
+        outState.putBoolean(STATE_JOURNAL_ONBOARDING_REPLAY, onboardingReplay)
         customizationOriginalCamera?.let { original ->
             outState.putString(STATE_CUSTOMIZATION_CAMERA, original.cameraMovement.name)
             outState.putString(STATE_CUSTOMIZATION_PACING, original.longTripCompression.name)
@@ -729,6 +775,8 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     showNewVideo(loadRemembered = false)
                     requestTimelineImport(uri)
+                    intent.data = null
+                    intent.action = null
                 }
             }
         }
@@ -754,6 +802,7 @@ class MainActivity : AppCompatActivity() {
         editor.root.visibility = View.GONE
         settingsScreen.root.visibility = View.GONE
         playerScreen.root.visibility = View.GONE
+        onboarding.root.visibility = View.GONE
         binding.bottomNavigation.visibility = View.VISIBLE
         if (binding.bottomNavigation.selectedItemId != R.id.navigationVideos) {
             syncingBottomNavigation = true
@@ -812,6 +861,7 @@ class MainActivity : AppCompatActivity() {
         editor.root.visibility = View.VISIBLE
         settingsScreen.root.visibility = View.GONE
         playerScreen.root.visibility = View.GONE
+        onboarding.root.visibility = View.GONE
         binding.bottomNavigation.visibility = View.VISIBLE
         if (binding.bottomNavigation.selectedItemId != R.id.navigationCreate) {
             syncingBottomNavigation = true
@@ -847,9 +897,12 @@ class MainActivity : AppCompatActivity() {
         editor.root.visibility = View.GONE
         settingsScreen.root.visibility = View.VISIBLE
         playerScreen.root.visibility = View.GONE
+        onboarding.root.visibility = View.GONE
         binding.bottomNavigation.visibility = if (fromCreate) View.GONE else View.VISIBLE
         settingsScreen.customizeSettingsActions.visibility = if (fromCreate) View.VISIBLE else View.GONE
         settingsScreen.timelineDataCard.visibility = if (fromCreate) View.GONE else View.VISIBLE
+        settingsScreen.settingsJournalHowItWorksButton.visibility =
+            if (BuildConfig.IS_JOURNAL_LAB && !fromCreate) View.VISIBLE else View.GONE
         settingsScreen.journalSetupIntro.visibility = View.GONE
         settingsScreen.timelineDataTitle.setText(R.string.timeline_data)
         settingsScreen.settingsTitle.setText(if (fromCreate) R.string.customize_video else R.string.settings)
@@ -872,9 +925,12 @@ class MainActivity : AppCompatActivity() {
         editor.root.visibility = View.GONE
         settingsScreen.root.visibility = View.VISIBLE
         playerScreen.root.visibility = View.GONE
+        onboarding.root.visibility = View.GONE
         binding.bottomNavigation.visibility = View.VISIBLE
         settingsScreen.customizeSettingsActions.visibility = View.GONE
         settingsScreen.timelineDataCard.visibility = View.VISIBLE
+        settingsScreen.settingsJournalHowItWorksButton.visibility =
+            if (BuildConfig.IS_JOURNAL_LAB) View.VISIBLE else View.GONE
         settingsScreen.journalSetupIntro.visibility = View.VISIBLE
         settingsScreen.timelineDataTitle.setText(R.string.travel_journal)
         settingsScreen.settingsTitle.setText(R.string.journal_setup_title)
@@ -886,6 +942,96 @@ class MainActivity : AppCompatActivity() {
         }
         updateTimelineSettingsCard()
         loadJournalIfNeeded()
+    }
+
+    private fun showJournalStartupPlaceholder() {
+        currentScreen = Screen.VIDEOS
+        home.root.visibility = View.GONE
+        editor.root.visibility = View.GONE
+        settingsScreen.root.visibility = View.GONE
+        playerScreen.root.visibility = View.GONE
+        onboarding.root.visibility = View.GONE
+        binding.bottomNavigation.visibility = View.GONE
+        binding.exportStatusTray.visibility = View.GONE
+    }
+
+    private fun configureJournalOnboarding() {
+        val pages = JournalOnboardingPages.all
+        onboarding.onboardingPager.adapter = JournalOnboardingAdapter(pages)
+        onboarding.onboardingPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                onboardingPage = position
+                renderJournalOnboardingPage(announce = currentScreen == Screen.ONBOARDING)
+            }
+        })
+        onboarding.onboardingNextButton.setOnClickListener {
+            onboarding.onboardingPager.currentItem = (onboardingPage + 1).coerceAtMost(pages.lastIndex)
+        }
+        onboarding.onboardingBackButton.setOnClickListener {
+            if (onboardingPage > 0) {
+                onboarding.onboardingPager.currentItem = onboardingPage - 1
+            } else if (onboardingReplay) {
+                showSettings(fromCreate = false)
+            }
+        }
+        onboarding.onboardingSkipButton.setOnClickListener {
+            onboarding.onboardingPager.currentItem = pages.lastIndex
+        }
+        onboarding.onboardingChooseFileButton.setOnClickListener {
+            journalOnboardingStore.complete()
+            showJournalSetup(returnToCreate = false)
+            requestTimelineImport()
+        }
+        onboarding.onboardingSetupMapsButton.setOnClickListener {
+            journalOnboardingStore.complete()
+            showJournalSetup(returnToCreate = false)
+            showExportHelp()
+        }
+        onboarding.onboardingNotNowButton.setOnClickListener {
+            journalOnboardingStore.complete()
+            if (onboardingReplay) showSettings(fromCreate = false) else showVideos()
+        }
+    }
+
+    private fun showJournalOnboarding(page: Int, replay: Boolean) {
+        releaseVideoPlayer()
+        onboardingReplay = replay
+        onboardingPage = page.coerceIn(JournalOnboardingPages.all.indices)
+        currentScreen = Screen.ONBOARDING
+        home.root.visibility = View.GONE
+        editor.root.visibility = View.GONE
+        settingsScreen.root.visibility = View.GONE
+        playerScreen.root.visibility = View.GONE
+        onboarding.root.visibility = View.VISIBLE
+        binding.bottomNavigation.visibility = View.GONE
+        binding.exportStatusTray.visibility = View.GONE
+        onboarding.onboardingPager.setCurrentItem(onboardingPage, false)
+        renderJournalOnboardingPage(announce = false)
+    }
+
+    private fun renderJournalOnboardingPage(announce: Boolean) {
+        val pages = JournalOnboardingPages.all
+        val pageNumber = onboardingPage + 1
+        val isFinal = onboardingPage == pages.lastIndex
+        onboarding.onboardingPagePosition.text = getString(
+            R.string.onboarding_page_position,
+            pageNumber,
+            pages.size,
+        )
+        onboarding.onboardingPageProgress.setProgressCompat(pageNumber, true)
+        onboarding.onboardingBackButton.visibility =
+            if (onboardingPage > 0 || onboardingReplay) View.VISIBLE else View.INVISIBLE
+        onboarding.onboardingSkipButton.visibility = if (isFinal) View.INVISIBLE else View.VISIBLE
+        onboarding.onboardingNavigationActions.visibility = if (isFinal) View.GONE else View.VISIBLE
+        onboarding.onboardingFinalActions.visibility = if (isFinal) View.VISIBLE else View.GONE
+        val announcement = getString(
+            R.string.onboarding_page_announcement,
+            pageNumber,
+            pages.size,
+            getString(pages[onboardingPage].titleRes),
+        )
+        onboarding.onboardingPager.contentDescription = announcement
+        if (announce) onboarding.onboardingPager.announceForAccessibility(announcement)
     }
 
     private fun showVideoCustomization() {
@@ -1214,6 +1360,7 @@ class MainActivity : AppCompatActivity() {
         editor.root.visibility = View.GONE
         settingsScreen.root.visibility = View.GONE
         playerScreen.root.visibility = View.VISIBLE
+        onboarding.root.visibility = View.GONE
         binding.bottomNavigation.visibility = View.GONE
         playerScreen.playerTitle.text =
             videoLibraryViewModel.records.value.firstOrNull { it.uri == uri.toString() }?.title
@@ -2174,10 +2321,18 @@ class MainActivity : AppCompatActivity() {
     private fun updateHomeJournalCard() {
         if (!::home.isInitialized) return
         val journal = activeJournal
-        if (!BuildConfig.IS_JOURNAL_LAB || journal == null) {
+        if (!BuildConfig.IS_JOURNAL_LAB) {
             home.journalFreshnessCard.visibility = View.GONE
+            home.journalSetupCard.visibility = View.GONE
             return
         }
+        if (journal == null) {
+            home.journalFreshnessCard.visibility = View.GONE
+            home.journalSetupCard.visibility =
+                if (journalOnboardingStore.isCompleted()) View.VISIBLE else View.GONE
+            return
+        }
+        home.journalSetupCard.visibility = View.GONE
         val freshness = JournalFreshnessPolicy.evaluate(
             journal.detailedUsableThroughEpochMillis,
             System.currentTimeMillis(),
@@ -3757,6 +3912,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showRunningExportTray() {
+        if (currentScreen == Screen.ONBOARDING) {
+            binding.exportStatusTray.visibility = View.GONE
+            return
+        }
         binding.exportStatusTray.visibility = View.VISIBLE
         binding.exportTrayProgress.visibility = View.VISIBLE
         binding.exportTrayCancelButton.visibility = View.VISIBLE
@@ -3767,6 +3926,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showCompletedExportTray() {
+        if (currentScreen == Screen.ONBOARDING) {
+            binding.exportStatusTray.visibility = View.GONE
+            return
+        }
         binding.exportStatusTray.visibility = View.VISIBLE
         binding.exportTrayProgress.visibility = View.GONE
         binding.exportTrayCancelButton.visibility = View.GONE
@@ -3782,6 +3945,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showFailedExportTray(message: String?) {
+        if (currentScreen == Screen.ONBOARDING) {
+            binding.exportStatusTray.visibility = View.GONE
+            return
+        }
         binding.exportStatusTray.visibility = View.VISIBLE
         binding.exportTrayProgress.visibility = View.GONE
         binding.exportTrayCancelButton.visibility = View.GONE
@@ -5276,7 +5443,7 @@ class MainActivity : AppCompatActivity() {
         dropdown.setOnClickListener { dropdown.showDropDown() }
     }
 
-    private enum class Screen { VIDEOS, NEW_VIDEO, SETTINGS, PLAYER }
+    private enum class Screen { VIDEOS, NEW_VIDEO, SETTINGS, PLAYER, ONBOARDING }
     private enum class CreateStep { TYPE, TRIP_SOURCE, DISCOVERY, PROJECT, STYLE, PREVIEW }
 
     private data class PreparedTimeline(
@@ -5327,6 +5494,8 @@ class MainActivity : AppCompatActivity() {
         private const val STATE_JOURNAL_SETUP_MODE = "journal_setup_mode_v1"
         private const val STATE_JOURNAL_SETUP_RETURN_TO_CREATE = "journal_setup_return_to_create_v1"
         private const val STATE_PENDING_JOURNAL_REMINDER_ID = "pending_journal_reminder_id_v1"
+        private const val STATE_JOURNAL_ONBOARDING_PAGE = "journal_onboarding_page_v1"
+        private const val STATE_JOURNAL_ONBOARDING_REPLAY = "journal_onboarding_replay_v1"
         private const val JOURNAL_REFRESH_PADDING_MILLIS = 31L * 60L * 1000L
         private const val STATE_CUSTOMIZATION_CAMERA = "customization_camera_v3"
         private const val STATE_CUSTOMIZATION_PACING = "customization_pacing_v3"
