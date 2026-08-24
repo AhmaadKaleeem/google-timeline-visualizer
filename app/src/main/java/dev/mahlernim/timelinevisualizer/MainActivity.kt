@@ -1269,7 +1269,8 @@ class MainActivity : AppCompatActivity() {
         setTimelineLoading(true, R.string.opening_timeline)
         importJob = lifecycleScope.launch {
             try {
-                editor.loadingStageText.setText(R.string.reading_timeline)
+                val sourceSize = timelineFileSize(uri)
+                showJournalImportStage(R.string.reading_timeline, bytesRead = 0L, totalBytes = sourceSize)
                 val existing = withContext(Dispatchers.IO) { journalRepository.primaryJournal() }
                 val adapted = withContext(Dispatchers.IO) {
                     contentResolver.openInputStream(uri)?.buffered()?.use { input ->
@@ -1281,6 +1282,15 @@ class MainActivity : AppCompatActivity() {
                                 JournalMatchClassification.NEW_JOURNAL
                             } else {
                                 JournalMatchClassification.UNCERTAIN
+                            },
+                            onBytesRead = { bytesRead ->
+                                runOnUiThread {
+                                    showJournalImportStage(
+                                        R.string.reading_timeline,
+                                        bytesRead = bytesRead,
+                                        totalBytes = sourceSize,
+                                    )
+                                }
                             },
                         )
                     } ?: error("Timeline document is unavailable")
@@ -1294,30 +1304,41 @@ class MainActivity : AppCompatActivity() {
                 val classified = if (existing == null) {
                     adapted
                 } else {
+                    showJournalImportStage(R.string.journal_import_checking)
                     val committed = withContext(Dispatchers.IO) {
                         journalRepository.committedImport(journal.id, adapted.sourceHash)
                     }
                     if (committed != null) {
-                        adapted
+                        Snackbar.make(
+                            binding.root,
+                            R.string.journal_import_duplicate,
+                            Snackbar.LENGTH_LONG,
+                        ).show()
+                        return@launch
                     } else {
-                        val overlap = withContext(Dispatchers.IO) {
-                            journalRepository.detailedOverlapCount(journal.id, adapted.detailedObservations)
+                        val likelySame = withContext(Dispatchers.IO) {
+                            journalRepository.hasLikelySameDetailedIdentity(journal.id, adapted.detailedObservations)
                         }
-                        if (overlap == 0) {
+                        if (!likelySame) {
                             showJournalMismatch()
                             return@launch
                         }
                         adapted.copy(matchClassification = JournalMatchClassification.LIKELY_SAME)
                     }
                 }
-                editor.loadingStageText.setText(R.string.preparing_trips)
+                showJournalImportStage(R.string.journal_import_saving)
                 val result = withContext(Dispatchers.IO) {
                     if (existing == null) {
-                        journalRepository.createJournalAndImport(journal, classified)
+                        journalRepository.createJournalAndImport(journal, classified) { processed, total ->
+                            runOnUiThread { showJournalSaveProgress(processed, total) }
+                        }
                     } else {
-                        journalRepository.import(journal.id, classified)
+                        journalRepository.import(journal.id, classified) { processed, total ->
+                            runOnUiThread { showJournalSaveProgress(processed, total) }
+                        }
                     }
                 }
+                showJournalImportStage(R.string.journal_import_updating)
                 loadJournal(journal.id, force = true)
                 when (result) {
                     is JournalImportResult.Committed -> Snackbar.make(
@@ -1516,9 +1537,72 @@ class MainActivity : AppCompatActivity() {
         editor.importButton.isEnabled = !loading
         editor.exportHelpButton.isEnabled = !loading
         if (::settingsScreen.isInitialized) {
+            settingsScreen.settingsTimelineProgressGroup.visibility = if (loading) View.VISIBLE else View.GONE
             settingsScreen.settingsImportTimelineButton.isEnabled = !loading
             settingsScreen.settingsTimelineHelpButton.isEnabled = !loading
+            settingsScreen.settingsImportTimelineButton.setText(
+                if (loading) R.string.journal_import_in_progress else R.string.import_or_update,
+            )
+            if (loading) {
+                showJournalImportStage(stage)
+            } else {
+                settingsScreen.settingsTimelineProgress.isIndeterminate = true
+                settingsScreen.settingsTimelineProgress.progress = 0
+                settingsScreen.settingsTimelineProgressDetail.setText(R.string.journal_import_working_detail)
+            }
         }
+    }
+
+    private fun showJournalImportStage(
+        stage: Int,
+        bytesRead: Long? = null,
+        totalBytes: Long? = null,
+    ) {
+        editor.loadingStageText.setText(stage)
+        if (!::settingsScreen.isInitialized) return
+        settingsScreen.settingsTimelineProgressStage.setText(stage)
+        val determinate = bytesRead != null && totalBytes != null && totalBytes > 0L
+        setJournalProgressIndeterminate(!determinate)
+        if (determinate) {
+            val boundedBytes = bytesRead.coerceIn(0L, totalBytes)
+            settingsScreen.settingsTimelineProgress.progress =
+                ((boundedBytes * JOURNAL_PROGRESS_MAX) / totalBytes).toInt()
+            settingsScreen.settingsTimelineProgressDetail.text = getString(
+                R.string.journal_import_read_progress,
+                Formatter.formatFileSize(this, boundedBytes),
+                Formatter.formatFileSize(this, totalBytes),
+            )
+        } else {
+            settingsScreen.settingsTimelineProgress.progress = 0
+            settingsScreen.settingsTimelineProgressDetail.setText(R.string.journal_import_working_detail)
+        }
+    }
+
+    private fun showJournalSaveProgress(processed: Int, total: Int) {
+        if (!::settingsScreen.isInitialized) return
+        settingsScreen.settingsTimelineProgressStage.setText(R.string.journal_import_saving)
+        if (total > 0) {
+            setJournalProgressIndeterminate(false)
+            settingsScreen.settingsTimelineProgress.progress =
+                ((processed.toLong().coerceIn(0L, total.toLong()) * JOURNAL_PROGRESS_MAX) / total).toInt()
+            settingsScreen.settingsTimelineProgressDetail.text = getString(
+                R.string.journal_import_save_progress,
+                processed.coerceIn(0, total),
+                total,
+            )
+        } else {
+            setJournalProgressIndeterminate(true)
+            settingsScreen.settingsTimelineProgressDetail.setText(R.string.journal_import_working_detail)
+        }
+    }
+
+    private fun setJournalProgressIndeterminate(indeterminate: Boolean) {
+        val indicator = settingsScreen.settingsTimelineProgress
+        if (indicator.isIndeterminate == indeterminate) return
+        val wasVisible = indicator.visibility == View.VISIBLE
+        if (wasVisible) indicator.visibility = View.INVISIBLE
+        indicator.isIndeterminate = indeterminate
+        if (wasVisible) indicator.visibility = View.VISIBLE
     }
 
     private fun rememberTimelineSource(uri: Uri) {
@@ -4768,6 +4852,7 @@ class MainActivity : AppCompatActivity() {
         private const val RESTORE_GUIDE_URL_JA =
             "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/restore-google-maps-timeline.ja.md"
         private const val TAG = "TimelineVisualizer"
+        private const val JOURNAL_PROGRESS_MAX = 1_000
         private const val DAY_MILLIS = 24L * 60L * 60L * 1_000L
 
         internal fun playbackIntent(context: Context, uri: Uri): Intent =

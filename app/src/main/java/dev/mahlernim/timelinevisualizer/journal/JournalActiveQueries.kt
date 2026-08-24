@@ -10,6 +10,18 @@ data class ActiveDetailedObservation(
     val accuracyMeters: Double,
 )
 
+/** The committed detailed time range used to avoid probing unrelated Journals. */
+data class CommittedDetailedBounds(
+    val startEpochMillis: Long?,
+    val endEpochMillis: Long?,
+)
+
+/** A compact lookup result for resolving ignored bulk inserts without per-row queries. */
+data class ObservationKeyId(
+    val observationKey: String,
+    val id: Long,
+)
+
 /** A committed semantic segment plus the capture time used to resolve snapshot precedence. */
 data class ActiveSemanticSegment(
     val id: Long,

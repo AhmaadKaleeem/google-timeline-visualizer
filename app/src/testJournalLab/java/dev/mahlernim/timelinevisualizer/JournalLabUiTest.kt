@@ -61,6 +61,28 @@ class JournalLabUiTest {
     }
 
     @Test
+    fun settingsShowVisibleWorkWhileTheJournalIsGrowing() {
+        val source = rawTimeline("progress", 37.5, 127.0, "2026-08-01T00:00:00Z")
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.navigationSettings).performClick()
+
+        activity.importTimeline(Uri.fromFile(source))
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsTimelineProgressGroup).visibility)
+        assertEquals(
+            activity.getString(R.string.journal_import_in_progress),
+            activity.findViewById<TextView>(R.id.settingsImportTimelineButton).text.toString(),
+        )
+        waitUntil {
+            activity.findViewById<View>(R.id.settingsTimelineProgressGroup).visibility == View.GONE
+        }
+        assertEquals(
+            activity.getString(R.string.import_or_update),
+            activity.findViewById<TextView>(R.id.settingsImportTimelineButton).text.toString(),
+        )
+    }
+
+    @Test
     fun importPersistsFusedJournalAcrossActivityRecreationWithoutRememberedFile() {
         val activity = launchActivity()
         val source = Uri.fromFile(repoRoot().resolve("test-fixtures/semantic-and-raw-ranges.json"))

@@ -73,10 +73,10 @@ object JournalRouteFusion {
         val semanticNodeCount = normalizedPaths.size
         val connections = DisjointSet(semanticNodeCount + detailedIslands.size)
         normalizedPaths.forEachIndexed { pathIndex, path ->
-            detailedIslands.forEachIndexed { islandIndex, island ->
-                if (path.start <= island.end && island.start <= path.end) {
-                    connections.union(pathIndex, semanticNodeCount + islandIndex)
-                }
+            var islandIndex = firstIslandEndingAtOrAfter(detailedIslands, path.start)
+            while (islandIndex < detailedIslands.size && detailedIslands[islandIndex].start <= path.end) {
+                connections.union(pathIndex, semanticNodeCount + islandIndex)
+                islandIndex += 1
             }
         }
 
@@ -118,24 +118,48 @@ object JournalRouteFusion {
         if (islands.isEmpty()) return listOf(points)
         val fragments = mutableListOf<MutableList<GeoPoint>>()
         var current: MutableList<GeoPoint>? = null
+        var islandIndex = 0
         points.forEach { point ->
-            if (islands.any { point.instant in it.interval }) {
+            val active = current
+            val previousInstant = active?.lastOrNull()?.instant
+            var crossedDetailedIsland = false
+            while (islandIndex < islands.size && islands[islandIndex].end < point.instant) {
+                if (
+                    previousInstant != null &&
+                    islands[islandIndex].start > previousInstant &&
+                    islands[islandIndex].start < point.instant
+                ) {
+                    crossedDetailedIsland = true
+                }
+                islandIndex += 1
+            }
+            val island = islands.getOrNull(islandIndex)
+            if (island != null && point.instant in island.interval) {
                 current = null
                 return@forEach
             }
-            val active = current
             if (
                 active == null ||
-                islands.any { island ->
-                    val previous = active.last().instant
-                    island.start > previous && island.start < point.instant
-                }
+                crossedDetailedIsland ||
+                island?.let {
+                    it.start > previousInstant!! && it.start < point.instant
+                } == true
             ) {
                 current = mutableListOf<GeoPoint>().also(fragments::add)
             }
             current?.add(point)
         }
         return fragments.filter { it.isNotEmpty() }
+    }
+
+    private fun firstIslandEndingAtOrAfter(islands: List<DetailedIsland>, instant: Instant): Int {
+        var low = 0
+        var high = islands.size
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (islands[middle].end < instant) low = middle + 1 else high = middle
+        }
+        return low
     }
 
     private fun resolveDetailedConflicts(points: List<GeoPoint>): List<GeoPoint> = points

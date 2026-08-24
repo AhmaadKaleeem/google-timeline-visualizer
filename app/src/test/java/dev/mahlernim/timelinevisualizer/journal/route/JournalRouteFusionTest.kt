@@ -66,6 +66,33 @@ class JournalRouteFusionTest {
         assertEquals(8.0, result.single().points.single().latitude, 0.0)
     }
 
+    @Test
+    fun multipleDetailedIslandsSplitOneSemanticPathWithoutLosingFragments() {
+        val result = JournalRouteFusion.fuse(
+            semanticPoints = (0L..60L step 10L).map { minute -> point(minute, minute.toDouble()) },
+            detailedPoints = listOf(
+                point(10, 101.0),
+                point(50, 105.0),
+            ),
+            discontinuity = java.time.Duration.ofMinutes(30),
+        )
+
+        assertEquals(
+            listOf(
+                RouteSource.SEMANTIC_PATH,
+                RouteSource.DETAILED,
+                RouteSource.SEMANTIC_PATH,
+                RouteSource.DETAILED,
+                RouteSource.SEMANTIC_PATH,
+            ),
+            result.map(RouteSpan::source),
+        )
+        assertEquals(
+            listOf(0.0, 101.0, 20.0, 30.0, 40.0, 105.0, 60.0),
+            result.flatMap(RouteSpan::points).map(GeoPoint::latitude),
+        )
+    }
+
     private fun point(minutes: Long, latitude: Double): GeoPoint = GeoPoint(
         instant = Instant.parse("2026-01-01T00:00:00Z").plusSeconds(minutes * 60),
         latitude = latitude,

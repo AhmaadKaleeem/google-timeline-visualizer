@@ -244,6 +244,42 @@ class JournalRouteServiceTest {
         assertEquals(2, route.spans.count { it.source == RouteSource.GAP })
     }
 
+    @Test
+    fun severalNewerCoverageIntervalsSplitOlderHistoryAtEveryBoundary() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "old-complete",
+                importedAt = minute(100),
+                semantic = listOf(
+                    semantic(
+                        0,
+                        60,
+                        (0L..60L step 10L).mapIndexed { index, value -> point(value, index.toDouble()) },
+                    ),
+                ),
+            ),
+        )
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "new-islands",
+                importedAt = minute(200),
+                semantic = listOf(
+                    semantic(10, 20, listOf(point(10, 11.0), point(20, 12.0))),
+                    semantic(40, 50, listOf(point(40, 14.0), point(50, 15.0))),
+                ),
+            ),
+        )
+
+        val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(61)))
+
+        assertEquals(
+            listOf(0.0, 11.0, 12.0, 3.0, 14.0, 15.0, 6.0),
+            route.timeline.points.map(GeoPoint::latitude),
+        )
+    }
+
     private fun importInput(
         hash: String,
         importedAt: Long,

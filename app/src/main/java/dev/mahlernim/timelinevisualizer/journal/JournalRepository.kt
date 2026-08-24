@@ -67,9 +67,10 @@ class JournalRepository(
     suspend fun createJournalAndImport(
         journal: JournalEntity,
         input: JournalImport,
+        onProgress: (processedRecordCount: Int, totalRecordCount: Int) -> Unit = { _, _ -> },
     ): JournalImportResult = database.withTransaction {
         dao.insertJournal(journal)
-        import(journal.id, input)
+        import(journal.id, input, onProgress)
     }
 
     suspend fun journal(journalId: String): JournalEntity? = dao.journal(journalId)
@@ -81,16 +82,40 @@ class JournalRepository(
         return dao.committedBatchByHash(journalId, sourceHash)
     }
 
-    /** Returns concrete coordinate and timestamp overlap with already committed detail. */
+    /**
+     * Returns a bounded count of deterministic detail samples that exactly match committed detail.
+     *
+     * Callers use zero versus nonzero as identity evidence. This deliberately avoids scanning every
+     * point in a large rolling export.
+     */
     suspend fun detailedOverlapCount(
         journalId: String,
         candidates: List<DetailedObservationInput>,
     ): Int {
         if (candidates.isEmpty()) return 0
-        val keys = candidates.asSequence().map(::observationKey).distinct().toList()
-        return keys.chunked(SQLITE_BIND_CHUNK_SIZE).sumOf { chunk ->
-            dao.committedObservationKeyCount(journalId, chunk)
-        }
+        val committedBounds = dao.committedDetailedBounds(journalId)
+        val committedStart = committedBounds.startEpochMillis ?: return 0
+        val committedEnd = committedBounds.endEpochMillis ?: return 0
+        val overlapping = candidates.asSequence()
+            .filter { it.instantEpochMillis in committedStart..committedEnd }
+            .toList()
+        if (overlapping.isEmpty()) return 0
+        val samples = deterministicSamples(overlapping, IDENTITY_SAMPLE_SIZE)
+            .map(::observationKey)
+            .distinct()
+        return dao.committedObservationKeyCount(journalId, samples)
+    }
+
+    /** True when a bounded, evenly distributed probe provides useful same-Journal evidence. */
+    suspend fun hasLikelySameDetailedIdentity(
+        journalId: String,
+        candidates: List<DetailedObservationInput>,
+    ): Boolean {
+        if (candidates.isEmpty()) return false
+        val sampleCount = minOf(candidates.size, IDENTITY_SAMPLE_SIZE)
+        val matches = detailedOverlapCount(journalId, candidates)
+        val requiredMatches = minOf(3, (sampleCount + 3) / 4)
+        return matches >= requiredMatches
     }
 
     suspend fun activeDetailedObservations(
@@ -111,7 +136,11 @@ class JournalRepository(
         return dao.activeSemanticSegmentsNewestFirst(journalId, startEpochMillis, endExclusiveEpochMillis)
     }
 
-    suspend fun import(journalId: String, input: JournalImport): JournalImportResult =
+    suspend fun import(
+        journalId: String,
+        input: JournalImport,
+        onProgress: (processedRecordCount: Int, totalRecordCount: Int) -> Unit = { _, _ -> },
+    ): JournalImportResult =
         database.withTransaction {
             require(input.sourceHash.isNotBlank()) { "sourceHash must not be blank" }
             val journal = requireNotNull(dao.journal(journalId)) { "Journal does not exist" }
@@ -151,26 +180,42 @@ class JournalRepository(
             )
             dao.insertBatch(staging)
 
+            input.detailedObservations.forEach(::validate)
             var insertedCount = 0
-            input.detailedObservations.forEach { candidate ->
-                validate(candidate)
-                val observationKey = observationKey(candidate)
-                val insertedId = dao.insertObservation(
+            var processedCount = 0
+            val totalRecordCount = input.detailedObservations.size + input.semanticSegments.size
+            onProgress(0, totalRecordCount)
+            for (chunkStart in input.detailedObservations.indices step OBSERVATION_INSERT_CHUNK_SIZE) {
+                val chunkEnd = minOf(chunkStart + OBSERVATION_INSERT_CHUNK_SIZE, input.detailedObservations.size)
+                val candidates = input.detailedObservations.subList(chunkStart, chunkEnd)
+                val entities = candidates.map { candidate ->
                     DetailedObservationEntity(
                         journalId = journalId,
                         instantEpochMillis = candidate.instantEpochMillis,
                         latitude = candidate.latitude,
                         longitude = candidate.longitude,
-                        observationKey = observationKey,
-                    ),
-                )
-                val observationId = if (insertedId == -1L) {
-                    dao.observationId(journalId, observationKey)
-                } else {
-                    insertedCount += 1
-                    insertedId
+                        observationKey = observationKey(candidate),
+                    )
                 }
-                dao.insertObservationImport(
+                val insertedIds = dao.insertObservations(entities)
+                check(insertedIds.size == candidates.size) { "Room returned an unexpected insert result count" }
+                val duplicateKeys = insertedIds.mapIndexedNotNull { index, insertedId ->
+                    if (insertedId == -1L) entities[index].observationKey else null
+                }.distinct()
+                val duplicateIds = duplicateKeys
+                    .chunked(SQLITE_BIND_CHUNK_SIZE)
+                    .flatMap { keys -> dao.observationIds(journalId, keys) }
+                    .associate { it.observationKey to it.id }
+                val provenance = insertedIds.mapIndexed { index, insertedId ->
+                    val observationId = if (insertedId == -1L) {
+                        requireNotNull(duplicateIds[entities[index].observationKey]) {
+                            "An ignored observation could not be resolved"
+                        }
+                    } else {
+                        insertedCount += 1
+                        insertedId
+                    }
+                    val candidate = candidates[index]
                     ObservationImportEntity(
                         importBatchId = batchId,
                         observationId = observationId,
@@ -178,8 +223,11 @@ class JournalRepository(
                         altitudeMeters = candidate.altitudeMeters,
                         speedMetersPerSecond = candidate.speedMetersPerSecond,
                         provider = candidate.provider,
-                    ),
-                )
+                    )
+                }
+                if (provenance.isNotEmpty()) dao.insertObservationImports(provenance)
+                processedCount += candidates.size
+                onProgress(processedCount, totalRecordCount)
             }
 
             if (input.semanticSegments.isNotEmpty()) {
@@ -193,14 +241,15 @@ class JournalRepository(
                         endEpochMillis = semanticEnd,
                     ),
                 )
-                dao.insertSemanticSegments(
-                    input.semanticSegments.mapIndexed { index, segment ->
+                for (chunkStart in input.semanticSegments.indices step SEMANTIC_INSERT_CHUNK_SIZE) {
+                    val chunkEnd = minOf(chunkStart + SEMANTIC_INSERT_CHUNK_SIZE, input.semanticSegments.size)
+                    val segments = input.semanticSegments.subList(chunkStart, chunkEnd).mapIndexed { offset, segment ->
                         require(segment.endEpochMillis >= segment.startEpochMillis) {
                             "Semantic segment ends before it starts"
                         }
                         SemanticSegmentEntity(
                             snapshotId = snapshotId,
-                            sourceOrdinal = index,
+                            sourceOrdinal = chunkStart + offset,
                             startEpochMillis = segment.startEpochMillis,
                             endEpochMillis = segment.endEpochMillis,
                             kind = segment.kind,
@@ -208,8 +257,11 @@ class JournalRepository(
                             placeId = segment.placeId,
                             geometryJson = segment.geometryJson,
                         )
-                    },
-                )
+                    }
+                    dao.insertSemanticSegments(segments)
+                    processedCount += segments.size
+                    onProgress(processedCount, totalRecordCount)
+                }
             }
 
             val duplicateCount = input.detailedObservations.size - insertedCount
@@ -255,6 +307,14 @@ class JournalRepository(
         append(observation.longitude.toBits().toULong().toString(16))
     }
 
+    private fun <T> deterministicSamples(items: List<T>, limit: Int): List<T> {
+        if (items.size <= limit) return items
+        return List(limit) { sampleIndex ->
+            val itemIndex = sampleIndex.toLong() * (items.lastIndex).toLong() / (limit - 1)
+            items[itemIndex.toInt()]
+        }
+    }
+
     private fun minOfNullable(first: Long?, second: Long?): Long? = when {
         first == null -> second
         second == null -> first
@@ -268,6 +328,9 @@ class JournalRepository(
     }
 
     private companion object {
+        const val OBSERVATION_INSERT_CHUNK_SIZE = 4_096
+        const val SEMANTIC_INSERT_CHUNK_SIZE = 1_000
         const val SQLITE_BIND_CHUNK_SIZE = 900
+        const val IDENTITY_SAMPLE_SIZE = 32
     }
 }

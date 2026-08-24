@@ -91,6 +91,52 @@ class JournalRepositoryTest {
     }
 
     @Test
+    fun largeImportWritesInChunksAndReportsProgress() = runBlocking {
+        val observations = (0 until 10_000).map { index ->
+            observation(2_000L + index, latitude = 37.0 + index / 1_000_000.0)
+        }
+        val progress = mutableListOf<Pair<Int, Int>>()
+
+        val result = repository.import(
+            JOURNAL_ID,
+            importInput("large", 20_000, observations),
+        ) { processed, total -> progress += processed to total } as JournalImportResult.Committed
+
+        assertEquals(10_000, result.insertedObservationCount)
+        assertEquals(10_000, dao.observationCount(JOURNAL_ID))
+        assertEquals(10_000, dao.provenanceCount(result.batchId))
+        assertEquals(listOf(0, 4_096, 8_192, 10_000), progress.map { it.first })
+        assertEquals(setOf(10_000), progress.map { it.second }.toSet())
+    }
+
+    @Test
+    fun semanticSegmentsAreChunkedAndIncludedInSaveProgress() = runBlocking {
+        val segments = (0 until 2_501).map { index ->
+            segment(index.toLong(), index.toLong() + 1, "VISIT")
+        }
+        val progress = mutableListOf<Pair<Int, Int>>()
+
+        repository.import(JOURNAL_ID, importInput("semantic-large", 20_000, segments = segments)) {
+            processed, total -> progress += processed to total
+        }
+
+        assertEquals(listOf(0, 1_000, 2_000, 2_501), progress.map { it.first })
+        assertEquals(setOf(2_501), progress.map { it.second }.toSet())
+    }
+
+    @Test
+    fun identityProbeUsesBoundedDeterministicSamplesInsideCommittedDates() = runBlocking {
+        val committed = (0 until 100).map { index -> observation(10_000L + index, 37.0 + index / 10_000.0) }
+        repository.import(JOURNAL_ID, importInput("base", 20_000, committed))
+        val nextExport = listOf(observation(1_000, 1.0)) + committed + listOf(observation(50_000, 2.0))
+
+        assertEquals(32, repository.detailedOverlapCount(JOURNAL_ID, nextExport))
+        assertEquals(true, repository.hasLikelySameDetailedIdentity(JOURNAL_ID, nextExport))
+        assertEquals(0, repository.detailedOverlapCount(JOURNAL_ID, listOf(observation(50_000, 2.0))))
+        assertEquals(false, repository.hasLikelySameDetailedIdentity(JOURNAL_ID, listOf(observation(50_000, 2.0))))
+    }
+
+    @Test
     fun partialSemanticSnapshotDoesNotReplaceOlderUniqueCoverage() = runBlocking {
         repository.import(
             JOURNAL_ID,

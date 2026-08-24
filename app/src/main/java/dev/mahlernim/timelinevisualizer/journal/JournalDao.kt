@@ -33,13 +33,16 @@ interface JournalDao {
     suspend fun batch(batchId: String): ImportBatchEntity?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertObservation(observation: DetailedObservationEntity): Long
+    suspend fun insertObservations(observations: List<DetailedObservationEntity>): List<Long>
 
-    @Query("SELECT id FROM detailed_observations WHERE journalId = :journalId AND observationKey = :observationKey")
-    suspend fun observationId(journalId: String, observationKey: String): Long
+    @Query("SELECT observationKey, id FROM detailed_observations WHERE journalId = :journalId AND observationKey IN (:observationKeys)")
+    suspend fun observationIds(
+        journalId: String,
+        observationKeys: List<String>,
+    ): List<ObservationKeyId>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertObservationImport(provenance: ObservationImportEntity)
+    suspend fun insertObservationImports(provenance: List<ObservationImportEntity>)
 
     @Insert
     suspend fun insertSemanticSnapshot(snapshot: SemanticSnapshotEntity)
@@ -110,6 +113,21 @@ interface JournalDao {
         startEpochMillis: Long,
         endExclusiveEpochMillis: Long,
     ): List<ActiveSemanticSegment>
+
+    @Query(
+        """
+        SELECT MIN(detailed_observations.instantEpochMillis) AS startEpochMillis,
+               MAX(detailed_observations.instantEpochMillis) AS endEpochMillis
+        FROM detailed_observations
+        INNER JOIN observation_imports
+            ON observation_imports.observationId = detailed_observations.id
+        INNER JOIN import_batches
+            ON import_batches.id = observation_imports.importBatchId
+        WHERE detailed_observations.journalId = :journalId
+          AND import_batches.status = 'COMMITTED'
+        """,
+    )
+    suspend fun committedDetailedBounds(journalId: String): CommittedDetailedBounds
 
     @Query(
         """

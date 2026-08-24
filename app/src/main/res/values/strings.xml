@@ -341,8 +341,15 @@
     <string name="journal_import_added_timeline" translatable="false">Your Travel Journal grew with the available Timeline history.</string>
     <string name="journal_import_duplicate" translatable="false">This Timeline file is already in your Travel Journal. Nothing was changed.</string>
     <string name="journal_import_failed_preserved" translatable="false">This Timeline file could not be added. Your saved Travel Journal was not changed.</string>
+    <string name="journal_import_checking" translatable="false">Checking your Travel Journal</string>
+    <string name="journal_import_saving" translatable="false">Saving new detail</string>
+    <string name="journal_import_updating" translatable="false">Updating your journeys</string>
+    <string name="journal_import_working_detail" translatable="false">Your saved Journal stays safe while this finishes.</string>
+    <string name="journal_import_read_progress" translatable="false">%1$s of %2$s read</string>
+    <string name="journal_import_save_progress" translatable="false">%1$d of %2$d Journal records saved</string>
+    <string name="journal_import_in_progress" translatable="false">Growing Travel Journal…</string>
     <string name="journal_import_mismatch_title" translatable="false">This may be a different Travel Journal</string>
-    <string name="journal_import_mismatch_message" translatable="false">This file has no detailed locations in common with your saved Travel Journal. Nothing was changed. Journal Lab 2 does not yet add a different person’s Timeline to the same Journal.</string>
+    <string name="journal_import_mismatch_message" translatable="false">This file does not have enough detailed locations in common with your saved Travel Journal. Nothing was changed. A different person’s Timeline cannot be added to the same Journal.</string>
     <string name="trips">Trips</string>
     <string name="library">Library</string>
     <string name="create">Create</string>

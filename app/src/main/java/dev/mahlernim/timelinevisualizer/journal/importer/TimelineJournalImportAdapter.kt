@@ -27,9 +27,12 @@ class TimelineJournalImportAdapter(
         sourceName: String?,
         importedAtEpochMillis: Long,
         matchClassification: JournalMatchClassification,
+        onBytesRead: (Long) -> Unit = {},
     ): JournalImport {
         val digest = MessageDigest.getInstance(SHA_256)
-        val countingInput = CountingInputStream(input)
+        val progress = ByteProgressReporter(onBytesRead)
+        val countingInput = CountingInputStream(input, progress::onBytesRead)
+        progress.start()
         val digestInput = DigestInputStream(countingInput, digest)
         val parsed = parser.parseWithRawSignals(NonClosingInputStream(digestInput))
 
@@ -39,6 +42,7 @@ class TimelineJournalImportAdapter(
         while (digestInput.read(drainBuffer) != -1) {
             // Drain only. DigestInputStream updates the hash as bytes pass through it.
         }
+        progress.finish(countingInput.byteCount)
 
         return JournalImport(
             sourceHash = digest.digest().toHexString(),
@@ -118,18 +122,55 @@ class TimelineJournalImportAdapter(
         "%02x".format(byte.toInt() and 0xff)
     }
 
-    private class CountingInputStream(input: InputStream) : FilterInputStream(input) {
+    private class CountingInputStream(
+        input: InputStream,
+        private val onBytesRead: (Long) -> Unit,
+    ) : FilterInputStream(input) {
         var byteCount: Long = 0
             private set
 
         override fun read(): Int = super.read().also { value ->
-            if (value != -1) byteCount += 1
+            if (value != -1) {
+                byteCount += 1
+                onBytesRead(byteCount)
+            }
         }
 
         override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
             super.read(buffer, offset, length).also { count ->
-                if (count > 0) byteCount += count
+                if (count > 0) {
+                    byteCount += count
+                    onBytesRead(byteCount)
+                }
             }
+    }
+
+    private class ByteProgressReporter(
+        private val callback: (Long) -> Unit,
+    ) {
+        private var lastReportedBytes = 0L
+        private var lastReportedAtNanos = 0L
+
+        fun start() {
+            lastReportedAtNanos = System.nanoTime()
+            callback(0L)
+        }
+
+        fun onBytesRead(bytesRead: Long) {
+            val now = System.nanoTime()
+            if (
+                bytesRead - lastReportedBytes >= PROGRESS_BYTES_INTERVAL ||
+                now - lastReportedAtNanos >= PROGRESS_TIME_INTERVAL_NANOS
+            ) {
+                lastReportedBytes = bytesRead
+                lastReportedAtNanos = now
+                callback(bytesRead)
+            }
+        }
+
+        fun finish(bytesRead: Long) {
+            if (bytesRead != lastReportedBytes) callback(bytesRead)
+        }
     }
 
     private class NonClosingInputStream(input: InputStream) : FilterInputStream(input) {
@@ -141,6 +182,8 @@ class TimelineJournalImportAdapter(
         const val SEMANTIC_PATH_KIND = "TIMELINE_PATH"
         const val MAX_SEMANTIC_POINTS_PER_SEGMENT = 10_000
         private const val DRAIN_BUFFER_BYTES = 8 * 1024
+        private const val PROGRESS_BYTES_INTERVAL = 256 * 1024L
+        private const val PROGRESS_TIME_INTERVAL_NANOS = 100_000_000L
         private const val SHA_256 = "SHA-256"
         private const val FALLBACK_CONTINUITY_GROUP = "fallback-timeline"
     }

@@ -77,13 +77,13 @@ class JournalRouteService(
         startEpochMillis: Long,
         endExclusiveEpochMillis: Long,
     ): List<SemanticRoutePath> {
-        val coveredByNewerSnapshots = mutableListOf<MillisInterval>()
+        val coveredByNewerSnapshots = MergedMillisIntervals()
         val selected = mutableListOf<SemanticRoutePath>()
         segments.groupBy { it.snapshotCapturedAtEpochMillis to it.snapshotId }.forEach { (_, snapshotRows) ->
             val records = snapshotRecords(snapshotRows, startEpochMillis, endExclusiveEpochMillis)
-            val preferredIntervals = records
+            val preferredIntervals = MergedMillisIntervals(records
                 .filter { it.kind in PREFERRED_SEMANTIC_KINDS }
-                .map(StoredSemanticRecord::interval)
+                .map(StoredSemanticRecord::interval))
             val withoutSecondaryHistory = records.flatMap { record ->
                 if (record.kind == STRUCTURED_PATH_KIND) {
                     record.fragmentsOutside(preferredIntervals)
@@ -96,7 +96,7 @@ class JournalRouteService(
                     selected += fragment.toRoutePath("${fragment.id}:selected:$index")
                 }
             }
-            coveredByNewerSnapshots += withoutSecondaryHistory.map(StoredSemanticRecord::interval)
+            coveredByNewerSnapshots.addAll(withoutSecondaryHistory.map(StoredSemanticRecord::interval))
         }
         return selected.sortedWith(compareBy<SemanticRoutePath> { it.start }.thenBy(SemanticRoutePath::id))
     }
@@ -175,24 +175,41 @@ class JournalRouteService(
     )
 
     private fun StoredSemanticRecord.fragmentsOutside(
-        excluded: List<MillisInterval>,
+        excluded: MergedMillisIntervals,
     ): List<StoredSemanticRecord> {
-        if (excluded.none { it.overlaps(interval) }) return listOf(this)
+        if (!excluded.overlaps(interval)) return listOf(this)
         val fragments = mutableListOf<MutableList<GeoPoint>>()
         var current: MutableList<GeoPoint>? = null
+        var exclusionIndex = 0
         points.forEach { point ->
             val instant = point.instant.toEpochMilli()
-            if (excluded.any { instant in it }) {
+            val active = current
+            val previousInstant = active?.lastOrNull()?.instant?.toEpochMilli()
+            var crossedExcludedInterval = false
+            while (
+                exclusionIndex < excluded.size &&
+                excluded[exclusionIndex].endInclusive < instant
+            ) {
+                if (
+                    previousInstant != null &&
+                    excluded[exclusionIndex].start > previousInstant &&
+                    excluded[exclusionIndex].start < instant
+                ) {
+                    crossedExcludedInterval = true
+                }
+                exclusionIndex += 1
+            }
+            val exclusion = excluded.getOrNull(exclusionIndex)
+            if (exclusion != null && instant in exclusion) {
                 current = null
                 return@forEach
             }
-            val active = current
             if (
                 active == null ||
-                excluded.any { interval ->
-                    val previous = active.last().instant.toEpochMilli()
-                    interval.start > previous && interval.start < instant
-                }
+                crossedExcludedInterval ||
+                exclusion?.start?.let { start ->
+                    start > previousInstant!! && start < instant
+                } == true
             ) {
                 current = mutableListOf<GeoPoint>().also(fragments::add)
             }
@@ -251,6 +268,78 @@ class JournalRouteService(
         operator fun contains(value: Long): Boolean = value in start..endInclusive
 
         fun overlaps(other: MillisInterval): Boolean = start <= other.endInclusive && other.start <= endInclusive
+    }
+
+    /** Sorted, non-overlapping intervals used for linear point exclusion sweeps. */
+    private class MergedMillisIntervals(intervals: List<MillisInterval> = emptyList()) {
+        private var values: List<MillisInterval> = merge(intervals)
+
+        val size: Int get() = values.size
+
+        operator fun get(index: Int): MillisInterval = values[index]
+
+        fun getOrNull(index: Int): MillisInterval? = values.getOrNull(index)
+
+        fun overlaps(interval: MillisInterval): Boolean {
+            var low = 0
+            var high = values.size
+            while (low < high) {
+                val middle = (low + high) ushr 1
+                if (values[middle].endInclusive < interval.start) low = middle + 1 else high = middle
+            }
+            return low < values.size && values[low].start <= interval.endInclusive
+        }
+
+        fun addAll(intervals: List<MillisInterval>) {
+            if (intervals.isEmpty()) return
+            values = mergeSorted(values, merge(intervals))
+        }
+
+        private fun merge(intervals: List<MillisInterval>): List<MillisInterval> {
+            if (intervals.isEmpty()) return emptyList()
+            val ordered = intervals.sortedWith(compareBy<MillisInterval> { it.start }.thenBy { it.endInclusive })
+            val merged = ArrayList<MillisInterval>(ordered.size)
+            ordered.forEach { next ->
+                val previous = merged.lastOrNull()
+                if (previous == null || next.start > previous.endInclusive) {
+                    merged += next
+                } else if (next.endInclusive > previous.endInclusive) {
+                    merged[merged.lastIndex] = MillisInterval(previous.start, next.endInclusive)
+                }
+            }
+            return merged
+        }
+
+        private fun mergeSorted(
+            first: List<MillisInterval>,
+            second: List<MillisInterval>,
+        ): List<MillisInterval> {
+            if (first.isEmpty()) return second
+            if (second.isEmpty()) return first
+            val mergedInput = ArrayList<MillisInterval>(first.size + second.size)
+            var firstIndex = 0
+            var secondIndex = 0
+            while (firstIndex < first.size || secondIndex < second.size) {
+                if (
+                    secondIndex >= second.size ||
+                    firstIndex < first.size && first[firstIndex].start <= second[secondIndex].start
+                ) {
+                    mergedInput += first[firstIndex++]
+                } else {
+                    mergedInput += second[secondIndex++]
+                }
+            }
+            val result = ArrayList<MillisInterval>(mergedInput.size)
+            mergedInput.forEach { next ->
+                val previous = result.lastOrNull()
+                if (previous == null || next.start > previous.endInclusive) {
+                    result += next
+                } else if (next.endInclusive > previous.endInclusive) {
+                    result[result.lastIndex] = MillisInterval(previous.start, next.endInclusive)
+                }
+            }
+            return result
+        }
     }
 
     private companion object {

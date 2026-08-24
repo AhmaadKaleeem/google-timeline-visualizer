@@ -4,6 +4,7 @@ import dev.mahlernim.timelinevisualizer.journal.JournalMatchClassification
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.security.MessageDigest
@@ -79,6 +80,29 @@ class TimelineJournalImportAdapterTest {
         assertEquals(1, result.detailedObservations.size)
         assertEquals(emptyList<Any>(), result.semanticSegments)
         assertFalse(input.closed)
+    }
+
+    @Test
+    fun reportsThrottledByteProgressFromZeroThroughTheCompleteDocument() {
+        val filler = " ".repeat(600_000)
+        val source = (
+            """{"rawSignals":[{"position":{"LatLng":"37.1,127.1","timestamp":"2026-02-01T00:00:00Z","accuracyMeters":10}}]}""" +
+                filler
+            ).toByteArray()
+        val reports = mutableListOf<Long>()
+
+        adapter.adapt(
+            input = ByteArrayInputStream(source),
+            sourceName = "large.json",
+            importedAtEpochMillis = 1,
+            matchClassification = JournalMatchClassification.NEW_JOURNAL,
+            onBytesRead = reports::add,
+        )
+
+        assertEquals(0L, reports.first())
+        assertEquals(source.size.toLong(), reports.last())
+        assertTrue(reports.zipWithNext().all { (before, after) -> after > before })
+        assertTrue(reports.size < 20)
     }
 
     @Test
