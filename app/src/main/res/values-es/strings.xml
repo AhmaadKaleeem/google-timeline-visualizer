@@ -442,4 +442,41 @@
     <string name="yearly_recap_badge">Resumen anual</string>
     <plurals name="library_project_count"><item quantity="one">%d proyecto</item><item quantity="other">%d proyectos</item></plurals>
     <plurals name="library_video_count"><item quantity="one">%d vídeo</item><item quantity="other">%d vídeos</item></plurals>
+    <string name="journal_reminders">Recordatorios del diario de viaje</string>
+    <string name="journal_reminders_summary">Los recordatorios opcionales y discretos te ayudan a conservar los detalles recientes de las rutas. Tu diario funciona aunque estén desactivados.</string>
+    <string name="journal_status_no_detail">Esta exportación contiene el historial de Timeline, pero no había ubicaciones detalladas disponibles.</string>
+    <string name="journal_status_current">Se conservaron nuevos detalles de rutas hace %1$d días.</string>
+    <string name="journal_status_gentle">Han pasado %1$d días desde que tu diario capturó nuevos detalles de rutas.</string>
+    <string name="journal_status_due">Amplía tu diario con los últimos días de Timeline.</string>
+    <string name="journal_status_at_risk">Algunos detalles de rutas que aún no se han conservado podrían desaparecer pronto de futuras exportaciones.</string>
+    <string name="journal_status_overdue">Actualiza tu diario cuando puedas. La aplicación no puede recuperar los detalles que falten en exportaciones anteriores.</string>
+    <string name="journal_status_detail">Rutas detalladas conservadas hasta %1$s\n%2$s ubicaciones detalladas conservadas\nHistorial del diario %3$s\nÚltima importación correcta %4$s</string>
+    <string name="journal_growth_title">Tu diario ha crecido</string>
+    <string name="journal_created_title">Tu diario de viaje está listo</string>
+    <string name="journal_backfill_title">Una parte anterior ahora tiene más detalles</string>
+    <string name="journal_timeline_growth_title">Se añadió más historial de Timeline</string>
+    <string name="journal_up_to_date_title">Tu diario está al día</string>
+    <string name="journal_growth_detail">%1$s\n%2$s\nLas rutas detalladas ahora llegan hasta %3$s</string>
+    <string name="journal_backfill_detail">Se añadieron %1$s a un periodo anterior. La fecha detallada más reciente no ha cambiado.</string>
+    <string name="journal_timeline_growth_detail">Se añadió el mejor historial de Timeline disponible sin cambiar la fecha más reciente de tus rutas detalladas.</string>
+    <string name="journal_up_to_date_detail">No se encontraron nuevos detalles de rutas. Tu diario guardado no ha cambiado.</string>
+    <string name="keep_journal_growing">Sigue ampliando tu diario</string>
+    <string name="journal_reminder_invitation">Recibe uno o dos recordatorios discretos cuando convenga actualizar los detalles recientes de las rutas.</string>
+    <string name="turn_on_reminders">Activar recordatorios</string>
+    <string name="update_journal">Actualizar diario</string>
+    <string name="remind_in_three_days">Recordármelo en 3 días</string>
+    <string name="turn_off">Desactivar</string>
+    <string name="journal_reminder_channel">Recordatorios del diario de viaje</string>
+    <string name="journal_reminder_channel_summary">Recordatorios opcionales para conservar los detalles recientes de las rutas</string>
+    <string name="journal_reminder_day24_title">Sigue ampliando tu diario de viaje</string>
+    <string name="journal_reminder_day24_detail">Añade los últimos días de tu exportación de Timeline y conserva los detalles de sus rutas.</string>
+    <string name="journal_reminder_day29_title">Conserva los detalles recientes de las rutas</string>
+    <string name="journal_reminder_day29_detail">Han pasado 29 días desde que tu diario capturó nuevos detalles. Algunas ubicaciones detalladas anteriores podrían desaparecer pronto de futuras exportaciones.</string>
+    <string name="journal_reminders_enabled">Los recordatorios del diario de viaje están activados.</string>
+    <string name="journal_reminders_permission_denied">Los recordatorios siguen desactivados. Puedes habilitar las notificaciones más tarde en los ajustes de Android.</string>
+    <string name="journal_import_result_done">Listo</string>
+    <string name="journal_import_result_create">Crear un vídeo</string>
+    <string name="journal_home_due_detail">Han pasado %1$d días desde que tu diario capturó nuevos detalles de rutas. Añade los últimos días de Timeline.</string>
+    <string name="journal_home_risk_detail">Han pasado %1$d días desde que tu diario capturó nuevos detalles de rutas. Algunos detalles que aún no se han conservado podrían desaparecer pronto de futuras exportaciones.</string>
+    <string name="journal_home_overdue_detail">Han pasado %1$d días desde que tu diario capturó nuevos detalles de rutas. Actualízalo cuando puedas. Es posible que los detalles anteriores que falten no se puedan recuperar.</string>
 </resources>

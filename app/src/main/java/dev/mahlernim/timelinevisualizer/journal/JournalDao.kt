@@ -71,6 +71,18 @@ interface JournalDao {
     @Query("SELECT COUNT(*) FROM detailed_observations WHERE journalId = :journalId")
     suspend fun observationCount(journalId: String): Int
 
+    @Query("SELECT MAX(importedAtEpochMillis) FROM import_batches WHERE journalId = :journalId AND status = 'COMMITTED'")
+    suspend fun latestCommittedImportAt(journalId: String): Long?
+
+    @Query("UPDATE journals SET reminderEligible = :eligible WHERE id = :journalId")
+    suspend fun setReminderEligible(journalId: String, eligible: Boolean)
+
+    @Query("UPDATE journals SET reminderEnabled = :enabled WHERE id = :journalId")
+    suspend fun setReminderEnabled(journalId: String, enabled: Boolean)
+
+    @Query("UPDATE journals SET detailedUsableThroughEpochMillis = :usableThroughEpochMillis WHERE id = :journalId")
+    suspend fun setDetailedUsableThrough(journalId: String, usableThroughEpochMillis: Long?)
+
     @Query("SELECT COUNT(*) FROM observation_imports WHERE importBatchId = :batchId")
     suspend fun provenanceCount(batchId: String): Int
 

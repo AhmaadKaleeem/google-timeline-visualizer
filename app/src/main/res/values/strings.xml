@@ -360,6 +360,10 @@
         <item quantity="one">%d detailed location</item>
         <item quantity="other">%d detailed locations</item>
     </plurals>
+    <plurals name="journal_preserved_observations_count" translatable="false">
+        <item quantity="one">%d detailed observation</item>
+        <item quantity="other">%d detailed observations</item>
+    </plurals>
     <string name="journal_import_no_changes" translatable="false">Your Travel Journal already contains newer or matching data. Nothing needed updating.</string>
     <string name="journal_import_mismatch_title" translatable="false">This may be a different Travel Journal</string>
     <string name="journal_import_mismatch_message" translatable="false">This file does not have enough detailed locations in common with your saved Travel Journal. Nothing was changed. A different person’s Timeline cannot be added to the same Journal.</string>
@@ -524,4 +528,41 @@
         <item quantity="other">Recent %d-day recap</item>
     </plurals>
     <string name="project_changes_saved">Changes saved</string>
+    <string name="journal_reminders">Travel Journal reminders</string>
+    <string name="journal_reminders_summary">Optional, quiet reminders help you preserve recent route detail. Your Journal still works when reminders are off.</string>
+    <string name="journal_status_no_detail">This export contains Timeline history, but no detailed locations were available.</string>
+    <string name="journal_status_current">New route detail was preserved %1$d days ago.</string>
+    <string name="journal_status_gentle">It has been %1$d days since your Journal captured new route detail.</string>
+    <string name="journal_status_due">Grow your Journal with the latest days from Timeline.</string>
+    <string name="journal_status_at_risk">Some unpreserved route detail may soon disappear from future exports.</string>
+    <string name="journal_status_overdue">Update your Journal when you can. Detail missing from earlier exports cannot be recovered by the app.</string>
+    <string name="journal_status_detail">Detailed routes preserved through %1$s\n%2$s detailed locations preserved\nJournal history %3$s\nLast successful import %4$s</string>
+    <string name="journal_growth_title">Your Journal grew</string>
+    <string name="journal_created_title">Your Travel Journal is ready</string>
+    <string name="journal_backfill_title">An older part became more detailed</string>
+    <string name="journal_timeline_growth_title">More Timeline history was added</string>
+    <string name="journal_up_to_date_title">Your Journal is up to date</string>
+    <string name="journal_growth_detail">%1$s\n%2$s\nDetailed routes now continue through %3$s</string>
+    <string name="journal_backfill_detail">%1$s were added to an earlier period. Your latest detailed date is unchanged.</string>
+    <string name="journal_timeline_growth_detail">The best available Timeline history was added without changing your latest detailed route date.</string>
+    <string name="journal_up_to_date_detail">No new route detail was found. Your saved Journal was not changed.</string>
+    <string name="keep_journal_growing">Keep your Journal growing</string>
+    <string name="journal_reminder_invitation">Get one or two gentle reminders when recent route detail may need an update.</string>
+    <string name="turn_on_reminders">Turn on reminders</string>
+    <string name="update_journal">Update Journal</string>
+    <string name="remind_in_three_days">Remind me in 3 days</string>
+    <string name="turn_off">Turn off</string>
+    <string name="journal_reminder_channel">Travel Journal reminders</string>
+    <string name="journal_reminder_channel_summary">Optional reminders to preserve recent route detail</string>
+    <string name="journal_reminder_day24_title">Keep your Travel Journal growing</string>
+    <string name="journal_reminder_day24_detail">Add the latest days from your Timeline export and preserve their route detail.</string>
+    <string name="journal_reminder_day29_title">Preserve recent route detail</string>
+    <string name="journal_reminder_day29_detail">It has been 29 days since your Journal captured new detail. Some older detailed locations may soon disappear from future exports.</string>
+    <string name="journal_reminders_enabled">Travel Journal reminders are on.</string>
+    <string name="journal_reminders_permission_denied">Reminders remain off. You can enable notifications in Android settings later.</string>
+    <string name="journal_import_result_done">Done</string>
+    <string name="journal_import_result_create">Create a video</string>
+    <string name="journal_home_due_detail">It has been %1$d days since your Journal captured new route detail. Add the latest days from Timeline.</string>
+    <string name="journal_home_risk_detail">It has been %1$d days since your Journal captured new route detail. Some unpreserved detail may soon disappear from future exports.</string>
+    <string name="journal_home_overdue_detail">It has been %1$d days since your Journal captured new route detail. Update when you can, without assuming earlier missing detail can be recovered.</string>
 </resources>

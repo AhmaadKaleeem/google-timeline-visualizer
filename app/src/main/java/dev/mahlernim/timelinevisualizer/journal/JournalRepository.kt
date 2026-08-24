@@ -66,6 +66,12 @@ sealed interface JournalImportResult {
     data class AlreadyImported(val batchId: String) : JournalImportResult
 }
 
+data class JournalStatusSnapshot(
+    val journal: JournalEntity,
+    val preservedObservationCount: Int,
+    val lastSuccessfulImportAtEpochMillis: Long?,
+)
+
 class JournalRepository(
     private val database: JournalDatabase,
     private val idFactory: () -> String = { UUID.randomUUID().toString() },
@@ -88,6 +94,24 @@ class JournalRepository(
     suspend fun journal(journalId: String): JournalEntity? = dao.journal(journalId)
 
     suspend fun primaryJournal(): JournalEntity? = dao.primaryJournal()
+
+    suspend fun status(journalId: String): JournalStatusSnapshot? {
+        val journal = dao.journal(journalId) ?: return null
+        return JournalStatusSnapshot(
+            journal = journal,
+            preservedObservationCount = dao.observationCount(journalId),
+            lastSuccessfulImportAtEpochMillis = dao.latestCommittedImportAt(journalId),
+        )
+    }
+
+    suspend fun setReminderEligible(journalId: String, eligible: Boolean) =
+        dao.setReminderEligible(journalId, eligible)
+
+    suspend fun setReminderEnabled(journalId: String, enabled: Boolean) =
+        dao.setReminderEnabled(journalId, enabled)
+
+    suspend fun setDetailedUsableThrough(journalId: String, usableThroughEpochMillis: Long?) =
+        dao.setDetailedUsableThrough(journalId, usableThroughEpochMillis)
 
     suspend fun committedImport(journalId: String, sourceHash: String): ImportBatchEntity? {
         require(sourceHash.isNotBlank()) { "sourceHash must not be blank" }

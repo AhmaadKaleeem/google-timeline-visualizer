@@ -1,6 +1,7 @@
 package dev.mahlernim.timelinevisualizer
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Looper
 import android.view.View
@@ -88,6 +89,59 @@ class JournalLabUiTest {
             activity.getString(R.string.import_or_update),
             activity.findViewById<TextView>(R.id.settingsImportTimelineButton).text.toString(),
         )
+        val result = ShadowDialog.getLatestDialog()
+        assertEquals(
+            activity.getString(R.string.journal_created_title),
+            result.findViewById<TextView>(R.id.journalGrowthHeadline)?.text,
+        )
+    }
+
+    @Test
+    fun recentDetailedImportOffersOptionalRemindersAndShowsStructuredStatus() {
+        val source = rawTimeline("recent", 37.5, 127.0, java.time.Instant.now().minusSeconds(60).toString())
+        val activity = launchActivity()
+
+        activity.importTimeline(Uri.fromFile(source))
+        waitForImportedRoute(activity)
+        ShadowDialog.getLatestDialog()?.dismiss()
+        activity.findViewById<View>(R.id.navigationSettings).performClick()
+        waitUntil { activity.findViewById<View>(R.id.journalReminderSwitch).visibility == View.VISIBLE }
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.journalFreshnessStatus).visibility)
+        assertTrue(activity.findViewById<TextView>(R.id.timelineDataStatus).text.contains("detailed locations"))
+        assertFalse(
+            activity.findViewById<com.google.android.material.materialswitch.MaterialSwitch>(
+                R.id.journalReminderSwitch,
+            ).isChecked,
+        )
+    }
+
+    @Test
+    fun reminderActionOpensTheJournalCardWithoutStartingAFilePicker() {
+        val activity = launchActivity()
+        requireNotNull(controller).newIntent(
+            Intent(activity, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN_JOURNAL),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsScreen).visibility)
+        assertTrue(activity.findViewById<View>(R.id.settingsImportTimelineButton).hasFocus())
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)
+    }
+
+    @Test
+    fun dueJournalAppearsAsAnInAppLibraryCard() {
+        val source = rawTimeline("due", 37.5, 127.0, "2026-08-01T00:00:00Z")
+        val activity = launchActivity()
+
+        activity.importTimeline(Uri.fromFile(source))
+        waitForImportedRoute(activity)
+        ShadowDialog.getLatestDialog()?.dismiss()
+        activity.findViewById<View>(R.id.navigationVideos).performClick()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.journalFreshnessCard).visibility)
+        activity.findViewById<View>(R.id.journalFreshnessCard).performClick()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsScreen).visibility)
     }
 
     @Test

@@ -239,6 +239,50 @@ class JournalRepositoryTest {
     }
 
     @Test
+    fun importPreservesExplicitReminderConsentState() = runBlocking {
+        val first = repository.import(
+            JOURNAL_ID,
+            importInput("recent", 10_000, observations = listOf(observation(9_000), observation(10_000))),
+        ) as JournalImportResult.Committed
+        repository.setReminderEligible(JOURNAL_ID, eligible = true)
+        repository.setReminderEnabled(JOURNAL_ID, enabled = true)
+        val armed = requireNotNull(repository.journal(JOURNAL_ID))
+        assertEquals(true, armed.reminderEligible)
+        assertEquals(true, armed.reminderEnabled)
+        assertEquals(10_000L, armed.detailedCapturedThroughEpochMillis)
+        assertEquals(10_000L, armed.lastAdvancedAtEpochMillis)
+
+        val duplicate = repository.import(
+            JOURNAL_ID,
+            importInput("recent", 20_000, observations = listOf(observation(9_000), observation(10_000))),
+        )
+        assertEquals(JournalImportResult.AlreadyImported(first.batchId), duplicate)
+
+        repository.import(
+            JOURNAL_ID,
+            importInput("older", 30_000, observations = listOf(observation(1_000), observation(2_000))),
+        )
+        repository.import(
+            JOURNAL_ID,
+            importInput("semantic-only", 40_000, segments = listOf(segment(11_000, 12_000, "VISIT"))),
+        )
+        val unchanged = requireNotNull(repository.journal(JOURNAL_ID))
+        assertEquals(true, unchanged.reminderEligible)
+        assertEquals(true, unchanged.reminderEnabled)
+        assertEquals(10_000L, unchanged.detailedCapturedThroughEpochMillis)
+        assertEquals(10_000L, unchanged.lastAdvancedAtEpochMillis)
+
+        repository.import(
+            JOURNAL_ID,
+            importInput("advanced", 50_000, observations = listOf(observation(10_000), observation(15_000))),
+        )
+        val advanced = requireNotNull(repository.journal(JOURNAL_ID))
+        assertEquals(15_000L, advanced.detailedCapturedThroughEpochMillis)
+        assertEquals(50_000L, advanced.lastAdvancedAtEpochMillis)
+        assertEquals(true, advanced.reminderEnabled)
+    }
+
+    @Test
     fun identityProbeUsesBoundedDeterministicSamplesInsideCommittedDates() = runBlocking {
         val committed = (0 until 100).map { index -> observation(10_000L + index, 37.0 + index / 10_000.0) }
         repository.import(JOURNAL_ID, importInput("base", 20_000, committed))

@@ -20,10 +20,10 @@ def test_journal_lab_has_a_separate_installation_identity() -> None:
     )
     assert lab_flavor is not None
     assert 'applicationId = "dev.mahlernim.timelinevisualizer.journallab"' in lab_flavor.group("body")
-    assert 'versionCode = 7' in lab_flavor.group("body")
-    assert 'versionName = "3.0.0-journal-lab.7"' in lab_flavor.group("body")
+    assert 'versionCode = 8' in lab_flavor.group("body")
+    assert 'versionName = "3.0.0-journal-lab.8"' in lab_flavor.group("body")
     assert 'buildConfigField("boolean", "IS_JOURNAL_LAB", "true")' in lab_flavor.group("body")
-    assert 'releases/tag/journal-lab-7' in lab_flavor.group("body")
+    assert 'releases/tag/journal-lab-8' in lab_flavor.group("body")
     assert 'manifestPlaceholders["appLabel"] = "Journal Lab"' in lab_flavor.group("body")
     assert 'android:label="${appLabel}"' in manifest
 
@@ -42,21 +42,26 @@ def test_lab_release_is_immutable_verified_and_coinstallable() -> None:
     for required in (
         'tags:\n      - "journal-lab-*"',
         "testGithubDebugUnitTest lintJournalLabRelease assembleGithubRelease assembleJournalLabRelease",
-        "testJournalLabDebugUnitTest --tests dev.mahlernim.timelinevisualizer.JournalLabUiTest",
+        "--tests dev.mahlernim.timelinevisualizer.JournalLabUiTest",
         'test "$package_name" = "dev.mahlernim.timelinevisualizer.journallab"',
         'test "$application_label" = "Journal Lab"',
-        "EXPECTED_VERSION_CODE: 7",
-        "EXPECTED_VERSION_NAME: 3.0.0-journal-lab.7",
-        'test "$LAB_RELEASE_TAG" = "journal-lab-7"',
+        "EXPECTED_VERSION_CODE: 8",
+        "EXPECTED_VERSION_NAME: 3.0.0-journal-lab.8",
+        'test "$LAB_RELEASE_TAG" = "journal-lab-8"',
         'test "$version_name" = "$EXPECTED_VERSION_NAME"',
         'test "$lab_cert" = "$production_cert"',
         "adb install app/build/outputs/apk/github/release/app-github-release.apk",
-        "adb install app/build/outputs/apk/journalLab/release/app-journalLab-release.apk",
+        "gh release download journal-lab-7",
+        "adb install previous-lab/JournalLab-journal-lab-7.apk",
+        "adb install -r app/build/outputs/apk/journalLab/release/app-journalLab-release.apk",
         'if gh release view "$LAB_RELEASE_TAG" >/dev/null 2>&1; then',
         'echo "Release $LAB_RELEASE_TAG already exists and will not be replaced."',
         'sha256sum "$lab_apk" > "$lab_apk.sha256"',
-        "--notes-file docs/journal-lab-7.md",
+        "--notes-file docs/journal-lab-8.md",
         "--prerelease",
         "--verify-tag",
     ):
         assert required in workflow
+
+    assert "--tests 'dev.mahlernim.timelinevisualizer.journal.reminder.*'" in workflow
+    assert "--tests dev.mahlernim.timelinevisualizer.journal.JournalRepositoryTest" in workflow

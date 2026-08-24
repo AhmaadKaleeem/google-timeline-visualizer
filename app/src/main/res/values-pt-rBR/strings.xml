@@ -442,4 +442,41 @@
     <string name="yearly_recap_badge">Resumo anual</string>
     <plurals name="library_project_count"><item quantity="one">%d projeto</item><item quantity="other">%d projetos</item></plurals>
     <plurals name="library_video_count"><item quantity="one">%d vídeo</item><item quantity="other">%d vídeos</item></plurals>
+    <string name="journal_reminders">Lembretes do diário de viagem</string>
+    <string name="journal_reminders_summary">Lembretes opcionais e discretos ajudam você a preservar detalhes recentes das rotas. Seu diário continua funcionando quando os lembretes estão desativados.</string>
+    <string name="journal_status_no_detail">Esta exportação contém o histórico da Linha do tempo, mas não havia locais detalhados disponíveis.</string>
+    <string name="journal_status_current">Novos detalhes de rotas foram preservados há %1$d dias.</string>
+    <string name="journal_status_gentle">Já se passaram %1$d dias desde que seu diário registrou novos detalhes de rotas.</string>
+    <string name="journal_status_due">Amplie seu diário com os dias mais recentes da Linha do tempo.</string>
+    <string name="journal_status_at_risk">Alguns detalhes de rotas ainda não preservados podem desaparecer em breve de futuras exportações.</string>
+    <string name="journal_status_overdue">Atualize seu diário quando puder. O aplicativo não consegue recuperar detalhes ausentes de exportações anteriores.</string>
+    <string name="journal_status_detail">Rotas detalhadas preservadas até %1$s\n%2$s locais detalhados preservados\nHistórico do diário %3$s\nÚltima importação bem-sucedida %4$s</string>
+    <string name="journal_growth_title">Seu diário cresceu</string>
+    <string name="journal_created_title">Seu diário de viagem está pronto</string>
+    <string name="journal_backfill_title">Uma parte mais antiga ficou mais detalhada</string>
+    <string name="journal_timeline_growth_title">Mais histórico da Linha do tempo foi adicionado</string>
+    <string name="journal_up_to_date_title">Seu diário está atualizado</string>
+    <string name="journal_growth_detail">%1$s\n%2$s\nAs rotas detalhadas agora continuam até %3$s</string>
+    <string name="journal_backfill_detail">%1$s foram adicionados a um período anterior. A data detalhada mais recente permanece igual.</string>
+    <string name="journal_timeline_growth_detail">O melhor histórico disponível da Linha do tempo foi adicionado sem alterar a data mais recente das rotas detalhadas.</string>
+    <string name="journal_up_to_date_detail">Nenhum novo detalhe de rota foi encontrado. Seu diário salvo não foi alterado.</string>
+    <string name="keep_journal_growing">Continue ampliando seu diário</string>
+    <string name="journal_reminder_invitation">Receba um ou dois lembretes discretos quando os detalhes recentes das rotas precisarem de atualização.</string>
+    <string name="turn_on_reminders">Ativar lembretes</string>
+    <string name="update_journal">Atualizar diário</string>
+    <string name="remind_in_three_days">Lembrar em 3 dias</string>
+    <string name="turn_off">Desativar</string>
+    <string name="journal_reminder_channel">Lembretes do diário de viagem</string>
+    <string name="journal_reminder_channel_summary">Lembretes opcionais para preservar detalhes recentes das rotas</string>
+    <string name="journal_reminder_day24_title">Continue ampliando seu diário de viagem</string>
+    <string name="journal_reminder_day24_detail">Adicione os dias mais recentes da exportação da Linha do tempo e preserve os detalhes das rotas.</string>
+    <string name="journal_reminder_day29_title">Preserve detalhes recentes das rotas</string>
+    <string name="journal_reminder_day29_detail">Já se passaram 29 dias desde que seu diário registrou novos detalhes. Alguns locais detalhados mais antigos podem desaparecer em breve de futuras exportações.</string>
+    <string name="journal_reminders_enabled">Os lembretes do diário de viagem estão ativados.</string>
+    <string name="journal_reminders_permission_denied">Os lembretes continuam desativados. Você pode ativar as notificações mais tarde nas configurações do Android.</string>
+    <string name="journal_import_result_done">Concluído</string>
+    <string name="journal_import_result_create">Criar um vídeo</string>
+    <string name="journal_home_due_detail">Já se passaram %1$d dias desde que seu diário registrou novos detalhes de rotas. Adicione os dias mais recentes da Linha do tempo.</string>
+    <string name="journal_home_risk_detail">Já se passaram %1$d dias desde que seu diário registrou novos detalhes de rotas. Alguns detalhes ainda não preservados podem desaparecer em breve de futuras exportações.</string>
+    <string name="journal_home_overdue_detail">Já se passaram %1$d dias desde que seu diário registrou novos detalhes de rotas. Atualize quando puder. Talvez não seja possível recuperar detalhes anteriores ausentes.</string>
 </resources>

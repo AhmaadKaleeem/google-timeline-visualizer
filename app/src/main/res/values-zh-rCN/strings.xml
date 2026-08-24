@@ -433,4 +433,41 @@
     <string name="yearly_recap_badge">年度回顾</string>
     <plurals name="library_project_count"><item quantity="other">%d 个项目</item></plurals>
     <plurals name="library_video_count"><item quantity="other">%d 个视频</item></plurals>
+    <string name="journal_reminders">旅行记录提醒</string>
+    <string name="journal_reminders_summary">可选的静默提醒可帮助你保留近期的详细路线。关闭提醒后，旅行记录仍可正常使用。</string>
+    <string name="journal_status_no_detail">此导出文件包含时间轴记录，但没有可用的详细位置。</string>
+    <string name="journal_status_current">已于 %1$d 天前保留新的详细路线。</string>
+    <string name="journal_status_gentle">旅行记录已有 %1$d 天未捕获新的详细路线。</string>
+    <string name="journal_status_due">添加时间轴中的最近日期，让旅行记录继续增长。</string>
+    <string name="journal_status_at_risk">一些尚未保留的详细路线可能很快会从未来的导出文件中消失。</string>
+    <string name="journal_status_overdue">请在方便时更新旅行记录。应用无法恢复早期导出文件中缺失的详细信息。</string>
+    <string name="journal_status_detail">详细路线已保留至 %1$s\n已保留 %2$s 个详细位置\n旅行记录范围 %3$s\n上次成功导入 %4$s</string>
+    <string name="journal_growth_title">旅行记录已增长</string>
+    <string name="journal_created_title">旅行记录已准备就绪</string>
+    <string name="journal_backfill_title">较早的记录现在更详细了</string>
+    <string name="journal_timeline_growth_title">已添加更多时间轴记录</string>
+    <string name="journal_up_to_date_title">旅行记录已是最新状态</string>
+    <string name="journal_growth_detail">%1$s\n%2$s\n详细路线现已延续至 %3$s</string>
+    <string name="journal_backfill_detail">已向较早的时间段添加 %1$s。最新的详细日期没有变化。</string>
+    <string name="journal_timeline_growth_detail">已添加当前可用的最佳时间轴记录，最新的详细路线日期没有变化。</string>
+    <string name="journal_up_to_date_detail">未发现新的详细路线。已保存的旅行记录没有变化。</string>
+    <string name="keep_journal_growing">让旅行记录继续增长</string>
+    <string name="journal_reminder_invitation">当近期的详细路线可能需要更新时，接收一两次静默提醒。</string>
+    <string name="turn_on_reminders">开启提醒</string>
+    <string name="update_journal">更新旅行记录</string>
+    <string name="remind_in_three_days">3 天后提醒我</string>
+    <string name="turn_off">关闭</string>
+    <string name="journal_reminder_channel">旅行记录提醒</string>
+    <string name="journal_reminder_channel_summary">用于保留近期详细路线的可选提醒</string>
+    <string name="journal_reminder_day24_title">让旅行记录继续增长</string>
+    <string name="journal_reminder_day24_detail">添加时间轴导出文件中的最近日期，并保留这些日期的详细路线。</string>
+    <string name="journal_reminder_day29_title">保留近期的详细路线</string>
+    <string name="journal_reminder_day29_detail">旅行记录已有 29 天未捕获新的详细信息。一些较早的详细位置可能很快会从未来的导出文件中消失。</string>
+    <string name="journal_reminders_enabled">旅行记录提醒已开启。</string>
+    <string name="journal_reminders_permission_denied">提醒仍处于关闭状态。你可以稍后在 Android 设置中启用通知。</string>
+    <string name="journal_import_result_done">完成</string>
+    <string name="journal_import_result_create">创建视频</string>
+    <string name="journal_home_due_detail">旅行记录已有 %1$d 天未捕获新的详细路线。请添加时间轴中的最近日期。</string>
+    <string name="journal_home_risk_detail">旅行记录已有 %1$d 天未捕获新的详细路线。一些尚未保留的详细信息可能很快会从未来的导出文件中消失。</string>
+    <string name="journal_home_overdue_detail">旅行记录已有 %1$d 天未捕获新的详细路线。请在方便时更新。之前缺失的详细信息可能无法恢复。</string>
 </resources>

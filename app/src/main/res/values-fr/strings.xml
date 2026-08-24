@@ -442,4 +442,41 @@
     <string name="yearly_recap_badge">Récapitulatif annuel</string>
     <plurals name="library_project_count"><item quantity="one">%d projet</item><item quantity="other">%d projets</item></plurals>
     <plurals name="library_video_count"><item quantity="one">%d vidéo</item><item quantity="other">%d vidéos</item></plurals>
+    <string name="journal_reminders">Rappels du carnet de voyage</string>
+    <string name="journal_reminders_summary">Des rappels facultatifs et discrets vous aident à conserver les détails récents de vos itinéraires. Votre carnet fonctionne même lorsque les rappels sont désactivés.</string>
+    <string name="journal_status_no_detail">Cette exportation contient l’historique Timeline, mais aucun emplacement détaillé n’était disponible.</string>
+    <string name="journal_status_current">De nouveaux détails d’itinéraire ont été conservés il y a %1$d jours.</string>
+    <string name="journal_status_gentle">Cela fait %1$d jours que votre carnet n’a pas enregistré de nouveaux détails d’itinéraire.</string>
+    <string name="journal_status_due">Enrichissez votre carnet avec les derniers jours de Timeline.</string>
+    <string name="journal_status_at_risk">Certains détails d’itinéraire non conservés pourraient bientôt disparaître des prochaines exportations.</string>
+    <string name="journal_status_overdue">Mettez à jour votre carnet dès que possible. L’application ne peut pas récupérer les détails absents des exportations précédentes.</string>
+    <string name="journal_status_detail">Itinéraires détaillés conservés jusqu’au %1$s\n%2$s emplacements détaillés conservés\nHistorique du carnet %3$s\nDernière importation réussie %4$s</string>
+    <string name="journal_growth_title">Votre carnet s’est enrichi</string>
+    <string name="journal_created_title">Votre carnet de voyage est prêt</string>
+    <string name="journal_backfill_title">Une période plus ancienne est désormais plus détaillée</string>
+    <string name="journal_timeline_growth_title">Davantage d’historique Timeline a été ajouté</string>
+    <string name="journal_up_to_date_title">Votre carnet est à jour</string>
+    <string name="journal_growth_detail">%1$s\n%2$s\nLes itinéraires détaillés couvrent désormais la période jusqu’au %3$s</string>
+    <string name="journal_backfill_detail">%1$s ont été ajoutés à une période antérieure. La date détaillée la plus récente reste inchangée.</string>
+    <string name="journal_timeline_growth_detail">Le meilleur historique Timeline disponible a été ajouté sans modifier la date la plus récente de vos itinéraires détaillés.</string>
+    <string name="journal_up_to_date_detail">Aucun nouveau détail d’itinéraire n’a été trouvé. Votre carnet enregistré n’a pas été modifié.</string>
+    <string name="keep_journal_growing">Continuez à enrichir votre carnet</string>
+    <string name="journal_reminder_invitation">Recevez un ou deux rappels discrets lorsque les détails récents de vos itinéraires pourraient nécessiter une mise à jour.</string>
+    <string name="turn_on_reminders">Activer les rappels</string>
+    <string name="update_journal">Mettre à jour le carnet</string>
+    <string name="remind_in_three_days">Me le rappeler dans 3 jours</string>
+    <string name="turn_off">Désactiver</string>
+    <string name="journal_reminder_channel">Rappels du carnet de voyage</string>
+    <string name="journal_reminder_channel_summary">Rappels facultatifs pour conserver les détails récents des itinéraires</string>
+    <string name="journal_reminder_day24_title">Continuez à enrichir votre carnet de voyage</string>
+    <string name="journal_reminder_day24_detail">Ajoutez les derniers jours de votre exportation Timeline et conservez les détails de leurs itinéraires.</string>
+    <string name="journal_reminder_day29_title">Conservez les détails récents de vos itinéraires</string>
+    <string name="journal_reminder_day29_detail">Cela fait 29 jours que votre carnet n’a pas enregistré de nouveaux détails. Certains emplacements détaillés plus anciens pourraient bientôt disparaître des prochaines exportations.</string>
+    <string name="journal_reminders_enabled">Les rappels du carnet de voyage sont activés.</string>
+    <string name="journal_reminders_permission_denied">Les rappels restent désactivés. Vous pourrez activer les notifications plus tard dans les paramètres Android.</string>
+    <string name="journal_import_result_done">Terminé</string>
+    <string name="journal_import_result_create">Créer une vidéo</string>
+    <string name="journal_home_due_detail">Cela fait %1$d jours que votre carnet n’a pas enregistré de nouveaux détails d’itinéraire. Ajoutez les derniers jours de Timeline.</string>
+    <string name="journal_home_risk_detail">Cela fait %1$d jours que votre carnet n’a pas enregistré de nouveaux détails d’itinéraire. Certains détails non conservés pourraient bientôt disparaître des prochaines exportations.</string>
+    <string name="journal_home_overdue_detail">Cela fait %1$d jours que votre carnet n’a pas enregistré de nouveaux détails d’itinéraire. Mettez-le à jour dès que possible. Les détails antérieurs manquants ne pourront peut-être pas être récupérés.</string>
 </resources>

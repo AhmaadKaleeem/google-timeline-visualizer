@@ -437,4 +437,41 @@
     <string name="yearly_recap_badge">Jahresrückblick</string>
     <plurals name="library_project_count"><item quantity="one">%d Projekt</item><item quantity="other">%d Projekte</item></plurals>
     <plurals name="library_video_count"><item quantity="one">%d Video</item><item quantity="other">%d Videos</item></plurals>
+    <string name="journal_reminders">Erinnerungen für das Reisetagebuch</string>
+    <string name="journal_reminders_summary">Optionale, leise Erinnerungen helfen dir, aktuelle Routendetails zu bewahren. Dein Reisetagebuch funktioniert auch ohne Erinnerungen.</string>
+    <string name="journal_status_no_detail">Dieser Export enthält den Zeitachsenverlauf, aber keine detaillierten Standorte.</string>
+    <string name="journal_status_current">Vor %1$d Tagen wurden neue Routendetails gespeichert.</string>
+    <string name="journal_status_gentle">Seit %1$d Tagen hat dein Reisetagebuch keine neuen Routendetails erfasst.</string>
+    <string name="journal_status_due">Erweitere dein Reisetagebuch um die neuesten Tage aus der Zeitachse.</string>
+    <string name="journal_status_at_risk">Einige noch nicht gespeicherte Routendetails könnten bald aus künftigen Exporten verschwinden.</string>
+    <string name="journal_status_overdue">Aktualisiere dein Reisetagebuch, wenn du kannst. Details, die in früheren Exporten fehlen, kann die App nicht wiederherstellen.</string>
+    <string name="journal_status_detail">Detaillierte Routen gespeichert bis %1$s\n%2$s detaillierte Standorte gespeichert\nTagebuchverlauf %3$s\nLetzter erfolgreicher Import %4$s</string>
+    <string name="journal_growth_title">Dein Reisetagebuch ist gewachsen</string>
+    <string name="journal_created_title">Dein Reisetagebuch ist bereit</string>
+    <string name="journal_backfill_title">Ein älterer Abschnitt ist jetzt detaillierter</string>
+    <string name="journal_timeline_growth_title">Mehr Zeitachsenverlauf wurde hinzugefügt</string>
+    <string name="journal_up_to_date_title">Dein Reisetagebuch ist aktuell</string>
+    <string name="journal_growth_detail">%1$s\n%2$s\nDetaillierte Routen reichen jetzt bis %3$s</string>
+    <string name="journal_backfill_detail">%1$s wurden einem früheren Zeitraum hinzugefügt. Dein neuestes Detaildatum bleibt unverändert.</string>
+    <string name="journal_timeline_growth_detail">Der beste verfügbare Zeitachsenverlauf wurde hinzugefügt, ohne das neueste Datum deiner detaillierten Routen zu ändern.</string>
+    <string name="journal_up_to_date_detail">Es wurden keine neuen Routendetails gefunden. Dein gespeichertes Reisetagebuch wurde nicht geändert.</string>
+    <string name="keep_journal_growing">Lass dein Reisetagebuch weiter wachsen</string>
+    <string name="journal_reminder_invitation">Erhalte eine oder zwei sanfte Erinnerungen, wenn aktuelle Routendetails möglicherweise aktualisiert werden sollten.</string>
+    <string name="turn_on_reminders">Erinnerungen aktivieren</string>
+    <string name="update_journal">Reisetagebuch aktualisieren</string>
+    <string name="remind_in_three_days">In 3 Tagen erinnern</string>
+    <string name="turn_off">Deaktivieren</string>
+    <string name="journal_reminder_channel">Erinnerungen für das Reisetagebuch</string>
+    <string name="journal_reminder_channel_summary">Optionale Erinnerungen zum Bewahren aktueller Routendetails</string>
+    <string name="journal_reminder_day24_title">Lass dein Reisetagebuch weiter wachsen</string>
+    <string name="journal_reminder_day24_detail">Füge die neuesten Tage aus deinem Zeitachsenexport hinzu und bewahre ihre Routendetails.</string>
+    <string name="journal_reminder_day29_title">Aktuelle Routendetails bewahren</string>
+    <string name="journal_reminder_day29_detail">Seit 29 Tagen hat dein Reisetagebuch keine neuen Details erfasst. Einige ältere detaillierte Standorte könnten bald aus künftigen Exporten verschwinden.</string>
+    <string name="journal_reminders_enabled">Erinnerungen für das Reisetagebuch sind aktiviert.</string>
+    <string name="journal_reminders_permission_denied">Erinnerungen bleiben deaktiviert. Du kannst Benachrichtigungen später in den Android-Einstellungen aktivieren.</string>
+    <string name="journal_import_result_done">Fertig</string>
+    <string name="journal_import_result_create">Video erstellen</string>
+    <string name="journal_home_due_detail">Seit %1$d Tagen hat dein Reisetagebuch keine neuen Routendetails erfasst. Füge die neuesten Tage aus der Zeitachse hinzu.</string>
+    <string name="journal_home_risk_detail">Seit %1$d Tagen hat dein Reisetagebuch keine neuen Routendetails erfasst. Einige noch nicht gespeicherte Details könnten bald aus künftigen Exporten verschwinden.</string>
+    <string name="journal_home_overdue_detail">Seit %1$d Tagen hat dein Reisetagebuch keine neuen Routendetails erfasst. Aktualisiere es, wenn du kannst. Früher fehlende Details lassen sich möglicherweise nicht wiederherstellen.</string>
 </resources>

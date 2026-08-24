@@ -433,4 +433,41 @@
     <string name="yearly_recap_badge">年度回顧</string>
     <plurals name="library_project_count"><item quantity="other">%d 個專案</item></plurals>
     <plurals name="library_video_count"><item quantity="other">%d 部影片</item></plurals>
+    <string name="journal_reminders">旅行記錄提醒</string>
+    <string name="journal_reminders_summary">選用的安靜提醒可協助你保留近期的詳細路線。關閉提醒後，旅行記錄仍可正常使用。</string>
+    <string name="journal_status_no_detail">此匯出檔包含時間軸記錄，但沒有可用的詳細位置。</string>
+    <string name="journal_status_current">已於 %1$d 天前保留新的詳細路線。</string>
+    <string name="journal_status_gentle">旅行記錄已有 %1$d 天未擷取新的詳細路線。</string>
+    <string name="journal_status_due">加入時間軸中的最近日期，讓旅行記錄繼續成長。</string>
+    <string name="journal_status_at_risk">一些尚未保留的詳細路線可能很快會從未來的匯出檔中消失。</string>
+    <string name="journal_status_overdue">請在方便時更新旅行記錄。應用程式無法復原先前匯出檔中缺少的詳細資料。</string>
+    <string name="journal_status_detail">詳細路線已保留至 %1$s\n已保留 %2$s 個詳細位置\n旅行記錄範圍 %3$s\n上次成功匯入 %4$s</string>
+    <string name="journal_growth_title">旅行記錄已成長</string>
+    <string name="journal_created_title">旅行記錄已準備就緒</string>
+    <string name="journal_backfill_title">較早的記錄現在更詳細了</string>
+    <string name="journal_timeline_growth_title">已加入更多時間軸記錄</string>
+    <string name="journal_up_to_date_title">旅行記錄已是最新狀態</string>
+    <string name="journal_growth_detail">%1$s\n%2$s\n詳細路線現已延續至 %3$s</string>
+    <string name="journal_backfill_detail">已在較早的期間加入 %1$s。最新的詳細日期沒有變更。</string>
+    <string name="journal_timeline_growth_detail">已加入目前可用的最佳時間軸記錄，最新的詳細路線日期沒有變更。</string>
+    <string name="journal_up_to_date_detail">找不到新的詳細路線。已儲存的旅行記錄沒有變更。</string>
+    <string name="keep_journal_growing">讓旅行記錄繼續成長</string>
+    <string name="journal_reminder_invitation">當近期的詳細路線可能需要更新時，接收一兩次安靜提醒。</string>
+    <string name="turn_on_reminders">開啟提醒</string>
+    <string name="update_journal">更新旅行記錄</string>
+    <string name="remind_in_three_days">3 天後提醒我</string>
+    <string name="turn_off">關閉</string>
+    <string name="journal_reminder_channel">旅行記錄提醒</string>
+    <string name="journal_reminder_channel_summary">用於保留近期詳細路線的選用提醒</string>
+    <string name="journal_reminder_day24_title">讓旅行記錄繼續成長</string>
+    <string name="journal_reminder_day24_detail">加入時間軸匯出檔中的最近日期，並保留這些日期的詳細路線。</string>
+    <string name="journal_reminder_day29_title">保留近期的詳細路線</string>
+    <string name="journal_reminder_day29_detail">旅行記錄已有 29 天未擷取新的詳細資料。一些較早的詳細位置可能很快會從未來的匯出檔中消失。</string>
+    <string name="journal_reminders_enabled">旅行記錄提醒已開啟。</string>
+    <string name="journal_reminders_permission_denied">提醒仍維持關閉。你可以稍後在 Android 設定中啟用通知。</string>
+    <string name="journal_import_result_done">完成</string>
+    <string name="journal_import_result_create">建立影片</string>
+    <string name="journal_home_due_detail">旅行記錄已有 %1$d 天未擷取新的詳細路線。請加入時間軸中的最近日期。</string>
+    <string name="journal_home_risk_detail">旅行記錄已有 %1$d 天未擷取新的詳細路線。一些尚未保留的詳細資料可能很快會從未來的匯出檔中消失。</string>
+    <string name="journal_home_overdue_detail">旅行記錄已有 %1$d 天未擷取新的詳細路線。請在方便時更新。先前缺少的詳細資料可能無法復原。</string>
 </resources>

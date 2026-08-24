@@ -45,7 +45,10 @@
                         android:textAppearance="?attr/textAppearanceBodyMedium" />
                 </LinearLayout>
                 <TextView android:id="@+id/timelineDataTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/timeline_data" android:textAppearance="?attr/textAppearanceTitleMedium" android:textStyle="bold" />
-                <TextView android:id="@+id/timelineDataStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="@string/timeline_source_empty" android:textAppearance="?attr/textAppearanceBodySmall" />
+                <TextView android:id="@+id/timelineDataStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:accessibilityLiveRegion="polite" android:text="@string/timeline_source_empty" android:textAppearance="?attr/textAppearanceBodySmall" />
+                <TextView android:id="@+id/journalFreshnessStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:textStyle="bold" android:visibility="gone" tools:text="New route detail was preserved 8 days ago" tools:visibility="visible" />
+                <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/journalReminderSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/journal_reminders" android:visibility="gone" tools:visibility="visible" />
+                <TextView android:id="@+id/journalReminderSummary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/journal_reminders_summary" android:textAppearance="?attr/textAppearanceBodySmall" android:visibility="gone" tools:visibility="visible" />
                 <LinearLayout
                     android:id="@+id/settingsTimelineProgressGroup"
                     android:layout_width="match_parent"

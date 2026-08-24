@@ -53,6 +53,9 @@
             android:exported="false"
             android:foregroundServiceType="dataSync|mediaProcessing"
             android:stopWithTask="false" />
+        <receiver
+            android:name=".journal.reminder.JournalReminderReceiver"
+            android:exported="false" />
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
             android:enabled="false"

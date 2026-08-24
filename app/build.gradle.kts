@@ -65,11 +65,11 @@ android {
         create("journalLab") {
             dimension = "distribution"
             applicationId = "dev.mahlernim.timelinevisualizer.journallab"
-            versionCode = 7
-            versionName = "3.0.0-journal-lab.7"
+            versionCode = 8
+            versionName = "3.0.0-journal-lab.8"
             manifestPlaceholders["appLabel"] = "Journal Lab"
             buildConfigField("boolean", "IS_JOURNAL_LAB", "true")
-            buildConfigField("String", "UPDATE_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases/tag/journal-lab-7\"")
+            buildConfigField("String", "UPDATE_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases/tag/journal-lab-8\"")
             buildConfigField("String", "UPDATE_FALLBACK_URL", "\"https://github.com/mahlernim/google-timeline-visualizer/releases\"")
         }
     }
@@ -101,12 +101,14 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.11.0")
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")
+    implementation("androidx.work:work-runtime:2.11.2")
     ksp("androidx.room:room-compiler:2.8.4")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("androidx.test:core:1.7.0")
     testImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation("androidx.room:room-testing:2.8.4")
+    testImplementation("androidx.work:work-testing:2.11.2")
     androidTestImplementation("androidx.test:core-ktx:1.7.0")
     androidTestImplementation("androidx.test.ext:junit-ktx:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")

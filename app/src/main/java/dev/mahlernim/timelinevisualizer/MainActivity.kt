@@ -73,6 +73,7 @@ import dev.mahlernim.timelinevisualizer.data.TimelineParseReason
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceMetadata
 import dev.mahlernim.timelinevisualizer.databinding.ActivityMainBinding
+import dev.mahlernim.timelinevisualizer.databinding.DialogJournalGrowthBinding
 import dev.mahlernim.timelinevisualizer.databinding.ItemVideoBinding
 import dev.mahlernim.timelinevisualizer.databinding.ItemTripBinding
 import dev.mahlernim.timelinevisualizer.databinding.ScreenNewVideoBinding
@@ -99,7 +100,13 @@ import dev.mahlernim.timelinevisualizer.journal.JournalMatchClassification
 import dev.mahlernim.timelinevisualizer.journal.JournalRepository
 import dev.mahlernim.timelinevisualizer.journal.JournalEntryDestination
 import dev.mahlernim.timelinevisualizer.journal.JournalSetupNavigation
+import dev.mahlernim.timelinevisualizer.journal.JournalStatusSnapshot
 import dev.mahlernim.timelinevisualizer.journal.importer.TimelineJournalImportAdapter
+import dev.mahlernim.timelinevisualizer.journal.reminder.JournalFreshnessPolicy
+import dev.mahlernim.timelinevisualizer.journal.reminder.JournalFreshnessState
+import dev.mahlernim.timelinevisualizer.journal.reminder.JournalReminderCoordinator
+import dev.mahlernim.timelinevisualizer.journal.reminder.JournalReminderNotifications
+import dev.mahlernim.timelinevisualizer.journal.reminder.JournalReminderStateStore
 import dev.mahlernim.timelinevisualizer.journal.route.JournalRoute
 import dev.mahlernim.timelinevisualizer.journal.route.JournalRouteService
 import dev.mahlernim.timelinevisualizer.journal.route.RouteSource
@@ -297,10 +304,13 @@ class MainActivity : AppCompatActivity() {
     private var customizationOriginalModifiedBuiltInId: String? = null
     private var rawProjectRangeConflict = false
     private var activeJournal: JournalEntity? = null
+    private var activeJournalStatus: JournalStatusSnapshot? = null
     private var activeJournalRoute: JournalRoute? = null
     private var journalLoaded = false
     private var journalLoadJob: Job? = null
     private var journalImportIsInitial: Boolean? = null
+    private var updatingJournalReminderSwitch = false
+    private var pendingJournalReminderId: String? = null
 
     private val openTimeline = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importTimeline(uri)
@@ -331,6 +341,19 @@ class MainActivity : AppCompatActivity() {
     private val requestNotificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { openExportDestination() }
+
+    private val requestJournalNotificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val journalId = pendingJournalReminderId
+        pendingJournalReminderId = null
+        if (granted && journalId != null) {
+            enableJournalReminders(journalId)
+        } else if (!granted) {
+            Snackbar.make(binding.root, R.string.journal_reminders_permission_denied, Snackbar.LENGTH_LONG).show()
+            updateJournalReminderSwitch(enabled = false)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -456,6 +479,8 @@ class MainActivity : AppCompatActivity() {
             renderVideos()
         }
         home.deleteAllVideosButton.setOnClickListener { confirmDeleteAllLibraryContent() }
+        home.journalFreshnessCard.setOnClickListener { openJournalFromReminder() }
+        home.journalFreshnessCardAction.setOnClickListener { openJournalFromReminder() }
         settingsScreen.privacyPolicyButton.setOnClickListener { openPrivacyPolicy() }
         settingsScreen.githubProjectButton.setOnClickListener { openWebPage(PROJECT_URL, R.string.web_page_unavailable) }
         settingsScreen.checkUpdatesButton.setOnClickListener { openUpdates() }
@@ -463,6 +488,11 @@ class MainActivity : AppCompatActivity() {
         settingsScreen.cancelCustomizeButton.setOnClickListener { finishVideoCustomization(apply = false) }
         settingsScreen.applyCustomizeButton.setOnClickListener { finishVideoCustomization(apply = true) }
         settingsScreen.settingsImportTimelineButton.setOnClickListener { requestTimelineImport() }
+        settingsScreen.journalReminderSwitch.setOnCheckedChangeListener { _, checked ->
+            if (updatingJournalReminderSwitch) return@setOnCheckedChangeListener
+            val journal = activeJournal ?: return@setOnCheckedChangeListener
+            if (checked) requestEnableJournalReminders(journal.id) else disableJournalReminders(journal.id)
+        }
         settingsScreen.settingsTimelineHelpButton.setOnClickListener { showExportHelp() }
         settingsScreen.settingsTimelineRestoreButton.setOnClickListener { openRestoreGuide() }
         settingsScreen.versionText.text = installedVersionLabel()
@@ -574,6 +604,7 @@ class MainActivity : AppCompatActivity() {
         settingsReturnToCreate = savedInstanceState?.getBoolean(STATE_SETTINGS_RETURN_TO_CREATE) ?: false
         journalSetupMode = savedInstanceState?.getBoolean(STATE_JOURNAL_SETUP_MODE) ?: false
         journalSetupReturnToCreate = savedInstanceState?.getBoolean(STATE_JOURNAL_SETUP_RETURN_TO_CREATE) ?: false
+        pendingJournalReminderId = savedInstanceState?.getString(STATE_PENDING_JOURNAL_REMINDER_ID)
         customizationOriginalCamera = restoreCustomizationCamera(savedInstanceState)
         customizationOriginalPresetId = savedInstanceState?.getString(STATE_CUSTOMIZATION_PRESET_ID)
         customizationOriginalModifiedBuiltInId = savedInstanceState?.getString(STATE_CUSTOMIZATION_MODIFIED_ID)
@@ -589,7 +620,10 @@ class MainActivity : AppCompatActivity() {
         playerPositionMs = savedInstanceState?.getLong(STATE_PLAYER_POSITION) ?: 0L
         playerPlayWhenReady = savedInstanceState?.getBoolean(STATE_PLAYER_PLAYING) ?: true
         val incoming = intent?.data
-        if (intent?.action == ACTION_WATCH_VIDEO && incoming != null) {
+        if (intent?.action == ACTION_OPEN_JOURNAL && BuildConfig.IS_JOURNAL_LAB) {
+            openJournalFromReminder()
+            intent?.action = null
+        } else if (intent?.action == ACTION_WATCH_VIDEO && incoming != null) {
             if (savedInstanceState == null) watchVideo(incoming) else showVideoPlayer(incoming, resetPosition = false)
             VideoExportService.clearNotification(applicationContext)
         } else if (intent?.action == ACTION_SHARE_VIDEO && incoming != null) {
@@ -649,6 +683,7 @@ class MainActivity : AppCompatActivity() {
         outState.putBoolean(STATE_SETTINGS_RETURN_TO_CREATE, settingsReturnToCreate)
         outState.putBoolean(STATE_JOURNAL_SETUP_MODE, journalSetupMode)
         outState.putBoolean(STATE_JOURNAL_SETUP_RETURN_TO_CREATE, journalSetupReturnToCreate)
+        outState.putString(STATE_PENDING_JOURNAL_REMINDER_ID, pendingJournalReminderId)
         customizationOriginalCamera?.let { original ->
             outState.putString(STATE_CUSTOMIZATION_CAMERA, original.cameraMovement.name)
             outState.putString(STATE_CUSTOMIZATION_PACING, original.longTripCompression.name)
@@ -672,6 +707,11 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (intent.action == ACTION_OPEN_JOURNAL && BuildConfig.IS_JOURNAL_LAB) {
+            openJournalFromReminder()
+            intent.action = null
+            return
+        }
         intent.data?.let { uri ->
             when (intent.action) {
                 ACTION_WATCH_VIDEO -> {
@@ -694,6 +734,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun openJournalFromReminder() {
+        JournalReminderNotifications.cancel(applicationContext)
+        showSettings(fromCreate = false)
+        loadJournalIfNeeded()
+        settingsScreen.settingsImportTimelineButton.post {
+            settingsScreen.settingsImportTimelineButton.requestFocus()
+            settingsScreen.settingsImportTimelineButton.announceForAccessibility(
+                getString(R.string.update_journal),
+            )
+        }
+    }
+
     private fun showVideos(acknowledgeCompletion: Boolean = false) {
         if (acknowledgeCompletion) acknowledgeCompletedExport()
         releaseVideoPlayer()
@@ -708,6 +760,7 @@ class MainActivity : AppCompatActivity() {
             binding.bottomNavigation.selectedItemId = R.id.navigationVideos
             syncingBottomNavigation = false
         }
+        updateHomeJournalCard()
         renderVideos()
         renderTrips()
         if (BuildConfig.IS_JOURNAL_LAB) {
@@ -1180,6 +1233,13 @@ class MainActivity : AppCompatActivity() {
         if (::settingsScreen.isInitialized && distanceUnitPreference == DistanceUnitPreference.AUTOMATIC) {
             applyDistanceUnitPreference(distanceUnitPreference, save = false)
         }
+        if (
+            BuildConfig.IS_JOURNAL_LAB &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            activeJournal?.takeIf { it.reminderEnabled }?.let { disableJournalReminders(it.id) }
+        }
     }
 
     override fun onStop() {
@@ -1398,11 +1458,7 @@ class MainActivity : AppCompatActivity() {
                         journalRepository.committedImport(journal.id, adapted.sourceHash)
                     }
                     if (committed != null) {
-                        Snackbar.make(
-                            binding.root,
-                            R.string.journal_import_duplicate,
-                            Snackbar.LENGTH_LONG,
-                        ).show()
+                        showJournalDuplicateResult()
                         return@launch
                     } else {
                         val likelySame = withContext(Dispatchers.IO) {
@@ -1429,58 +1485,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 showJournalImportStage(R.string.journal_import_updating)
                 refreshJournalAfterImport(journal.id, result)
-                when (result) {
-                    is JournalImportResult.Committed -> Snackbar.make(
-                        binding.root,
-                        when {
-                            result.changeKind == JournalImportResult.ChangeKind.INITIAL &&
-                                result.insertedObservationCount > 0 -> {
-                                val detailedDays = classified.detailedObservations.asSequence()
-                                    .map { observation ->
-                                        Instant.ofEpochMilli(observation.instantEpochMillis)
-                                            .atZone(ZoneId.systemDefault())
-                                            .toLocalDate()
-                                    }
-                                    .distinct()
-                                    .count()
-                                getString(
-                                    R.string.journal_import_created,
-                                    resources.getQuantityString(
-                                        R.plurals.journal_days_count,
-                                        detailedDays,
-                                        detailedDays,
-                                    ),
-                                    resources.getQuantityString(
-                                        R.plurals.journal_detailed_locations_count,
-                                        result.insertedObservationCount,
-                                        result.insertedObservationCount,
-                                    ),
-                                )
-                            }
-                            result.changeKind == JournalImportResult.ChangeKind.INITIAL ->
-                                getString(R.string.journal_import_created_timeline)
-                            !result.needsRouteRefresh -> getString(R.string.journal_import_no_changes)
-                            result.insertedObservationCount == 0 && result.semanticSegmentCount > 0 ->
-                                getString(R.string.journal_import_added_timeline)
-                            else -> resources.getQuantityString(
-                                    R.plurals.journal_import_added,
-                                    result.insertedObservationCount,
-                                    result.insertedObservationCount,
-                                )
-                        },
-                        Snackbar.LENGTH_LONG,
-                    ).show()
-                    is JournalImportResult.AlreadyImported -> Snackbar.make(
-                        binding.root,
-                        R.string.journal_import_duplicate,
-                        Snackbar.LENGTH_LONG,
-                    ).show()
-                }
-                if (journalSetupMode && timeline != null) {
-                    journalSetupMode = false
-                    journalSetupReturnToCreate = false
-                    showNewVideo(loadRemembered = true)
-                }
+                showJournalImportResult(result, previousJournal = existing)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
@@ -1555,6 +1560,7 @@ class MainActivity : AppCompatActivity() {
         val loadedJournal = withContext(Dispatchers.IO) { journalRepository.journal(journalId) } ?: return
         if (!committed.needsRouteRefresh) {
             activeJournal = loadedJournal
+            activeJournalStatus = withContext(Dispatchers.IO) { journalRepository.status(journalId) }
             journalLoaded = true
             updateTimelineSettingsCard()
             return
@@ -1590,10 +1596,40 @@ class MainActivity : AppCompatActivity() {
     }
 
     private suspend fun applyJournalRoute(journal: JournalEntity, route: JournalRoute, refreshTrips: Boolean) {
-        val loadedJournal = journal
+        var reminderAdjustedJournal = journal
+        if (
+            journal.reminderEnabled &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            withContext(Dispatchers.IO) { journalRepository.setReminderEnabled(journal.id, enabled = false) }
+            JournalReminderCoordinator(applicationContext).cancel(journal.id)
+            reminderAdjustedJournal = journal.copy(reminderEnabled = false)
+        }
+        val usableThrough = route.spans.asSequence()
+            .filter { it.source == RouteSource.DETAILED }
+            .flatMap { it.points.asSequence() }
+            .maxOfOrNull { it.instant.toEpochMilli() }
+        if (reminderAdjustedJournal.detailedUsableThroughEpochMillis != usableThrough) {
+            withContext(Dispatchers.IO) {
+                journalRepository.setDetailedUsableThrough(reminderAdjustedJournal.id, usableThrough)
+            }
+        }
+        val loadedJournal = reminderAdjustedJournal.copy(detailedUsableThroughEpochMillis = usableThrough)
         activeJournal = loadedJournal
+        activeJournalStatus = withContext(Dispatchers.IO) { journalRepository.status(journal.id) }
+            ?.copy(journal = loadedJournal)
         activeJournalRoute = route
         journalLoaded = true
+        loadedJournal.detailedUsableThroughEpochMillis?.takeIf { loadedJournal.reminderEnabled }?.let { anchor ->
+            val stateStore = JournalReminderStateStore(applicationContext)
+            val anchorChanged = stateStore.state(loadedJournal.id).anchorEpochMillis != anchor
+            if (anchorChanged) {
+                JournalReminderNotifications.cancel(applicationContext)
+                stateStore.resetForAdvance(loadedJournal.id, anchor)
+            }
+            JournalReminderCoordinator(applicationContext).schedule(loadedJournal.id, anchor, replace = anchorChanged)
+        }
         rawSignalPoints = emptyList()
         rawSignalProcessing = null
         renderRawSignalsTimeline = null
@@ -1858,30 +1894,252 @@ class MainActivity : AppCompatActivity() {
         }
     }.getOrNull()?.takeIf { it >= 0L }
 
+    private fun showJournalDuplicateResult() {
+        showJournalGrowthDialog(
+            title = getString(R.string.journal_up_to_date_title),
+            detail = getString(R.string.journal_up_to_date_detail),
+            initial = false,
+            offerReminders = false,
+        )
+    }
+
+    private suspend fun showJournalImportResult(
+        result: JournalImportResult,
+        previousJournal: JournalEntity?,
+    ) {
+        val committed = result as? JournalImportResult.Committed
+        if (committed == null) {
+            showJournalDuplicateResult()
+            return
+        }
+        var journal = activeJournal
+        val usableThrough = journal?.detailedUsableThroughEpochMillis
+        val usableDate = usableThrough?.let(::formatJournalDate) ?: getString(R.string.timeline_range_unavailable)
+        val initial = committed.changeKind == JournalImportResult.ChangeKind.INITIAL
+        val previousUsableThrough = previousJournal?.detailedUsableThroughEpochMillis
+        val advancedAnchor = usableThrough?.takeIf { anchor ->
+            committed.insertedObservationCount > 0 &&
+                (previousUsableThrough == null || anchor > previousUsableThrough)
+        }
+        val usableGrowthPoints = activeJournalRoute?.spans.orEmpty()
+            .asSequence()
+            .filter { it.source == RouteSource.DETAILED }
+            .flatMap { it.points.asSequence() }
+            .filter { point -> previousUsableThrough == null || point.instant.toEpochMilli() > previousUsableThrough }
+            .distinctBy { point -> Triple(point.instant, point.latitude, point.longitude) }
+            .toList()
+        val usableGrowthDays = usableGrowthPoints.asSequence()
+            .map { it.instant.atZone(ZoneId.systemDefault()).toLocalDate() }
+            .distinct()
+            .count()
+        val locations = resources.getQuantityString(
+            R.plurals.journal_detailed_locations_count,
+            usableGrowthPoints.size,
+            usableGrowthPoints.size,
+        )
+        val preservedObservations = resources.getQuantityString(
+            R.plurals.journal_preserved_observations_count,
+            committed.insertedObservationCount,
+            committed.insertedObservationCount,
+        )
+        val (title, detail) = when {
+            initial && advancedAnchor != null -> {
+                getString(R.string.journal_created_title) to getString(
+                    R.string.journal_growth_detail,
+                    resources.getQuantityString(R.plurals.journal_days_count, usableGrowthDays, usableGrowthDays),
+                    locations,
+                    usableDate,
+                )
+            }
+            initial -> getString(R.string.journal_created_title) to getString(R.string.journal_timeline_growth_detail)
+            advancedAnchor != null -> {
+                getString(R.string.journal_growth_title) to getString(
+                    R.string.journal_growth_detail,
+                    resources.getQuantityString(R.plurals.journal_days_count, usableGrowthDays, usableGrowthDays),
+                    locations,
+                    usableDate,
+                )
+            }
+            committed.insertedObservationCount > 0 -> {
+                getString(R.string.journal_backfill_title) to getString(
+                    R.string.journal_backfill_detail,
+                    preservedObservations,
+                )
+            }
+            committed.semanticSegmentCount > 0 -> {
+                getString(R.string.journal_timeline_growth_title) to getString(R.string.journal_timeline_growth_detail)
+            }
+            else -> getString(R.string.journal_up_to_date_title) to getString(R.string.journal_up_to_date_detail)
+        }
+        val meaningfulRecentAdvance = JournalFreshnessPolicy.isRecent(advancedAnchor, System.currentTimeMillis())
+        if (advancedAnchor != null) {
+            JournalReminderNotifications.cancel(applicationContext)
+            JournalReminderStateStore(applicationContext).resetForAdvance(journal.id, advancedAnchor)
+            if (journal.reminderEnabled) {
+                JournalReminderCoordinator(applicationContext).schedule(journal.id, advancedAnchor, replace = true)
+            }
+        }
+        if (meaningfulRecentAdvance && journal != null && !journal.reminderEligible) {
+            withContext(Dispatchers.IO) { journalRepository.setReminderEligible(journal.id, eligible = true) }
+            journal = journal.copy(reminderEligible = true)
+            activeJournal = journal
+            activeJournalStatus = activeJournalStatus?.copy(journal = journal)
+        }
+        showJournalGrowthDialog(
+            title = title,
+            detail = detail,
+            initial = initial,
+            offerReminders = meaningfulRecentAdvance && journal?.reminderEnabled != true,
+        )
+        if (initial && timeline != null) {
+            journalSetupMode = false
+            journalSetupReturnToCreate = false
+            showNewVideo(loadRemembered = true)
+        }
+    }
+
+    private fun showJournalGrowthDialog(
+        title: String,
+        detail: String,
+        initial: Boolean,
+        offerReminders: Boolean,
+    ) {
+        val content = DialogJournalGrowthBinding.inflate(layoutInflater)
+        content.journalGrowthHeadline.text = title
+        content.journalGrowthDetail.text = detail
+        content.journalGrowthProgress.progress = 0
+        val builder = MaterialAlertDialogBuilder(this)
+            .setView(content.root)
+            .setPositiveButton(
+                if (initial) R.string.journal_import_result_create else R.string.journal_import_result_done,
+            ) { _, _ -> Unit }
+        if (offerReminders) {
+            builder.setNeutralButton(R.string.turn_on_reminders) { _, _ ->
+                activeJournal?.let { requestEnableJournalReminders(it.id) }
+            }
+        }
+        val dialog = builder.show()
+        content.journalGrowthProgress.setProgressCompat(1000, ValueAnimator.areAnimatorsEnabled())
+        content.journalGrowthDetail.post {
+            content.journalGrowthDetail.announceForAccessibility("$title. $detail")
+        }
+        dialog.setOnDismissListener { updateTimelineSettingsCard() }
+    }
+
+    private fun requestEnableJournalReminders(journalId: String) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingJournalReminderId = journalId
+            requestJournalNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            enableJournalReminders(journalId)
+        }
+    }
+
+    private fun enableJournalReminders(journalId: String) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { journalRepository.setReminderEnabled(journalId, enabled = true) }
+            activeJournal = activeJournal?.takeIf { it.id == journalId }?.copy(reminderEnabled = true) ?: activeJournal
+            activeJournalStatus = activeJournalStatus?.let { status ->
+                if (status.journal.id == journalId) {
+                    status.copy(journal = status.journal.copy(reminderEnabled = true))
+                } else {
+                    status
+                }
+            }
+            val anchor = activeJournal?.takeIf { it.id == journalId }?.detailedUsableThroughEpochMillis
+            if (anchor != null) {
+                val store = JournalReminderStateStore(applicationContext)
+                if (store.state(journalId).anchorEpochMillis != anchor) store.resetForAdvance(journalId, anchor)
+                JournalReminderCoordinator(applicationContext).schedule(journalId, anchor, replace = true)
+                JournalReminderNotifications.createChannel(applicationContext)
+            }
+            updateTimelineSettingsCard()
+            Snackbar.make(binding.root, R.string.journal_reminders_enabled, Snackbar.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun disableJournalReminders(journalId: String) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { journalRepository.setReminderEnabled(journalId, enabled = false) }
+            activeJournal = activeJournal?.takeIf { it.id == journalId }?.copy(reminderEnabled = false) ?: activeJournal
+            activeJournalStatus = activeJournalStatus?.let { status ->
+                if (status.journal.id == journalId) {
+                    status.copy(journal = status.journal.copy(reminderEnabled = false))
+                } else {
+                    status
+                }
+            }
+            JournalReminderStateStore(applicationContext).clear(journalId)
+            JournalReminderCoordinator(applicationContext).cancel(journalId)
+            updateTimelineSettingsCard()
+        }
+    }
+
+    private fun updateJournalReminderSwitch(enabled: Boolean) {
+        if (!::settingsScreen.isInitialized) return
+        updatingJournalReminderSwitch = true
+        settingsScreen.journalReminderSwitch.isChecked = enabled
+        updatingJournalReminderSwitch = false
+    }
+
+    private fun formatJournalDate(epochMillis: Long): String =
+        DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(epochMillis))
+
     private fun updateTimelineSettingsCard() {
         if (!::settingsScreen.isInitialized) return
         if (BuildConfig.IS_JOURNAL_LAB) {
             val journal = activeJournal
-            val route = activeJournalRoute
-            settingsScreen.timelineDataStatus.text = if (journal == null) {
-                getString(R.string.timeline_not_imported)
-            } else {
-                val updatedAt = journal.lastAdvancedAtEpochMillis ?: journal.createdAtEpochMillis
-                val updated = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(updatedAt))
-                val journalPoints = route?.timeline?.points.orEmpty()
-                val detailedPoints = route?.spans.orEmpty()
-                    .asSequence()
-                    .filter { it.source == RouteSource.DETAILED }
-                    .flatMap { it.points.asSequence() }
-                    .toList()
-                getString(
-                    R.string.timeline_file_status,
-                    journal.name,
-                    updated,
-                    formatPointRange(journalPoints),
-                    formatPointRange(detailedPoints),
-                )
+            if (journal == null) {
+                settingsScreen.timelineDataStatus.text = getString(R.string.timeline_not_imported)
+                settingsScreen.journalFreshnessStatus.visibility = View.GONE
+                settingsScreen.journalReminderSwitch.visibility = View.GONE
+                settingsScreen.journalReminderSummary.visibility = View.GONE
+                updateHomeJournalCard()
+                return
             }
+            val status = activeJournalStatus
+            val lastImportAt = status?.lastSuccessfulImportAtEpochMillis ?: journal.createdAtEpochMillis
+            val preservedCount = activeJournalRoute?.detailedUsableCount
+                ?: status?.preservedObservationCount
+                ?: 0
+            val semanticRange = if (journal.semanticStartEpochMillis != null && journal.semanticEndEpochMillis != null) {
+                getString(
+                    R.string.timeline_raw_points_available,
+                    formatJournalDate(journal.semanticStartEpochMillis),
+                    formatJournalDate(journal.semanticEndEpochMillis),
+                )
+            } else {
+                getString(R.string.timeline_range_unavailable)
+            }
+            settingsScreen.timelineDataStatus.text = getString(
+                R.string.journal_status_detail,
+                journal.detailedUsableThroughEpochMillis?.let(::formatJournalDate)
+                    ?: getString(R.string.timeline_range_unavailable),
+                NumberFormat.getIntegerInstance().format(preservedCount),
+                semanticRange,
+                DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(lastImportAt)),
+            )
+            val freshness = JournalFreshnessPolicy.evaluate(
+                journal.detailedUsableThroughEpochMillis,
+                System.currentTimeMillis(),
+            )
+            settingsScreen.journalFreshnessStatus.text = when (freshness.state) {
+                JournalFreshnessState.NO_DETAIL -> getString(R.string.journal_status_no_detail)
+                JournalFreshnessState.CURRENT -> getString(R.string.journal_status_current, freshness.ageDays)
+                JournalFreshnessState.GENTLE -> getString(R.string.journal_status_gentle, freshness.ageDays)
+                JournalFreshnessState.UPDATE_DUE -> getString(R.string.journal_status_due)
+                JournalFreshnessState.AT_RISK -> getString(R.string.journal_status_at_risk)
+                JournalFreshnessState.OVERDUE -> getString(R.string.journal_status_overdue)
+            }
+            settingsScreen.journalFreshnessStatus.visibility = View.VISIBLE
+            val remindersAvailable = journal.reminderEligible && journal.detailedUsableThroughEpochMillis != null
+            settingsScreen.journalReminderSwitch.visibility = if (remindersAvailable) View.VISIBLE else View.GONE
+            settingsScreen.journalReminderSummary.visibility = if (remindersAvailable) View.VISIBLE else View.GONE
+            updateJournalReminderSwitch(journal.reminderEnabled)
+            updateHomeJournalCard()
             return
         }
         var metadata = timelineSourceStore.metadata()
@@ -1911,6 +2169,35 @@ class MainActivity : AppCompatActivity() {
                 formatTimelineRange(metadata.rawStart, metadata.rawEnd),
             )
         }
+    }
+
+    private fun updateHomeJournalCard() {
+        if (!::home.isInitialized) return
+        val journal = activeJournal
+        if (!BuildConfig.IS_JOURNAL_LAB || journal == null) {
+            home.journalFreshnessCard.visibility = View.GONE
+            return
+        }
+        val freshness = JournalFreshnessPolicy.evaluate(
+            journal.detailedUsableThroughEpochMillis,
+            System.currentTimeMillis(),
+        )
+        val ageDays = freshness.ageDays
+        if (ageDays == null || freshness.state in setOf(JournalFreshnessState.NO_DETAIL, JournalFreshnessState.CURRENT)) {
+            home.journalFreshnessCard.visibility = View.GONE
+            return
+        }
+        home.journalFreshnessCardTitle.setText(
+            if (freshness.state == JournalFreshnessState.GENTLE) R.string.keep_journal_growing else R.string.update_journal,
+        )
+        home.journalFreshnessCardDetail.text = when (freshness.state) {
+            JournalFreshnessState.GENTLE -> getString(R.string.journal_status_gentle, ageDays)
+            JournalFreshnessState.UPDATE_DUE -> getString(R.string.journal_home_due_detail, ageDays)
+            JournalFreshnessState.AT_RISK -> getString(R.string.journal_home_risk_detail, ageDays)
+            JournalFreshnessState.OVERDUE -> getString(R.string.journal_home_overdue_detail, ageDays)
+            else -> return
+        }
+        home.journalFreshnessCard.visibility = View.VISIBLE
     }
 
     private fun formatTimelineRange(start: LocalDate?, end: LocalDate?): String =
@@ -5039,6 +5326,7 @@ class MainActivity : AppCompatActivity() {
         private const val STATE_SETTINGS_RETURN_TO_CREATE = "settings_return_to_create_v3"
         private const val STATE_JOURNAL_SETUP_MODE = "journal_setup_mode_v1"
         private const val STATE_JOURNAL_SETUP_RETURN_TO_CREATE = "journal_setup_return_to_create_v1"
+        private const val STATE_PENDING_JOURNAL_REMINDER_ID = "pending_journal_reminder_id_v1"
         private const val JOURNAL_REFRESH_PADDING_MILLIS = 31L * 60L * 1000L
         private const val STATE_CUSTOMIZATION_CAMERA = "customization_camera_v3"
         private const val STATE_CUSTOMIZATION_PACING = "customization_pacing_v3"
@@ -5049,6 +5337,7 @@ class MainActivity : AppCompatActivity() {
         private const val STATE_CUSTOMIZATION_MODIFIED_ID = "customization_modified_id_v3"
         internal const val ACTION_WATCH_VIDEO = "dev.mahlernim.timelinevisualizer.action.WATCH_VIDEO"
         internal const val ACTION_SHARE_VIDEO = "dev.mahlernim.timelinevisualizer.action.SHARE_VIDEO"
+        const val ACTION_OPEN_JOURNAL = "dev.mahlernim.timelinevisualizer.action.OPEN_JOURNAL"
         private const val PROJECT_URL = "https://github.com/mahlernim/google-timeline-visualizer"
         private const val PRIVACY_URL =
             "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/privacy.md"
