@@ -50,17 +50,13 @@ class TimelineJournalImportAdapterTest {
         assertNull(result.detailedObservations.single().provider)
 
         val semantic = result.semanticSegments.single()
-        assertEquals(TimelineJournalImportAdapter.SEMANTIC_PATH_KIND, semantic.kind)
+        assertEquals("ACTIVITY", semantic.kind)
         assertNull(semantic.activityType)
         assertNull(semantic.placeId)
-        assertEquals(
-            "[" +
-                "{\"instantEpochMillis\":1767225600000,\"latitude\":37.0,\"longitude\":127.0}," +
-                "{\"instantEpochMillis\":1767227400000,\"latitude\":37.1,\"longitude\":127.1}," +
-                "{\"instantEpochMillis\":1767229200000,\"latitude\":37.2,\"longitude\":127.2}" +
-                "]",
-            semantic.geometryJson,
-        )
+        assertEquals(true, semantic.geometryJson?.contains("\"continuityGroup\":\"source:0\"") == true)
+        assertEquals(true, semantic.geometryJson?.contains("\"partCount\":1") == true)
+        assertEquals(true, semantic.geometryJson?.contains("\"instantEpochMillis\":1767225600000") == true)
+        assertEquals(true, semantic.geometryJson?.contains("\"instantEpochMillis\":1767229200000") == true)
     }
 
     @Test

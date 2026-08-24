@@ -89,6 +89,7 @@ interface JournalDao {
     @Query(
         """
         SELECT semantic_segments.*,
+               import_batches.parserVersion AS parserVersion,
                semantic_snapshots.capturedAtEpochMillis AS snapshotCapturedAtEpochMillis
         FROM semantic_segments
         INNER JOIN semantic_snapshots

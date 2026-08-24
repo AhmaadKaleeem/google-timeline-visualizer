@@ -21,6 +21,7 @@ data class ActiveSemanticSegment(
     val activityType: String?,
     val placeId: String?,
     val geometryJson: String?,
+    val parserVersion: Int,
     @ColumnInfo(name = "snapshotCapturedAtEpochMillis")
     val snapshotCapturedAtEpochMillis: Long,
 )

@@ -152,6 +152,27 @@ class JournalLabUiTest {
         assertTrue(activity.currentJourneyDistanceKm() < 5.0)
     }
 
+    @Test
+    fun independentSemanticRecordsRemainAGapInTheJourney() {
+        val source = File.createTempFile("semantic-gap", ".json", context.cacheDir).apply {
+            writeText(
+                """
+                {"semanticSegments":[
+                  {"startTime":"2026-08-01T00:00:00Z","endTime":"2026-08-01T00:10:00Z","activity":{"start":{"latLng":"37.50,127.00"},"end":{"latLng":"37.51,127.01"}}},
+                  {"startTime":"2026-08-01T01:00:00Z","endTime":"2026-08-01T01:10:00Z","activity":{"start":{"latLng":"38.50,128.00"},"end":{"latLng":"38.51,128.01"}}}
+                ]}
+                """.trimIndent(),
+            )
+        }
+        val activity = launchActivity()
+
+        activity.importTimeline(Uri.fromFile(source))
+        waitForImportedRoute(activity)
+
+        assertEquals(listOf(2), activity.currentJourneyBreakIndices())
+        assertTrue(activity.currentJourneyDistanceKm() < 5.0)
+    }
+
     private fun rawTimeline(name: String, latitude: Double, longitude: Double, start: String): File {
         val second = java.time.Instant.parse(start).plusSeconds(600)
         return File.createTempFile(name, ".json", context.cacheDir).apply {

@@ -25,54 +25,117 @@ data class RouteSpan(
     }
 }
 
-/**
- * Builds a source-aware route without concatenating overlapping detailed and semantic points.
- *
- * The detailed input is expected to have passed the active conservative observation filter.
- * Semantic segment identity is not available from the v2 parser yet, so this first contract
- * uses semantic path points while preserving gaps between detailed coverage islands.
- */
+/** One independently connected semantic source record after snapshot arbitration. */
+data class SemanticRoutePath(
+    val id: String,
+    val start: Instant,
+    val end: Instant,
+    val points: List<GeoPoint>,
+) {
+    init {
+        require(id.isNotBlank())
+        require(end >= start)
+        require(points.isNotEmpty())
+    }
+}
+
+/** Builds a detailed-first route while retaining unsupported semantic boundaries as gaps. */
 object JournalRouteFusion {
     val DEFAULT_DISCONTINUITY: Duration = Duration.ofMinutes(30)
 
+    /** Compatibility API for callers that already have one proven semantic path. */
     fun fuse(
         semanticPoints: List<GeoPoint>,
         detailedPoints: List<GeoPoint>,
         discontinuity: Duration = DEFAULT_DISCONTINUITY,
     ): List<RouteSpan> {
+        val ordered = normalize(semanticPoints)
+        val paths = if (ordered.isEmpty()) {
+            emptyList()
+        } else {
+            listOf(SemanticRoutePath("compatibility-path", ordered.first().instant, ordered.last().instant, ordered))
+        }
+        return fuseSemanticPaths(paths, detailedPoints, discontinuity)
+    }
+
+    fun fuseSemanticPaths(
+        semanticPaths: List<SemanticRoutePath>,
+        detailedPoints: List<GeoPoint>,
+        discontinuity: Duration = DEFAULT_DISCONTINUITY,
+    ): List<RouteSpan> {
         require(!discontinuity.isNegative && !discontinuity.isZero)
-
+        val normalizedPaths = semanticPaths.mapNotNull { path ->
+            normalize(path.points).takeIf { it.isNotEmpty() }?.let { path.copy(points = it) }
+        }
         val detailedIslands = splitDetailedIslands(resolveDetailedConflicts(detailedPoints), discontinuity)
-        if (detailedIslands.isEmpty()) return semanticSpan(semanticPoints)?.let(::listOf).orEmpty()
+        if (normalizedPaths.isEmpty()) return detailedOnlySpans(detailedIslands)
 
-        val semanticOutsideDetailed = semanticPoints
-            .asSequence()
-            .sortedBy(GeoPoint::instant)
-            .distinctBy(::pointKey)
-            .filterNot { point -> detailedIslands.any { island -> point.instant in island.interval } }
-            .toList()
-
-        val spans = mutableListOf<RouteSpan>()
-        var semanticIndex = 0
-        detailedIslands.forEach { island ->
-            val before = mutableListOf<GeoPoint>()
-            while (
-                semanticIndex < semanticOutsideDetailed.size &&
-                semanticOutsideDetailed[semanticIndex].instant < island.start
-            ) {
-                before += semanticOutsideDetailed[semanticIndex++]
+        val semanticNodeCount = normalizedPaths.size
+        val connections = DisjointSet(semanticNodeCount + detailedIslands.size)
+        normalizedPaths.forEachIndexed { pathIndex, path ->
+            detailedIslands.forEachIndexed { islandIndex, island ->
+                if (path.start <= island.end && island.start <= path.end) {
+                    connections.union(pathIndex, semanticNodeCount + islandIndex)
+                }
             }
-            semanticSpan(before)?.let(spans::add)
-            spans += RouteSpan(
-                start = island.start,
-                end = island.end,
-                source = RouteSource.DETAILED,
-                points = island.points,
+        }
+
+        val candidates = mutableListOf<CandidateSpan>()
+        normalizedPaths.forEachIndexed { pathIndex, path ->
+            splitOutsideDetailed(path.points, detailedIslands).forEach { points ->
+                candidates += CandidateSpan(semanticSpan(points), pathIndex)
+            }
+        }
+        detailedIslands.forEachIndexed { islandIndex, island ->
+            candidates += CandidateSpan(
+                RouteSpan(island.start, island.end, RouteSource.DETAILED, island.points),
+                semanticNodeCount + islandIndex,
             )
         }
-        semanticSpan(semanticOutsideDetailed.drop(semanticIndex))?.let(spans::add)
+        candidates.sortWith(
+            compareBy<CandidateSpan> { it.span.start }
+                .thenBy { if (it.span.source == RouteSource.DETAILED) 0 else 1 }
+                .thenBy { it.span.end },
+        )
+        return insertUnsupportedGaps(candidates, connections)
+    }
 
-        return insertDetailedGaps(spans)
+    private fun detailedOnlySpans(islands: List<DetailedIsland>): List<RouteSpan> =
+        insertUnsupportedGaps(
+            islands.mapIndexed { index, island ->
+                CandidateSpan(
+                    RouteSpan(island.start, island.end, RouteSource.DETAILED, island.points),
+                    index,
+                )
+            },
+            DisjointSet(islands.size),
+        )
+
+    private fun splitOutsideDetailed(
+        points: List<GeoPoint>,
+        islands: List<DetailedIsland>,
+    ): List<List<GeoPoint>> {
+        if (islands.isEmpty()) return listOf(points)
+        val fragments = mutableListOf<MutableList<GeoPoint>>()
+        var current: MutableList<GeoPoint>? = null
+        points.forEach { point ->
+            if (islands.any { point.instant in it.interval }) {
+                current = null
+                return@forEach
+            }
+            val active = current
+            if (
+                active == null ||
+                islands.any { island ->
+                    val previous = active.last().instant
+                    island.start > previous && island.start < point.instant
+                }
+            ) {
+                current = mutableListOf<GeoPoint>().also(fragments::add)
+            }
+            current?.add(point)
+        }
+        return fragments.filter { it.isNotEmpty() }
     }
 
     private fun resolveDetailedConflicts(points: List<GeoPoint>): List<GeoPoint> = points
@@ -91,10 +154,7 @@ object JournalRouteFusion {
         val islands = mutableListOf<MutableList<GeoPoint>>()
         points.forEach { point ->
             val current = islands.lastOrNull()
-            if (
-                current == null ||
-                Duration.between(current.last().instant, point.instant) > discontinuity
-            ) {
+            if (current == null || Duration.between(current.last().instant, point.instant) > discontinuity) {
                 islands += mutableListOf(point)
             } else {
                 current += point
@@ -103,35 +163,46 @@ object JournalRouteFusion {
         return islands.map(::DetailedIsland)
     }
 
-    private fun semanticSpan(points: List<GeoPoint>): RouteSpan? {
-        if (points.isEmpty()) return null
-        val ordered = points.sortedBy(GeoPoint::instant).distinctBy(::pointKey)
-        return RouteSpan(
-            start = ordered.first().instant,
-            end = ordered.last().instant,
-            source = RouteSource.SEMANTIC_PATH,
-            points = ordered,
-        )
-    }
+    private fun semanticSpan(points: List<GeoPoint>): RouteSpan = RouteSpan(
+        start = points.first().instant,
+        end = points.last().instant,
+        source = RouteSource.SEMANTIC_PATH,
+        points = points,
+    )
 
-    private fun insertDetailedGaps(spans: List<RouteSpan>): List<RouteSpan> {
-        if (spans.size < 2) return spans
+    private fun insertUnsupportedGaps(
+        candidates: List<CandidateSpan>,
+        connections: DisjointSet,
+    ): List<RouteSpan> {
+        if (candidates.isEmpty()) return emptyList()
         val result = mutableListOf<RouteSpan>()
-        spans.forEach { next ->
-            val previous = result.lastOrNull()
-            if (previous?.source == RouteSource.DETAILED && next.source == RouteSource.DETAILED) {
+        var previous: CandidateSpan? = null
+        candidates.forEach { next ->
+            val prior = previous
+            if (prior != null && connections.find(prior.node) != connections.find(next.node)) {
                 result += RouteSpan(
-                    start = previous.end,
-                    end = next.start,
+                    start = minOf(prior.span.end, next.span.start),
+                    end = maxOf(prior.span.end, next.span.start),
                     source = RouteSource.GAP,
                     points = emptyList(),
-                    transitionReason = "No supported route observations",
+                    transitionReason = if (
+                        prior.span.source == RouteSource.DETAILED && next.span.source == RouteSource.DETAILED
+                    ) {
+                        "No supported route observations"
+                    } else {
+                        "No supported route continuity"
+                    },
                 )
             }
-            result += next
+            result += next.span
+            previous = next
         }
         return result
     }
+
+    private fun normalize(points: List<GeoPoint>): List<GeoPoint> = points
+        .sortedBy(GeoPoint::instant)
+        .distinctBy(::pointKey)
 
     private fun pointKey(point: GeoPoint): Triple<Long, Long, Long> = Triple(
         point.instant.toEpochMilli(),
@@ -139,9 +210,33 @@ object JournalRouteFusion {
         point.longitude.toBits(),
     )
 
+    private data class CandidateSpan(val span: RouteSpan, val node: Int)
+
     private data class DetailedIsland(val points: List<GeoPoint>) {
         val start: Instant = points.first().instant
         val end: Instant = points.last().instant
         val interval: ClosedRange<Instant> = start..end
+    }
+
+    private class DisjointSet(size: Int) {
+        private val parents = IntArray(size) { it }
+
+        fun find(value: Int): Int {
+            var root = value
+            while (parents[root] != root) root = parents[root]
+            var current = value
+            while (parents[current] != current) {
+                val next = parents[current]
+                parents[current] = root
+                current = next
+            }
+            return root
+        }
+
+        fun union(first: Int, second: Int) {
+            val firstRoot = find(first)
+            val secondRoot = find(second)
+            if (firstRoot != secondRoot) parents[secondRoot] = firstRoot
+        }
     }
 }

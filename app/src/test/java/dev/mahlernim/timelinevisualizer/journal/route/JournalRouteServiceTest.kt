@@ -154,17 +154,108 @@ class JournalRouteServiceTest {
         assertNotNull(repository.primaryJournal())
     }
 
+    @Test
+    fun adjacentStructuredSemanticRecordsRemainSeparatedWithoutContinuityEvidence() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "independent-segments",
+                importedAt = minute(100),
+                semantic = listOf(
+                    semantic(0, 10, listOf(point(0, 1.0), point(10, 1.1))),
+                    semantic(10, 20, listOf(point(10, 2.0), point(20, 2.1))),
+                ),
+            ),
+        )
+
+        val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(21)))
+
+        assertEquals(
+            listOf(RouteSource.SEMANTIC_PATH, RouteSource.GAP, RouteSource.SEMANTIC_PATH),
+            route.spans.map(RouteSpan::source),
+        )
+        assertEquals("No supported route continuity", route.spans[1].transitionReason)
+    }
+
+    @Test
+    fun legacyParserChunksRemainOneConnectedCompatibilityPath() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "legacy-chunks",
+                importedAt = minute(100),
+                parserVersion = 1,
+                semantic = listOf(
+                    semantic(0, 10, listOf(point(0, 1.0), point(10, 1.1))),
+                    semantic(20, 30, listOf(point(20, 1.2), point(30, 1.3))),
+                ),
+            ),
+        )
+
+        val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(31)))
+
+        assertEquals(listOf(RouteSource.SEMANTIC_PATH), route.spans.map(RouteSpan::source))
+        assertEquals(listOf(1.0, 1.1, 1.2, 1.3), route.timeline.points.map(GeoPoint::latitude))
+    }
+
+    @Test
+    fun explicitPartsOfOneStructuredRecordRemainConnected() = runBlocking {
+        val first = listOf(point(0, 1.0), point(10, 1.1))
+        val second = listOf(point(20, 1.2), point(30, 1.3))
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "structured-parts",
+                importedAt = minute(100),
+                semantic = listOf(
+                    semantic(0, 10, first).copy(
+                        geometryJson = SemanticGeometryCodec.encodePart(first, "source:7", 0, 2),
+                    ),
+                    semantic(20, 30, second).copy(
+                        geometryJson = SemanticGeometryCodec.encodePart(second, "source:7", 1, 2),
+                    ),
+                ),
+            ),
+        )
+
+        val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(31)))
+
+        assertEquals(listOf(RouteSource.SEMANTIC_PATH), route.spans.map(RouteSpan::source))
+    }
+
+    @Test
+    fun structuredActivityCoverageSuppressesOverlappingStandalonePathHistory() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "secondary-path",
+                importedAt = minute(100),
+                semantic = listOf(
+                    semantic(10, 20, listOf(point(10, 5.0), point(20, 5.1))),
+                    semantic(0, 30, listOf(point(0, 9.0), point(10, 9.1), point(20, 9.2), point(30, 9.3)))
+                        .copy(kind = "PATH"),
+                ),
+            ),
+        )
+
+        val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(31)))
+
+        assertEquals(listOf(9.0, 5.0, 5.1, 9.3), route.timeline.points.map(GeoPoint::latitude))
+        assertEquals(2, route.spans.count { it.source == RouteSource.GAP })
+    }
+
     private fun importInput(
         hash: String,
         importedAt: Long,
         observations: List<DetailedObservationInput> = emptyList(),
         semantic: List<SemanticSegmentInput> = emptyList(),
+        parserVersion: Int = 2,
     ) = JournalImport(
         sourceHash = hash,
         sourceName = "timeline.json",
         sourceSize = 1_024,
         importedAtEpochMillis = importedAt,
-        parserVersion = 2,
+        parserVersion = parserVersion,
         matchClassification = JournalMatchClassification.LIKELY_SAME,
         detailedObservations = observations,
         semanticSegments = semantic,
