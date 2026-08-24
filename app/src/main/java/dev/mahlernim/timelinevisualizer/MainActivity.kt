@@ -101,6 +101,9 @@ import dev.mahlernim.timelinevisualizer.journal.importer.TimelineJournalImportAd
 import dev.mahlernim.timelinevisualizer.journal.route.JournalRoute
 import dev.mahlernim.timelinevisualizer.journal.route.JournalRouteService
 import dev.mahlernim.timelinevisualizer.journal.route.RouteSource
+import dev.mahlernim.timelinevisualizer.journal.route.connectedTimelines
+import dev.mahlernim.timelinevisualizer.journal.route.journeyForDateRange
+import dev.mahlernim.timelinevisualizer.journal.route.journeyForRange
 import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.Timeline
@@ -1396,7 +1399,7 @@ class MainActivity : AppCompatActivity() {
         val loaded = timeline
         if (loaded != null) {
             val period = TimelinePeriod.sameYear(loaded.years.first())
-            configureYears(loaded, loaded.forRange(period), ignoredCount = 0)
+            configureYears(loaded, route.journeyForRange(period), ignoredCount = 0)
             applyActiveProjectDates()
             tripSuggestions = refreshRequestedTripSuggestions(loaded)
             editor.editorGroup.visibility = View.VISIBLE
@@ -1688,6 +1691,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun selectRange() {
+        if (BuildConfig.IS_JOURNAL_LAB) {
+            val route = activeJournalRoute ?: return
+            val period = currentPeriod() ?: return
+            val selected = if (exactDateRangeEnabled) {
+                route.journeyForDateRange(
+                    start = selectedStartDate ?: return,
+                    endInclusive = selectedEndDate ?: return,
+                )
+            } else {
+                route.journeyForRange(period)
+            }
+            applySelectedJourney(selected, ignoredCount = 0)
+            return
+        }
         if (rawSignalsEnabled) {
             val period = rawSignalsPeriod() ?: return
             val selected = if (exactDateRangeEnabled && selectedStartDate != null && selectedEndDate != null) {
@@ -3650,7 +3667,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun coverageFor(start: LocalDate, end: LocalDate): TripCoverage? =
-        (renderTimeline ?: timeline)?.let { TripCoverageCalculator.calculate(it, start, end) }
+        if (BuildConfig.IS_JOURNAL_LAB) {
+            activeJournalRoute?.let { route ->
+                TripCoverageCalculator.calculateConnected(route.connectedTimelines(), start, end)
+            }
+        } else {
+            (renderTimeline ?: timeline)?.let { TripCoverageCalculator.calculate(it, start, end) }
+        }
 
     private fun showTripCoverage(card: ItemTripBinding, coverage: TripCoverage?) {
         if (coverage == null) {
@@ -4648,6 +4671,10 @@ class MainActivity : AppCompatActivity() {
     internal fun pendingExportDurationSeconds(): Int? = pendingExport?.durationSeconds
 
     internal fun currentJourneyPoints(): List<GeoPoint> = journey?.points.orEmpty()
+
+    internal fun currentJourneyBreakIndices(): List<Int> = journey?.breakBeforePointIndices.orEmpty()
+
+    internal fun currentJourneyDistanceKm(): Double = journey?.totalDistanceKm ?: 0.0
 
     internal fun currentVideoDataSource(): VideoDataSource = when {
         BuildConfig.IS_JOURNAL_LAB -> VideoDataSource.JOURNAL

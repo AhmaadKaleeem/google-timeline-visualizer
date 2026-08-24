@@ -1016,7 +1016,7 @@ class TimelinePainter {
         val end = journey.positionAtDistance(endDistance)
         val startScreen = screenPoint(start, prepared, viewport, width, height)
         val endScreen = screenPoint(end, prepared, viewport, width, height)
-        val firstIndex = prepared.lowerBound(startDistance)
+        val firstIndex = prepared.rangeStartIndex(startDistance)
         val lastIndex = prepared.upperBound(endDistance)
         val path = Path()
         path.moveTo(startScreen.first, startScreen.second)
@@ -1031,6 +1031,13 @@ class TimelinePainter {
                 width,
                 height,
             )
+            if (index > 0 && !journey.isRenderConnectionFromPrevious(index)) {
+                path.moveTo(screen.first, screen.second)
+                lastX = screen.first
+                lastY = screen.second
+                index++
+                continue
+            }
             val dx = screen.first - lastX
             val dy = screen.second - lastY
             if (dx * dx + dy * dy >= MIN_ROUTE_PIXEL_SPACING * MIN_ROUTE_PIXEL_SPACING) {
@@ -1210,6 +1217,12 @@ class TimelinePainter {
                 if (distanceAt(middle) < value) low = middle + 1 else high = middle
             }
             return low.coerceAtMost((size - 1).coerceAtLeast(0))
+        }
+
+        /** Starts after earlier samples that share a discontinuity's zero-length distance. */
+        fun rangeStartIndex(value: Double): Int {
+            val first = lowerBound(value)
+            return if (size > 0 && distanceAt(first) == value) upperBound(value).coerceAtLeast(first) else first
         }
 
         fun upperBound(value: Double): Int {

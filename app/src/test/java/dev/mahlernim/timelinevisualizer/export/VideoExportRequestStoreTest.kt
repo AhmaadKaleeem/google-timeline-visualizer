@@ -121,6 +121,36 @@ class VideoExportRequestStoreTest {
     }
 
     @Test
+    fun journalRouteBreaksSurvivePendingExportRestart() {
+        val request = VideoExportRequest(
+            outputUri = "content://documents/journal-with-gap.mp4",
+            journey = Journey.fromSections(
+                listOf(
+                    listOf(
+                        GeoPoint(Instant.parse("2026-01-01T00:00:00Z"), 37.5, 127.0),
+                        GeoPoint(Instant.parse("2026-01-01T01:00:00Z"), 37.6, 127.1),
+                    ),
+                    listOf(
+                        GeoPoint(Instant.parse("2026-01-03T00:00:00Z"), 35.6, 139.7),
+                        GeoPoint(Instant.parse("2026-01-03T01:00:00Z"), 35.7, 139.8),
+                    ),
+                ),
+                TimelinePeriod.sameYear(2026),
+            ),
+            title = "Travel Journal",
+            durationSeconds = 30,
+            dataSource = VideoDataSource.JOURNAL,
+        )
+
+        store.save(request)
+        val restored = store.load()!!
+
+        assertEquals(request.journey.points, restored.journey.points)
+        assertEquals(listOf(2), restored.journey.breakBeforePointIndices)
+        assertEquals(request.journey.totalDistanceKm, restored.journey.totalDistanceKm, 0.001)
+    }
+
+    @Test
     fun restoresPortraitAndLandscapePendingExports() {
         listOf(VideoQuality.PORTRAIT, VideoQuality.LANDSCAPE).forEach { format ->
             val request = VideoExportRequest(

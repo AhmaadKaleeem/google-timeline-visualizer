@@ -76,6 +76,8 @@ class VideoExportRequestStore(context: Context) {
                 output.writeDouble(point.latitude)
                 output.writeDouble(point.longitude)
             }
+            output.writeInt(request.journey.breakBeforePointIndices.size)
+            request.journey.breakBeforePointIndices.forEach(output::writeInt)
         }
         if (!temporaryFile.renameTo(requestFile)) {
             temporaryFile.copyTo(requestFile, overwrite = true)
@@ -196,14 +198,21 @@ class VideoExportRequestStore(context: Context) {
                         longitude = input.readDouble(),
                     )
                 }
+                val breakBeforePointIndices = if (version >= 12) {
+                    val breakCount = input.readInt().coerceIn(0, pointCount)
+                    List(breakCount) { input.readInt() }
+                } else {
+                    emptyList()
+                }
                 VideoExportRequest(
                     outputUri = outputUri,
-                    journey = Journey.from(
+                    journey = Journey.fromBreakIndices(
                         points,
                         TimelinePeriod(
                             start = java.time.YearMonth.of(startYear, startMonth),
                             endInclusive = java.time.YearMonth.of(endYear, endMonth),
                         ),
+                        breakBeforePointIndices,
                     ),
                     title = title,
                     durationSeconds = durationSeconds,
@@ -224,7 +233,7 @@ class VideoExportRequestStore(context: Context) {
     }
 
     companion object {
-        private const val CURRENT_FILE_VERSION = 11
+        private const val CURRENT_FILE_VERSION = 12
         private const val MAX_POINT_COUNT = 2_000_000
         private const val REQUEST_FILE = "pending-video-export.bin"
         private const val TEMPORARY_FILE = "pending-video-export.tmp"

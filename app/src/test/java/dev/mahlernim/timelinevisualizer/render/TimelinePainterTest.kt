@@ -11,6 +11,7 @@ import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.WebMercator
 import java.time.Instant
+import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import java.util.Locale
 import kotlin.math.min
 import org.junit.Assert.assertTrue
@@ -25,6 +26,63 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TimelinePainterTest {
+    @Test
+    fun overviewStrokeDoesNotBridgeAJournalRouteBreak() {
+        val journey = Journey.fromSections(
+            listOf(
+                listOf(point(0.0, 0.0), point(0.0, 1.0)),
+                listOf(point(0.0, 3.0), point(0.0, 4.0)),
+            ),
+            TimelinePeriod.sameYear(2025),
+        )
+        val painter = TimelinePainter()
+        val frame = TimelineFrame(1f, 1f)
+        val bitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
+
+        painter.draw(
+            canvas = Canvas(bitmap),
+            width = SIZE,
+            height = SIZE,
+            journey = journey,
+            frame = frame,
+            journeyDurationSeconds = 30,
+            title = "Journal",
+            tiles = { null },
+        )
+
+        val viewport = painter.viewport(journey, frame, SIZE, SIZE)
+        val gapMidpoint = WebMercator.project(point(0.0, 2.0))
+        val screenX = ((gapMidpoint.x - viewport.minX) / (viewport.maxX - viewport.minX) * SIZE).toInt()
+        val screenY = ((gapMidpoint.y - viewport.minY) / (viewport.maxY - viewport.minY) * SIZE).toInt()
+        val routeColoredPixels = (-3..3).sumOf { dy ->
+            (-3..3).count { dx ->
+                val color = bitmap.getPixel(
+                    (screenX + dx).coerceIn(0, SIZE - 1),
+                    (screenY + dy).coerceIn(0, SIZE - 1),
+                )
+                Color.red(color) - Color.green(color) > 80
+            }
+        }
+
+        assertEquals("A route stroke crossed the explicit gap", 0, routeColoredPixels)
+        bitmap.recycle()
+    }
+
+    @Test
+    fun exactGapBoundaryStartsAtThePostGapSample() {
+        val sections = listOf(
+            listOf(point(0.0, 0.0), point(0.0, 1.0)),
+            listOf(point(20.0, 20.0), point(20.0, 21.0)),
+        )
+        val journey = Journey.fromSections(sections, TimelinePeriod.sameYear(2025))
+        val prepared = TimelinePainter.PreparedJourney(journey)
+        val boundaryDistance = journey.cumulativeDistanceKm[2]
+        val startIndex = prepared.rangeStartIndex(boundaryDistance)
+
+        assertEquals(WebMercator.project(sections[1].first()).y, prepared.worldPointAt(startIndex).y, 1e-12)
+        assertEquals(false, journey.isRenderConnectionFromPrevious(startIndex))
+    }
+
     @Test
     fun firstPreviewFrameRendersInEverySupportedLocale() {
         val application = ApplicationProvider.getApplicationContext<Context>()

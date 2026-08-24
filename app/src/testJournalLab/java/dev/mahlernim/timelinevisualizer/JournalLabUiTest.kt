@@ -129,6 +129,29 @@ class JournalLabUiTest {
         assertEquals(before, activity.currentJourneyPoints())
     }
 
+    @Test
+    fun explicitJournalGapIsNotCountedAsTravelDistance() {
+        val source = File.createTempFile("gapped", ".json", context.cacheDir).apply {
+            writeText(
+                """
+                {"rawSignals":[
+                  {"position":{"LatLng":"geo:37.50,127.00","timestamp":"2026-08-01T00:00:00Z","accuracyMeters":10}},
+                  {"position":{"LatLng":"geo:37.51,127.01","timestamp":"2026-08-01T00:10:00Z","accuracyMeters":10}},
+                  {"position":{"LatLng":"geo:38.50,128.00","timestamp":"2026-08-01T01:00:00Z","accuracyMeters":10}},
+                  {"position":{"LatLng":"geo:38.51,128.01","timestamp":"2026-08-01T01:10:00Z","accuracyMeters":10}}
+                ]}
+                """.trimIndent(),
+            )
+        }
+        val activity = launchActivity()
+
+        activity.importTimeline(Uri.fromFile(source))
+        waitForImportedRoute(activity)
+
+        assertEquals(listOf(2), activity.currentJourneyBreakIndices())
+        assertTrue(activity.currentJourneyDistanceKm() < 5.0)
+    }
+
     private fun rawTimeline(name: String, latitude: Double, longitude: Double, start: String): File {
         val second = java.time.Instant.parse(start).plusSeconds(600)
         return File.createTempFile(name, ".json", context.cacheDir).apply {
