@@ -115,6 +115,7 @@ import dev.mahlernim.timelinevisualizer.journal.reminder.JournalReminderNotifica
 import dev.mahlernim.timelinevisualizer.journal.reminder.JournalReminderStateStore
 import dev.mahlernim.timelinevisualizer.journal.route.JournalRoute
 import dev.mahlernim.timelinevisualizer.journal.route.JournalRouteService
+import dev.mahlernim.timelinevisualizer.journal.route.JournalRoutePreparationStage
 import dev.mahlernim.timelinevisualizer.journal.route.RouteSource
 import dev.mahlernim.timelinevisualizer.journal.route.connectedTimelines
 import dev.mahlernim.timelinevisualizer.journal.route.journeyForDateRange
@@ -174,6 +175,7 @@ import dev.mahlernim.timelinevisualizer.trips.RecapPeriodRules
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.DateFormatSymbols
@@ -315,6 +317,9 @@ class MainActivity : AppCompatActivity() {
     private var journalLoaded = false
     private var journalLoadJob: Job? = null
     private var journalRouteLoadJob: Job? = null
+    private var journalRouteProgressDelayJob: Job? = null
+    private var journalRouteProgressExpanded = false
+    private var journalRoutePreparationStage = JournalRoutePreparationStage.PREPARING_DETAILED_ROUTES
     private var pendingJournalRouteAction: (() -> Unit)? = null
     private var journalImportIsInitial: Boolean? = null
     private var updatingJournalReminderSwitch = false
@@ -1233,6 +1238,17 @@ class MainActivity : AppCompatActivity() {
         } else {
             View.GONE
         }
+        val showExpandedRouteProgress = editor.journalRoutePreparingGroup.visibility == View.VISIBLE &&
+            journalRouteProgressExpanded
+        editor.journalRouteCompactProgressGroup.visibility = if (showExpandedRouteProgress) View.GONE else View.VISIBLE
+        editor.journalRouteProgressStageText.visibility = if (showExpandedRouteProgress) View.VISIBLE else View.GONE
+        editor.journalRouteProgressBar.visibility = if (showExpandedRouteProgress) View.VISIBLE else View.GONE
+        if (showExpandedRouteProgress) {
+            editor.journalRouteProgressStageText.setText(journalRoutePreparationStage.labelResource())
+            editor.journalRoutePreparingGroup.contentDescription = editor.journalRouteProgressStageText.text
+        } else {
+            editor.journalRoutePreparingGroup.contentDescription = getString(R.string.preparing_your_journeys)
+        }
         editor.tripSourceStepGroup.visibility = if (isTripSource) View.VISIBLE else View.GONE
         editor.tripDiscoveryStepGroup.visibility = if (isDiscovery) View.VISIBLE else View.GONE
         editor.projectStepGroup.visibility = if (isProject) View.VISIBLE else View.GONE
@@ -1760,6 +1776,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadJournalRouteIfNeeded() {
         if (activeJournalRoute != null || journalRouteLoadJob?.isActive == true) return
+        journalRouteProgressExpanded = false
+        journalRoutePreparationStage = JournalRoutePreparationStage.PREPARING_DETAILED_ROUTES
+        journalRouteProgressDelayJob?.cancel()
+        journalRouteProgressDelayJob = lifecycleScope.launch {
+            delay(JOURNAL_ROUTE_PROGRESS_DELAY_MILLIS)
+            if (journalRouteLoadJob?.isActive == true) {
+                journalRouteProgressExpanded = true
+                renderCreateStep()
+            }
+        }
         journalRouteLoadJob = lifecycleScope.launch {
             renderCreateStep()
             try {
@@ -1774,6 +1800,9 @@ class MainActivity : AppCompatActivity() {
                 Log.e(TAG, "Travel Journal route load failed", error)
                 Snackbar.make(binding.root, R.string.journal_route_load_failed, Snackbar.LENGTH_LONG).show()
             } finally {
+                journalRouteProgressDelayJob?.cancel()
+                journalRouteProgressDelayJob = null
+                journalRouteProgressExpanded = false
                 journalRouteLoadJob = null
                 renderCreateStep()
             }
@@ -1798,9 +1827,21 @@ class MainActivity : AppCompatActivity() {
                 journalId = journalId,
                 start = Instant.ofEpochMilli(Long.MIN_VALUE),
                 endExclusive = Instant.ofEpochMilli(Long.MAX_VALUE),
+                onPreparationStage = { stage ->
+                    withContext(Dispatchers.Main.immediate) {
+                        journalRoutePreparationStage = stage
+                        if (journalRouteProgressExpanded) renderCreateStep()
+                    }
+                },
             )
         }
         applyJournalRoute(loadedJournal, route, refreshTrips = true)
+    }
+
+    private fun JournalRoutePreparationStage.labelResource(): Int = when (this) {
+        JournalRoutePreparationStage.PREPARING_DETAILED_ROUTES -> R.string.preparing_detailed_routes
+        JournalRoutePreparationStage.COMBINING_JOURNEY_HISTORY -> R.string.combining_journey_history
+        JournalRoutePreparationStage.SAVING_FOR_FASTER_STARTS -> R.string.saving_for_faster_starts
     }
 
     private suspend fun refreshJournalAfterImport(journalId: String, result: JournalImportResult) {
@@ -5622,6 +5663,7 @@ class MainActivity : AppCompatActivity() {
             "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/restore-google-maps-timeline.ja.md"
         private const val TAG = "TimelineVisualizer"
         private const val JOURNAL_PROGRESS_MAX = 1_000
+        private const val JOURNAL_ROUTE_PROGRESS_DELAY_MILLIS = 2_000L
         private const val DAY_MILLIS = 24L * 60L * 60L * 1_000L
 
         internal fun playbackIntent(context: Context, uri: Uri): Intent =

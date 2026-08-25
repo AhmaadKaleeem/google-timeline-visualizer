@@ -240,6 +240,34 @@ class JournalLabUiTest {
     }
 
     @Test
+    fun routePreparationStartsCompactWithoutExtraProgressDetails() {
+        val database = JournalDatabase.open(context)
+        runBlocking {
+            JournalRepository(database).createJournal(
+                JournalEntity(
+                    id = "progress-start",
+                    name = "Travel Journal",
+                    isPrimary = true,
+                    createdAtEpochMillis = 1_000L,
+                ),
+            )
+        }
+        database.close()
+
+        val activity = launchActivity()
+        waitUntil(activity::journalMetadataReady)
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.createTypeStepGroup).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.journalRoutePreparingGroup).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.journalRouteCompactProgressGroup).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.journalRouteProgressBar).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.journalRouteProgressStageText).visibility)
+        assertTrue(activity.findViewById<View>(R.id.tripVideoChoice).isEnabled)
+        assertTrue(activity.findViewById<View>(R.id.recapVideoChoice).isEnabled)
+        assertTrue(activity.findViewById<View>(R.id.customRecapChoice).isEnabled)
+    }
+
+    @Test
     fun dueJournalAppearsAsAnInAppLibraryCard() {
         val source = rawTimeline("due", 37.5, 127.0, "2026-08-01T00:00:00Z")
         val activity = launchActivity()

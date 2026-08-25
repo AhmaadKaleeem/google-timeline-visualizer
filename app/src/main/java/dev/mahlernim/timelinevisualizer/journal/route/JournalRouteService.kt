@@ -19,6 +19,12 @@ data class JournalRoute(
     val semanticUsableCount: Int,
 )
 
+enum class JournalRoutePreparationStage {
+    PREPARING_DETAILED_ROUTES,
+    COMBINING_JOURNEY_HISTORY,
+    SAVING_FOR_FASTER_STARTS,
+}
+
 /** Reconstructs the active Journal projection and applies detailed-first route fusion. */
 class JournalRouteService(
     private val repository: JournalRepository,
@@ -30,13 +36,21 @@ class JournalRouteService(
         endExclusive: Instant,
         maximumAccuracyMeters: Double? = RawSignalProcessor.DEFAULT_MAXIMUM_ACCURACY_METERS,
         discontinuity: Duration = JournalRouteFusion.DEFAULT_DISCONTINUITY,
+        onPreparationStage: suspend (JournalRoutePreparationStage) -> Unit = {},
     ): JournalRoute {
         require(endExclusive > start) { "The route range must not be empty" }
         val usesCanonicalSettings = maximumAccuracyMeters == RawSignalProcessor.DEFAULT_MAXIMUM_ACCURACY_METERS &&
             discontinuity == JournalRouteFusion.DEFAULT_DISCONTINUITY
         val isLifetimeRange = start.toEpochMilli() == Long.MIN_VALUE && endExclusive.toEpochMilli() == Long.MAX_VALUE
         if (!usesCanonicalSettings || !isLifetimeRange) {
-            return reconstruct(journalId, start, endExclusive, maximumAccuracyMeters, discontinuity)
+            return reconstruct(
+                journalId,
+                start,
+                endExclusive,
+                maximumAccuracyMeters,
+                discontinuity,
+                onPreparationStage,
+            )
         }
 
         repository.ensureRouteProjectionState(journalId)
@@ -67,12 +81,21 @@ class JournalRouteService(
                 refreshEnd,
                 maximumAccuracyMeters,
                 discontinuity,
+                onPreparationStage,
             )
             previous.replacingWindow(refreshStart, refreshEnd, replacement)
         } else {
-            reconstruct(journalId, start, endExclusive, maximumAccuracyMeters, discontinuity)
+            reconstruct(
+                journalId,
+                start,
+                endExclusive,
+                maximumAccuracyMeters,
+                discontinuity,
+                onPreparationStage,
+            )
         }
         if (state != null) {
+            onPreparationStage(JournalRoutePreparationStage.SAVING_FOR_FASTER_STARTS)
             projectionStore.replace(
                 journalId = journalId,
                 expectedSourceRevision = state.sourceRevision,
@@ -89,9 +112,11 @@ class JournalRouteService(
         endExclusive: Instant,
         maximumAccuracyMeters: Double?,
         discontinuity: Duration,
+        onPreparationStage: suspend (JournalRoutePreparationStage) -> Unit,
     ): JournalRoute {
         val startMillis = start.toEpochMilli()
         val endMillis = endExclusive.toEpochMilli()
+        onPreparationStage(JournalRoutePreparationStage.PREPARING_DETAILED_ROUTES)
         val detailedRows = repository.activeDetailedObservations(journalId, startMillis, endMillis)
         val detailed = RawSignalProcessor.process(
             source = detailedRows.map { row ->
@@ -106,6 +131,7 @@ class JournalRouteService(
             },
             maximumAccuracyMeters = maximumAccuracyMeters,
         ).points
+        onPreparationStage(JournalRoutePreparationStage.COMBINING_JOURNEY_HISTORY)
         val semanticPaths = coverageAwareSemanticPaths(
             repository.activeSemanticSegments(journalId, startMillis, endMillis),
             startMillis,

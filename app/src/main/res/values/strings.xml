@@ -49,6 +49,9 @@
     <string name="opening_file">Opening file</string>
     <string name="preparing_trips">Preparing journey</string>
     <string name="preparing_your_journeys" translatable="false">Preparing your journeys…</string>
+    <string name="preparing_detailed_routes" translatable="false">Preparing detailed routes</string>
+    <string name="combining_journey_history" translatable="false">Combining journey history</string>
+    <string name="saving_for_faster_starts" translatable="false">Saving for faster starts</string>
     <string name="journal_route_action_waiting" translatable="false">Your journeys are being prepared. This will open when they are ready.</string>
     <string name="journal_freshness_inline" translatable="false">Detailed routes last updated %1$d days ago. Import an updated Timeline file.</string>
     <string name="finding_suggested_trips" translatable="false">Finding suggested trips…</string>

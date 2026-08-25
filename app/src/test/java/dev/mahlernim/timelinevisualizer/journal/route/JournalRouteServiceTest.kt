@@ -285,6 +285,63 @@ class JournalRouteServiceTest {
         )
     }
 
+    @Test
+    fun canonicalProjectionReportsOnlyExistingPreparationBoundaries() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "progress",
+                importedAt = minute(100),
+                observations = listOf(observation(0, 1.0), observation(10, 1.1)),
+                semantic = listOf(semantic(0, 30, listOf(point(0, 9.0), point(30, 9.3)))),
+            ),
+        )
+        val stages = mutableListOf<JournalRoutePreparationStage>()
+
+        service.route(
+            journalId = JOURNAL_ID,
+            start = Instant.ofEpochMilli(Long.MIN_VALUE),
+            endExclusive = Instant.ofEpochMilli(Long.MAX_VALUE),
+            onPreparationStage = stages::add,
+        )
+
+        assertEquals(
+            listOf(
+                JournalRoutePreparationStage.PREPARING_DETAILED_ROUTES,
+                JournalRoutePreparationStage.COMBINING_JOURNEY_HISTORY,
+                JournalRoutePreparationStage.SAVING_FOR_FASTER_STARTS,
+            ),
+            stages,
+        )
+    }
+
+    @Test
+    fun cachedProjectionDoesNotReportReconstructionProgress() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "cached-progress",
+                importedAt = minute(100),
+                observations = listOf(observation(0, 1.0), observation(10, 1.1)),
+            ),
+        )
+        service.route(
+            journalId = JOURNAL_ID,
+            start = Instant.ofEpochMilli(Long.MIN_VALUE),
+            endExclusive = Instant.ofEpochMilli(Long.MAX_VALUE),
+        )
+        val stages = mutableListOf<JournalRoutePreparationStage>()
+
+        service.route(
+            journalId = JOURNAL_ID,
+            start = Instant.ofEpochMilli(Long.MIN_VALUE),
+            endExclusive = Instant.ofEpochMilli(Long.MAX_VALUE),
+            onPreparationStage = stages::add,
+        )
+
+        assertEquals(emptyList<JournalRoutePreparationStage>(), stages)
+    }
+
     private fun importInput(
         hash: String,
         importedAt: Long,
