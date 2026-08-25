@@ -2,8 +2,8 @@ package dev.mahlernim.timelinevisualizer.journal
 
 import java.time.Instant
 import java.time.ZoneId
-import kotlin.test.Test
-import kotlin.test.assertEquals
+import org.junit.Assert.assertEquals
+import org.junit.Test
 
 class JournalCoverageTest {
     private val seoul = ZoneId.of("Asia/Seoul")
