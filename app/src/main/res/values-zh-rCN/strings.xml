@@ -23,6 +23,7 @@
     <string name="share_travel_video">分享旅游视频</string>
     <string name="import_failed">无法加载Timeline</string>
     <string name="import_failed_detail">无法读取该文件。选择支持的 Timeline JSON 导出。</string>
+    <string name="preview_preparation_failed">无法准备视频预览。</string>
     <string name="timeline_error_malformed">此文件不是有效或完整的 JSON。</string>
     <string name="timeline_error_legacy">这是旧版 Google Takeout 格式。请改为从手机导出 Timeline 数据。</string>
     <string name="timeline_error_raw_only">此文件不包含可用的访问地点、行程或原始位置信息。</string>

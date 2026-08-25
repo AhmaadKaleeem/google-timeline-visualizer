@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Looper
 import android.view.View
+import android.widget.AutoCompleteTextView
 import android.widget.TextView
 import com.google.android.material.button.MaterialButton
 import androidx.test.core.app.ApplicationProvider
@@ -15,9 +16,15 @@ import dev.mahlernim.timelinevisualizer.journal.JournalDatabase
 import dev.mahlernim.timelinevisualizer.journal.JournalEntity
 import dev.mahlernim.timelinevisualizer.journal.JournalRepository
 import dev.mahlernim.timelinevisualizer.presets.PresetRepository
+import dev.mahlernim.timelinevisualizer.trips.SuggestionConfidence
+import dev.mahlernim.timelinevisualizer.trips.ProjectTitleMode
+import dev.mahlernim.timelinevisualizer.trips.TripKind
+import dev.mahlernim.timelinevisualizer.trips.TripProject
+import dev.mahlernim.timelinevisualizer.trips.TripSuggestion
 import dev.mahlernim.timelinevisualizer.videos.VideoDataSource
 import java.io.File
 import java.time.Instant
+import java.time.LocalDate
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -330,6 +337,175 @@ class JournalLabUiTest {
     }
 
     @Test
+    fun cachedConfirmedSuggestionEnablesContinueImmediately() {
+        val start = LocalDate.of(2026, 1, 1)
+        val end = LocalDate.of(2026, 1, 7)
+        val activity = launchActivity()
+        activity.importTimeline(Uri.fromFile(rawTimelineRange("cached-suggestion", start, end)))
+        waitUntil {
+            activity.journalMetadataReady() &&
+                activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE
+        }
+        activity.prepareJournalRangeForTest(start, end)
+        waitUntil { activity.journalRouteCoversForTest(start, end) }
+
+        activity.confirmSuggestionForTest(
+            TripSuggestion(
+                id = "cached-trip",
+                destinationName = "Busan",
+                startDate = start.plusDays(1),
+                endDate = end.minusDays(1),
+                confidence = SuggestionConfidence.STRONG,
+                distanceFromHomeKm = 320.0,
+            ),
+        )
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.projectStepGroup).visibility)
+        assertTrue(activity.findViewById<View>(R.id.wizardContinueButton).isEnabled)
+    }
+
+    @Test
+    fun cachedManualAndSavedTripsEnableContinueImmediately() {
+        val start = LocalDate.of(2026, 2, 1)
+        val end = LocalDate.of(2026, 2, 7)
+        val activity = launchActivity()
+        activity.importTimeline(Uri.fromFile(rawTimelineRange("cached-projects", start, end)))
+        waitUntil {
+            activity.journalMetadataReady() &&
+                activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE
+        }
+        activity.prepareJournalRangeForTest(start, end)
+        waitUntil { activity.journalRouteCoversForTest(start, end) }
+
+        activity.startManualProjectForTest(TripKind.TRIP)
+        assertTrue(activity.findViewById<View>(R.id.wizardContinueButton).isEnabled)
+
+        activity.openProjectForTest(
+            TripProject(
+                id = "saved-cached-trip",
+                title = "Saved trip",
+                startDate = start.plusDays(1),
+                endDate = end.minusDays(1),
+                kind = TripKind.TRIP,
+                createdAtMillis = 1L,
+                titleMode = ProjectTitleMode.CUSTOM,
+            ),
+        )
+        assertTrue(activity.findViewById<View>(R.id.wizardContinueButton).isEnabled)
+    }
+
+    @Test
+    fun uncoveredProjectRangeDisablesContinueBeforeLoadingAndCannotAdvance() {
+        val start = LocalDate.of(2026, 3, 1)
+        val end = LocalDate.of(2026, 3, 7)
+        val activity = launchActivity()
+        activity.importTimeline(Uri.fromFile(rawTimelineRange("coverage-guard", start, end)))
+        waitUntil {
+            activity.journalMetadataReady() &&
+                activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE
+        }
+        activity.prepareJournalRangeForTest(start, end)
+        waitUntil { activity.journalRouteCoversForTest(start, end) }
+        activity.startManualProjectForTest(TripKind.TRIP)
+        assertTrue(activity.findViewById<View>(R.id.wizardContinueButton).isEnabled)
+
+        activity.selectProjectDatesForTest(start.plusMonths(1), end.plusMonths(1))
+
+        assertFalse(activity.findViewById<View>(R.id.wizardContinueButton).isEnabled)
+        activity.continueCreateForTest()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.projectStepGroup).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.styleStepGroup).visibility)
+    }
+
+    @Test
+    fun returningToCachedRangeCancelsTheSupersededRouteRequest() {
+        val cachedStart = LocalDate.of(2026, 4, 1)
+        val cachedEnd = LocalDate.of(2026, 4, 7)
+        val otherStart = cachedStart.plusMonths(1)
+        val otherEnd = cachedEnd.plusMonths(1)
+        val activity = launchActivity()
+        activity.importTimeline(Uri.fromFile(rawTimelineRange("range-replacement", cachedStart, cachedEnd)))
+        waitUntil {
+            activity.journalMetadataReady() &&
+                activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE
+        }
+        activity.prepareJournalRangeForTest(cachedStart, cachedEnd)
+        waitUntil { activity.journalRouteCoversForTest(cachedStart, cachedEnd) }
+        activity.startManualProjectForTest(TripKind.TRIP)
+
+        activity.selectProjectDatesForTest(otherStart, otherEnd)
+        activity.selectProjectDatesForTest(cachedStart, cachedEnd)
+        repeat(10) {
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(10)
+        }
+
+        assertTrue(activity.journalRouteCoversForTest(cachedStart, cachedEnd))
+        assertFalse(activity.journalRouteCoversForTest(otherStart, otherEnd))
+        assertTrue(activity.findViewById<View>(R.id.wizardContinueButton).isEnabled)
+    }
+
+    @Test
+    fun sparseBoundaryYearDoesNotBlockAValidCachedProject() {
+        val recordedStart = LocalDate.of(2027, 1, 1)
+        val recordedEnd = LocalDate.of(2027, 1, 2)
+        val projectStart = LocalDate.of(2026, 12, 31)
+        val activity = launchActivity()
+        activity.importTimeline(Uri.fromFile(rawTimelineRange("sparse-boundary", recordedStart, recordedEnd)))
+        waitUntil {
+            activity.journalMetadataReady() &&
+                activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE
+        }
+        activity.prepareJournalRangeForTest(projectStart, recordedEnd)
+        waitUntil { activity.journalRouteCoversForTest(projectStart, recordedEnd) }
+
+        activity.confirmSuggestionForTest(
+            TripSuggestion(
+                id = "cross-year-trip",
+                destinationName = "New Year",
+                startDate = projectStart,
+                endDate = recordedEnd,
+                confidence = SuggestionConfidence.POSSIBLE,
+                distanceFromHomeKm = 1.0,
+            ),
+        )
+
+        assertTrue(activity.findViewById<View>(R.id.wizardContinueButton).isEnabled)
+    }
+
+    @Test
+    fun changingDetectionYearClearsSuggestionsFromThePreviousRange() {
+        val activity = launchActivity()
+        activity.importTimeline(Uri.fromFile(twoYearTimeline()))
+        waitUntil {
+            activity.journalMetadataReady() &&
+                activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE
+        }
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
+        activity.findViewById<View>(R.id.tripVideoChoice).performClick()
+        activity.findViewById<View>(R.id.findTripsButton).performClick()
+        activity.installTripSuggestionsForTest(
+            listOf(
+                TripSuggestion(
+                    id = "old-range",
+                    destinationName = "Old range",
+                    startDate = LocalDate.of(2026, 1, 1),
+                    endDate = LocalDate.of(2026, 1, 2),
+                    confidence = SuggestionConfidence.POSSIBLE,
+                    distanceFromHomeKm = 200.0,
+                ),
+            ),
+        )
+        assertEquals(1, activity.tripSuggestionCountForTest())
+
+        val dropdown = activity.findViewById<AutoCompleteTextView>(R.id.detectionRangeDropdown)
+        dropdown.onItemClickListener?.onItemClick(null, null, 1, 1L)
+
+        assertEquals(0, activity.tripSuggestionCountForTest())
+        assertEquals(0, (activity.findViewById<View>(R.id.suggestionsList) as android.view.ViewGroup).childCount)
+    }
+
+    @Test
     fun dueJournalAppearsAsAnInAppLibraryCard() {
         val source = rawTimeline("due", 37.5, 127.0, "2026-08-01T00:00:00Z")
         val activity = launchActivity()
@@ -475,6 +651,39 @@ class JournalLabUiTest {
                 """.trimIndent(),
             )
         }
+    }
+
+    private fun rawTimelineRange(name: String, start: LocalDate, end: LocalDate): File {
+        val observations = buildList {
+            var date = start
+            var index = 0
+            while (!date.isAfter(end)) {
+                val latitude = 37.5 + index * 0.01
+                val longitude = 127.0 + index * 0.01
+                val first = date.atTime(12, 0).toInstant(java.time.ZoneOffset.UTC)
+                val second = first.plusSeconds(600)
+                add("{\"position\":{\"LatLng\":\"geo:$latitude,$longitude\",\"timestamp\":\"$first\",\"accuracyMeters\":10}}")
+                add("{\"position\":{\"LatLng\":\"geo:${latitude + 0.001},${longitude + 0.001}\",\"timestamp\":\"$second\",\"accuracyMeters\":10}}")
+                date = date.plusDays(1)
+                index += 1
+            }
+        }
+        return File.createTempFile(name, ".json", context.cacheDir).apply {
+            writeText("{\"rawSignals\":[${observations.joinToString(",")}]}" )
+        }
+    }
+
+    private fun twoYearTimeline(): File = File.createTempFile("two-year", ".json", context.cacheDir).apply {
+        writeText(
+            """
+            {"rawSignals":[
+              {"position":{"LatLng":"geo:37.50,127.00","timestamp":"2025-01-01T12:00:00Z","accuracyMeters":10}},
+              {"position":{"LatLng":"geo:37.51,127.01","timestamp":"2025-01-01T12:10:00Z","accuracyMeters":10}},
+              {"position":{"LatLng":"geo:37.52,127.02","timestamp":"2026-01-01T12:00:00Z","accuracyMeters":10}},
+              {"position":{"LatLng":"geo:37.53,127.03","timestamp":"2026-01-01T12:10:00Z","accuracyMeters":10}}
+            ]}
+            """.trimIndent(),
+        )
     }
 
     private fun launchActivity(): MainActivity {

@@ -22,6 +22,7 @@
     <string name="share_travel_video">여행 영상 공유</string>
     <string name="import_failed">파일을 불러오지 못했습니다</string>
     <string name="import_failed_detail">이 파일을 읽을 수 없습니다. 지원되는 Timeline JSON 내보내기 파일을 선택해 주세요.</string>
+    <string name="preview_preparation_failed">동영상 미리보기를 준비하지 못했습니다.</string>
     <string name="timeline_error_malformed">올바르거나 완전한 JSON 파일이 아닙니다.</string>
     <string name="timeline_error_legacy">이 파일은 이전 Google 테이크아웃 형식입니다. 휴대전화에서 타임라인 데이터를 내보내 주세요.</string>
     <string name="timeline_error_raw_only">이 파일에는 사용할 수 있는 방문, 이동 또는 원시 위치 정보가 없습니다.</string>

@@ -20,10 +20,10 @@ def test_journal_lab_has_a_separate_installation_identity() -> None:
     )
     assert lab_flavor is not None
     assert 'applicationId = "dev.mahlernim.timelinevisualizer.journallab"' in lab_flavor.group("body")
-    assert 'versionCode = 14' in lab_flavor.group("body")
-    assert 'versionName = "3.0.0-journal-lab.14"' in lab_flavor.group("body")
+    assert 'versionCode = 15' in lab_flavor.group("body")
+    assert 'versionName = "3.0.0-journal-lab.15"' in lab_flavor.group("body")
     assert 'buildConfigField("boolean", "IS_JOURNAL_LAB", "true")' in lab_flavor.group("body")
-    assert 'releases/tag/journal-lab-14' in lab_flavor.group("body")
+    assert 'releases/tag/journal-lab-15' in lab_flavor.group("body")
     assert 'manifestPlaceholders["appLabel"] = "Journal Lab"' in lab_flavor.group("body")
     assert 'android:label="${appLabel}"' in manifest
 
@@ -52,19 +52,19 @@ def test_lab_release_is_immutable_verified_and_coinstallable() -> None:
         "--tests dev.mahlernim.timelinevisualizer.journal.JournalSetupNavigationTest",
         'test "$package_name" = "dev.mahlernim.timelinevisualizer.journallab"',
         'test "$application_label" = "Journal Lab"',
-        "EXPECTED_VERSION_CODE: 14",
-        "EXPECTED_VERSION_NAME: 3.0.0-journal-lab.14",
-        'test "$LAB_RELEASE_TAG" = "journal-lab-14"',
+        "EXPECTED_VERSION_CODE: 15",
+        "EXPECTED_VERSION_NAME: 3.0.0-journal-lab.15",
+        'test "$LAB_RELEASE_TAG" = "journal-lab-15"',
         'test "$version_name" = "$EXPECTED_VERSION_NAME"',
         'test "$lab_cert" = "$production_cert"',
         "adb install app/build/outputs/apk/github/release/app-github-release.apk",
-        "gh release download journal-lab-13",
-        "adb install previous-lab/JournalLab-journal-lab-13.apk",
+        "gh release download journal-lab-14",
+        "adb install previous-lab/JournalLab-journal-lab-14.apk",
         "adb install -r app/build/outputs/apk/journalLab/release/app-journalLab-release.apk",
         'if gh release view "$LAB_RELEASE_TAG" >/dev/null 2>&1; then',
         'echo "Release $LAB_RELEASE_TAG already exists and will not be replaced."',
         'sha256sum "$lab_apk" > "$lab_apk.sha256"',
-        "--notes-file docs/journal-lab-14.md",
+        "--notes-file docs/journal-lab-15.md",
         "--prerelease",
         "--verify-tag",
     ):

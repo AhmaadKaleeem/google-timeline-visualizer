@@ -593,6 +593,19 @@ class MainActivityTest {
     }
 
     @Test
+    fun cameraPreparationFailureIsReportedAsAPreviewProblem() {
+        val activity = launchActivity()
+        val timelineView = activity.findViewById<TimelineView>(R.id.timelineView)
+
+        timelineView.onCameraPreparationFailed?.invoke(IllegalStateException("test failure"))
+
+        assertEquals(
+            activity.getString(R.string.preview_preparation_failed),
+            activity.findViewById<TextView>(R.id.statusText).text.toString(),
+        )
+    }
+
+    @Test
     fun settingsSelect2160pAnd60FramesPerSecondWithoutChangingAspect() {
         val activity = launchActivity()
         activity.findViewById<View>(R.id.navigationSettings).performClick()

@@ -23,6 +23,7 @@
     <string name="share_travel_video">分享旅遊影片</string>
     <string name="import_failed">無法載入時間軸</string>
     <string name="import_failed_detail">無法讀取該檔案。請選擇支援的時間軸.json 匯出檔。</string>
+    <string name="preview_preparation_failed">無法準備影片預覽。</string>
     <string name="timeline_error_malformed">這個檔案不是有效或完整的 JSON 檔案。</string>
     <string name="timeline_error_legacy">這是舊版的 Google Takeout 格式。請改從手機匯出時間軸資料。</string>
     <string name="timeline_error_raw_only">此檔案不包含可用的造訪地點、行程或原始定位資訊紀錄。</string>

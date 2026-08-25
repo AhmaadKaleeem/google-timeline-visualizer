@@ -22,6 +22,7 @@
     <string name="share_travel_video">Share travel video</string>
     <string name="import_failed">Could not load Timeline</string>
     <string name="import_failed_detail">This file could not be read. Select a supported Timeline JSON export.</string>
+    <string name="preview_preparation_failed">The video preview could not be prepared.</string>
     <string name="timeline_error_malformed">This file is not valid or complete JSON.</string>
     <string name="timeline_error_legacy">This is an older Google Takeout format. Export Timeline data from your phone instead.</string>
     <string name="timeline_error_raw_only">This file contains no usable visits, trips, or raw location data.</string>

@@ -1286,18 +1286,7 @@ class MainActivity : AppCompatActivity() {
         editor.wizardContinueButton.setText(
             if (isProject && editingProjectOnly) R.string.save_trip else R.string.continue_label,
         )
-        val selectedJournalRangeReady = if (BuildConfig.IS_JOURNAL_LAB && isProject) {
-            currentProjectDates()?.let { (start, end) ->
-                val zone = ZoneId.systemDefault()
-                journalRouteCovers(
-                    start.atStartOfDay(zone).toInstant(),
-                    end.plusDays(1).atStartOfDay(zone).toInstant(),
-                )
-            } == true
-        } else {
-            true
-        }
-        editor.wizardContinueButton.isEnabled = !(isProject && rawProjectRangeConflict) && selectedJournalRangeReady
+        updateWizardContinueAvailability()
         if (isType && (hasTimeline || hasJournalMetadata)) updateCreateTypeAvailability()
         // The wizard's primary action saves the project. Keeping the older inline save
         // actions here creates two competing paths through the same step.
@@ -1316,6 +1305,23 @@ class MainActivity : AppCompatActivity() {
         if (isProject) updateProjectDateLabel()
         updateRawDataAvailability()
         if (isPreview) editor.previewSettingsSummary.text = currentVideoSettingsSummary()
+    }
+
+    private fun updateWizardContinueAvailability() {
+        if (!::editor.isInitialized) return
+        val isProject = currentCreateStep == CreateStep.PROJECT
+        val selectedJournalRangeReady = if (BuildConfig.IS_JOURNAL_LAB && isProject) {
+            currentProjectDates()?.let { (start, end) ->
+                val zone = ZoneId.systemDefault()
+                journalRouteCovers(
+                    start.atStartOfDay(zone).toInstant(),
+                    end.plusDays(1).atStartOfDay(zone).toInstant(),
+                )
+            } == true
+        } else {
+            true
+        }
+        editor.wizardContinueButton.isEnabled = !(isProject && rawProjectRangeConflict) && selectedJournalRangeReady
     }
 
     private fun renderCreateStepper() {
@@ -1394,6 +1400,21 @@ class MainActivity : AppCompatActivity() {
         }
         currentCreateStep = when (currentCreateStep) {
             CreateStep.PROJECT -> {
+                if (BuildConfig.IS_JOURNAL_LAB) {
+                    val dates = currentProjectDates()
+                    val zone = ZoneId.systemDefault()
+                    val routeReady = dates?.let { (start, end) ->
+                        journalRouteCovers(
+                            start.atStartOfDay(zone).toInstant(),
+                            end.plusDays(1).atStartOfDay(zone).toInstant(),
+                        )
+                    } == true
+                    if (!routeReady) {
+                        dates?.let { (start, end) -> loadJournalRouteForRange(start, end) }
+                        Snackbar.make(binding.root, R.string.preparing_your_journeys, Snackbar.LENGTH_SHORT).show()
+                        return
+                    }
+                }
                 if (timeline == null) {
                     Snackbar.make(binding.root, R.string.choose_timeline_again, Snackbar.LENGTH_LONG).show()
                     return
@@ -1823,7 +1844,18 @@ class MainActivity : AppCompatActivity() {
         val requestedStart = startDate.atStartOfDay(zone).toInstant()
         val requestedEndExclusive = endDateInclusive.plusDays(1).atStartOfDay(zone).toInstant()
         if (journalRouteCovers(requestedStart, requestedEndExclusive)) {
-            onComplete?.invoke(JournalRouteLoadOutcome.READY)
+            val inFlight = activeJournalRouteRequest
+            if (
+                journalRouteLoadJob?.isActive == true &&
+                (inFlight?.start != requestedStart || inFlight.endExclusive != requestedEndExclusive)
+            ) {
+                invalidateJournalRouteRequest()
+            }
+            updateWizardContinueAvailability()
+            onComplete?.let { callback ->
+                runCatching { callback(JournalRouteLoadOutcome.READY) }
+                    .onFailure { error -> Log.e(TAG, "Journal route completion callback failed", error) }
+            }
             return
         }
         val inFlight = activeJournalRouteRequest
@@ -1844,6 +1876,7 @@ class MainActivity : AppCompatActivity() {
             endExclusive = requestedEndExclusive,
             callbacks = onComplete?.let { mutableListOf(it) } ?: mutableListOf(),
         )
+        updateWizardContinueAvailability()
         journalRouteProgressExpanded = false
         journalRoutePreparationStage = JournalRoutePreparationStage.PREPARING_DETAILED_ROUTES
         journalRouteProgressDelayJob?.cancel()
@@ -1874,6 +1907,9 @@ class MainActivity : AppCompatActivity() {
                     if (loaded) JournalRouteLoadOutcome.READY else JournalRouteLoadOutcome.FAILED,
                     requestId,
                 )
+                if (!loaded) {
+                    Snackbar.make(binding.root, R.string.journal_route_load_failed, Snackbar.LENGTH_LONG).show()
+                }
             } catch (error: Throwable) {
                 if (error is kotlinx.coroutines.CancellationException) {
                     completeJournalRouteRequest(JournalRouteLoadOutcome.CANCELLED, requestId)
@@ -1900,7 +1936,10 @@ class MainActivity : AppCompatActivity() {
         val request = activeJournalRouteRequest ?: return
         if (requestId != null && request.id != requestId) return
         activeJournalRouteRequest = null
-        request.callbacks.toList().forEach { callback -> callback(outcome) }
+        request.callbacks.toList().forEach { callback ->
+            runCatching { callback(outcome) }
+                .onFailure { error -> Log.e(TAG, "Journal route completion callback failed", error) }
+        }
     }
 
     private fun journalRouteCovers(start: Instant, endExclusive: Instant): Boolean =
@@ -1922,8 +1961,10 @@ class MainActivity : AppCompatActivity() {
                 endExclusive = endExclusive,
                 onPreparationStage = { stage ->
                     withContext(Dispatchers.Main.immediate) {
-                        journalRoutePreparationStage = stage
-                        if (journalRouteProgressExpanded) renderCreateStep()
+                        if (requestId == journalRouteRequestId && activeJournalRouteRequest?.id == requestId) {
+                            journalRoutePreparationStage = stage
+                            if (journalRouteProgressExpanded) renderCreateStep()
+                        }
                     }
                 },
             )
@@ -2698,6 +2739,9 @@ class MainActivity : AppCompatActivity() {
                     }
                     return
                 }
+                // Even a cached selection must supersede an incompatible request that is
+                // still preparing a range the user has already left.
+                loadJournalRouteForRange(requestedDates.first, requestedDates.second)
             }
             val route = activeJournalRoute ?: return
             val period = currentPeriod() ?: return
@@ -3709,7 +3753,14 @@ class MainActivity : AppCompatActivity() {
         }
         editor.timelineView.onCameraPreparationFailed = { error ->
             Log.e(TAG, "Timeline camera preparation failed", error)
-            editor.statusText.setText(R.string.import_failed_detail)
+            updateCameraPreparationUi()
+            editor.statusText.setText(R.string.preview_preparation_failed)
+            Snackbar.make(binding.root, R.string.preview_preparation_failed, Snackbar.LENGTH_INDEFINITE)
+                .setAction(R.string.retry) {
+                    editor.statusText.setText(R.string.preparing_preview)
+                    editor.timelineView.retryCameraPreparation()
+                }
+                .show()
         }
     }
 
@@ -3722,7 +3773,12 @@ class MainActivity : AppCompatActivity() {
         editor.timelineSeek.isEnabled = !exportingVideo && ready
         if (selected != null && !ready && !exportingVideo) {
             editor.statusText.setText(R.string.preparing_preview)
-        } else if (editor.statusText.text?.toString() == getString(R.string.preparing_preview)) {
+        } else if (
+            editor.statusText.text?.toString() in setOf(
+                getString(R.string.preparing_preview),
+                getString(R.string.preview_preparation_failed),
+            )
+        ) {
             editor.statusText.text = ""
         }
     }
@@ -4363,6 +4419,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun configureTripDiscovery() {
         editor.detectionRangeDropdown.setOnItemClickListener { _, _, position, _ ->
+            val previousRange = detectionStartDate to detectionEndDate
             if (position < detectionYears.size) {
                 val year = detectionYears[position]
                 selectedDetectionYear = year
@@ -4373,6 +4430,7 @@ class MainActivity : AppCompatActivity() {
                 selectedDetectionYear = null
                 editor.detectionCustomRangeButton.visibility = View.VISIBLE
             }
+            if (previousRange != (detectionStartDate to detectionEndDate)) invalidateTripSuggestionsForRange()
         }
         makeDropdownOpenReliably(editor.detectionRangeDropdown)
     }
@@ -4432,6 +4490,7 @@ class MainActivity : AppCompatActivity() {
                 requireNotNull(detectionStartDate),
                 requireNotNull(detectionEndDate),
             )
+            invalidateTripSuggestionsForRange()
         }
         picker.show(supportFragmentManager, "trip-detection-range")
     }
@@ -4500,6 +4559,14 @@ class MainActivity : AppCompatActivity() {
         tripDetectionJob?.cancel()
         tripDetectionJob = null
         setTripDetectionRunning(false)
+    }
+
+    private fun invalidateTripSuggestionsForRange() {
+        if (tripDetectionRunning) cancelTripDetection() else tripDetectionRequestId += 1
+        tripDiscoveryRequested = false
+        tripSuggestions = emptyList()
+        suggestionsExpanded = false
+        if (currentCreateStep == CreateStep.DISCOVERY) renderTripSuggestions()
     }
 
     private suspend fun refreshRequestedTripSuggestions(loaded: Timeline): List<TripSuggestion> {
@@ -4852,8 +4919,7 @@ class MainActivity : AppCompatActivity() {
     private fun applyActiveProjectDates() {
         val start = activeStartDate ?: return
         val end = activeEndDate ?: return
-        val years = timeline?.years ?: return
-        if (start.year !in years || end.year !in years) return
+        if (timeline == null) return
         rawSignalsEnabled = !BuildConfig.IS_JOURNAL_LAB && activeProjectKind == TripKind.RAW_DATA
         if (!rawSignalsEnabled) rawProjectRangeConflict = false
         if (rawSignalsEnabled) rebuildRawSignalsTimeline()
@@ -4879,6 +4945,7 @@ class MainActivity : AppCompatActivity() {
         selectRange()
         updateProjectDateLabel()
         updateSuggestedProjectTitle()
+        updateWizardContinueAvailability()
     }
 
     private fun updateProjectDateLabel() {
@@ -5792,6 +5859,51 @@ class MainActivity : AppCompatActivity() {
     internal fun journalRouteReady(): Boolean = activeJournalRoute != null
 
     internal fun currentJourneyDistanceKm(): Double = journey?.knownDistanceKm ?: 0.0
+
+    internal fun prepareJournalRangeForTest(start: LocalDate, end: LocalDate) {
+        loadJournalRouteForRange(start, end)
+    }
+
+    internal fun journalRouteCoversForTest(start: LocalDate, end: LocalDate): Boolean {
+        val zone = ZoneId.systemDefault()
+        return journalRouteCovers(
+            start.atStartOfDay(zone).toInstant(),
+            end.plusDays(1).atStartOfDay(zone).toInstant(),
+        )
+    }
+
+    internal fun confirmSuggestionForTest(suggestion: TripSuggestion) {
+        confirmSuggestion(suggestion)
+    }
+
+    internal fun startManualProjectForTest(kind: TripKind) {
+        startManualProject(kind)
+    }
+
+    internal fun openProjectForTest(project: TripProject) {
+        openProject(project)
+    }
+
+    internal fun selectProjectDatesForTest(start: LocalDate, end: LocalDate) {
+        activeStartDate = start
+        activeEndDate = end
+        exactDateRangeEnabled = true
+        selectedStartDate = start
+        selectedEndDate = end
+        selectRange()
+        updateWizardContinueAvailability()
+    }
+
+    internal fun continueCreateForTest() {
+        moveCreateStep(1)
+    }
+
+    internal fun installTripSuggestionsForTest(suggestions: List<TripSuggestion>) {
+        tripSuggestions = suggestions
+        renderTripSuggestions()
+    }
+
+    internal fun tripSuggestionCountForTest(): Int = tripSuggestions.size
 
     internal fun currentVideoDataSource(): VideoDataSource = when {
         BuildConfig.IS_JOURNAL_LAB -> VideoDataSource.JOURNAL
