@@ -84,8 +84,8 @@ jobs:
           script: |
             adb install app/build/outputs/apk/github/release/app-github-release.apk
             mkdir -p previous-lab
-            gh release download journal-lab-9 --pattern 'JournalLab-journal-lab-9.apk' --dir previous-lab
-            adb install previous-lab/JournalLab-journal-lab-9.apk
+            gh release download journal-lab-11 --pattern 'JournalLab-journal-lab-11.apk' --dir previous-lab
+            adb install previous-lab/JournalLab-journal-lab-11.apk
             adb install -r app/build/outputs/apk/journalLab/release/app-journalLab-release.apk
             adb shell pm path dev.mahlernim.timelinevisualizer
             adb shell pm path dev.mahlernim.timelinevisualizer.journallab
