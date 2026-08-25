@@ -65,7 +65,7 @@
                 android:layout_width="8dp"
                 android:layout_height="8dp"
                 android:src="@drawable/onboarding_progress_dot"
-                android:tint="?attr/colorPrimary" />
+                app:tint="?attr/colorPrimary" />
 
             <ImageView
                 android:id="@+id/onboardingDotTwo"
@@ -73,7 +73,7 @@
                 android:layout_height="8dp"
                 android:layout_marginStart="10dp"
                 android:src="@drawable/onboarding_progress_dot"
-                android:tint="?attr/colorPrimary" />
+                app:tint="?attr/colorPrimary" />
 
             <ImageView
                 android:id="@+id/onboardingDotThree"
@@ -81,7 +81,7 @@
                 android:layout_height="8dp"
                 android:layout_marginStart="10dp"
                 android:src="@drawable/onboarding_progress_dot"
-                android:tint="?attr/colorPrimary" />
+                app:tint="?attr/colorPrimary" />
         </LinearLayout>
 
         <LinearLayout
