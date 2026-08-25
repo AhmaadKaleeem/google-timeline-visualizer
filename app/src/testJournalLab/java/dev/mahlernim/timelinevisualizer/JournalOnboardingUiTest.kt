@@ -53,7 +53,10 @@ class JournalOnboardingUiTest {
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.journalOnboardingScreen).visibility)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.bottomNavigation).visibility)
-        assertEquals("1 of 5", activity.findViewById<TextView>(R.id.onboardingPagePosition).text)
+        assertEquals("Turn your journeys into a Travel Journal", activity.findViewById<TextView>(R.id.onboardingPageTitle).text)
+        assertEquals(1f, activity.findViewById<View>(R.id.onboardingDotOne).alpha)
+        assertEquals(0.24f, activity.findViewById<View>(R.id.onboardingDotTwo).alpha)
+        assertEquals(0.24f, activity.findViewById<View>(R.id.onboardingDotThree).alpha)
         assertEquals(View.INVISIBLE, activity.findViewById<View>(R.id.onboardingBackButton).visibility)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.onboardingNextButton).visibility)
         assertTrue(activity.findViewById<TextView>(R.id.onboardingPageTitle).isAccessibilityHeading)
@@ -64,11 +67,11 @@ class JournalOnboardingUiTest {
         val activity = launchActivity()
         waitForOnboarding(activity)
         activity.findViewById<View>(R.id.onboardingNextButton).performClick()
-        waitUntil { activity.findViewById<TextView>(R.id.onboardingPagePosition).text == "2 of 5" }
+        waitUntil { activity.findViewById<TextView>(R.id.onboardingPageTitle).text == "Your journeys, your device" }
 
         controller = requireNotNull(controller).recreate()
         val recreated = requireNotNull(controller).get()
-        waitUntil { recreated.findViewById<TextView>(R.id.onboardingPagePosition).text == "2 of 5" }
+        waitUntil { recreated.findViewById<TextView>(R.id.onboardingPageTitle).text == "Your journeys, your device" }
 
         assertEquals(View.VISIBLE, recreated.findViewById<View>(R.id.journalOnboardingScreen).visibility)
         assertEquals(View.VISIBLE, recreated.findViewById<View>(R.id.onboardingBackButton).visibility)
@@ -91,6 +94,22 @@ class JournalOnboardingUiTest {
         waitUntil { activity.findViewById<View>(R.id.videosScreen).visibility == View.VISIBLE }
         assertEquals(View.GONE, activity.findViewById<View>(R.id.journalOnboardingScreen).visibility)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.journalSetupCard).visibility)
+    }
+
+    @Test
+    fun finalPageShowsActionsAndExpandsTheLocalFileExplanation() {
+        val activity = launchActivity()
+        waitForOnboarding(activity)
+        activity.findViewById<View>(R.id.onboardingSkipButton).performClick()
+        waitUntil { activity.findViewById<View>(R.id.onboardingFinalActions).visibility == View.VISIBLE }
+
+        val detail = activity.findViewById<TextView>(R.id.onboardingFileDisclosureDetail)
+        assertEquals("Start your Travel Journal", activity.findViewById<TextView>(R.id.onboardingPageTitle).text)
+        assertEquals(View.GONE, detail.visibility)
+        activity.findViewById<View>(R.id.onboardingFileDisclosureButton).performClick()
+
+        assertEquals(View.VISIBLE, detail.visibility)
+        assertTrue(detail.text.contains("read locally"))
     }
 
     @Test
@@ -129,6 +148,13 @@ class JournalOnboardingUiTest {
 
         assertEquals(View.GONE, activity.findViewById<View>(R.id.journalOnboardingScreen).visibility)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.journalSetupCard).visibility)
+
+        activity.findViewById<View>(R.id.navigationSettings).performClick()
+        waitUntil { activity.findViewById<View>(R.id.settingsWhyImportButton).visibility == View.VISIBLE }
+        val detail = activity.findViewById<TextView>(R.id.settingsWhyImportDetail)
+        assertEquals(View.GONE, detail.visibility)
+        activity.findViewById<View>(R.id.settingsWhyImportButton).performClick()
+        assertEquals(View.VISIBLE, detail.visibility)
     }
 
     @Test

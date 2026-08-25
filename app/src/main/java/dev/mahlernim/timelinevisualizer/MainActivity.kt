@@ -495,7 +495,7 @@ class MainActivity : AppCompatActivity() {
         home.journalFreshnessCardAction.setOnClickListener { openJournalFromReminder() }
         home.journalSetupCard.setOnClickListener { showJournalSetup(returnToCreate = false) }
         home.journalSetupCardAction.setOnClickListener { showJournalSetup(returnToCreate = false) }
-        home.journalSetupIllustration.illustration = JournalOnboardingIllustration.START
+        home.journalSetupIllustration.illustration = JournalOnboardingIllustration.IMPORT
         settingsScreen.privacyPolicyButton.setOnClickListener { openPrivacyPolicy() }
         settingsScreen.githubProjectButton.setOnClickListener { openWebPage(PROJECT_URL, R.string.web_page_unavailable) }
         settingsScreen.checkUpdatesButton.setOnClickListener { openUpdates() }
@@ -504,6 +504,18 @@ class MainActivity : AppCompatActivity() {
         settingsScreen.cancelCustomizeButton.setOnClickListener { finishVideoCustomization(apply = false) }
         settingsScreen.applyCustomizeButton.setOnClickListener { finishVideoCustomization(apply = true) }
         settingsScreen.settingsImportTimelineButton.setOnClickListener { requestTimelineImport() }
+        onboarding.onboardingFileDisclosureButton.setOnClickListener {
+            toggleDisclosure(
+                onboarding.onboardingFileDisclosureButton,
+                onboarding.onboardingFileDisclosureDetail,
+            )
+        }
+        settingsScreen.settingsWhyImportButton.setOnClickListener {
+            toggleDisclosure(
+                settingsScreen.settingsWhyImportButton,
+                settingsScreen.settingsWhyImportDetail,
+            )
+        }
         settingsScreen.journalReminderSwitch.setOnCheckedChangeListener { _, checked ->
             if (updatingJournalReminderSwitch) return@setOnCheckedChangeListener
             val journal = activeJournal ?: return@setOnCheckedChangeListener
@@ -961,6 +973,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun configureJournalOnboarding() {
         val pages = JournalOnboardingPages.all
+        setDisclosureExpanded(
+            onboarding.onboardingFileDisclosureButton,
+            onboarding.onboardingFileDisclosureDetail,
+            expanded = false,
+        )
+        setDisclosureExpanded(
+            settingsScreen.settingsWhyImportButton,
+            settingsScreen.settingsWhyImportDetail,
+            expanded = false,
+        )
         onboarding.onboardingPager.adapter = JournalOnboardingAdapter(pages)
         onboarding.onboardingPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
@@ -1007,6 +1029,11 @@ class MainActivity : AppCompatActivity() {
         settingsScreen.root.visibility = View.GONE
         playerScreen.root.visibility = View.GONE
         onboarding.root.visibility = View.VISIBLE
+        setDisclosureExpanded(
+            onboarding.onboardingFileDisclosureButton,
+            onboarding.onboardingFileDisclosureDetail,
+            expanded = false,
+        )
         binding.bottomNavigation.visibility = View.GONE
         binding.exportStatusTray.visibility = View.GONE
         onboarding.onboardingPager.setCurrentItem(onboardingPage, false)
@@ -1017,12 +1044,13 @@ class MainActivity : AppCompatActivity() {
         val pages = JournalOnboardingPages.all
         val pageNumber = onboardingPage + 1
         val isFinal = onboardingPage == pages.lastIndex
-        onboarding.onboardingPagePosition.text = getString(
-            R.string.onboarding_page_position,
-            pageNumber,
-            pages.size,
-        )
-        onboarding.onboardingPageProgress.setProgressCompat(pageNumber, true)
+        listOf(
+            onboarding.onboardingDotOne,
+            onboarding.onboardingDotTwo,
+            onboarding.onboardingDotThree,
+        ).forEachIndexed { index, dot ->
+            dot.alpha = if (index == onboardingPage) 1f else 0.24f
+        }
         onboarding.onboardingBackButton.visibility =
             if (onboardingPage > 0 || onboardingReplay) View.VISIBLE else View.INVISIBLE
         onboarding.onboardingSkipButton.visibility = if (isFinal) View.INVISIBLE else View.VISIBLE
@@ -1036,6 +1064,18 @@ class MainActivity : AppCompatActivity() {
         )
         onboarding.onboardingPager.contentDescription = announcement
         if (announce) onboarding.onboardingPager.announceForAccessibility(announcement)
+    }
+
+    private fun toggleDisclosure(button: View, detail: View) {
+        setDisclosureExpanded(button, detail, detail.visibility != View.VISIBLE)
+    }
+
+    private fun setDisclosureExpanded(button: View, detail: View, expanded: Boolean) {
+        detail.visibility = if (expanded) View.VISIBLE else View.GONE
+        ViewCompat.setStateDescription(
+            button,
+            getString(if (expanded) R.string.disclosure_expanded else R.string.disclosure_collapsed),
+        )
     }
 
     private fun showVideoCustomization() {
@@ -2293,11 +2333,14 @@ class MainActivity : AppCompatActivity() {
                 settingsScreen.journalFreshnessStatus.visibility = View.GONE
                 settingsScreen.journalReminderSwitch.visibility = View.GONE
                 settingsScreen.journalReminderSummary.visibility = View.GONE
+                settingsScreen.settingsWhyImportButton.visibility = View.GONE
+                settingsScreen.settingsWhyImportDetail.visibility = View.GONE
                 updateHomeJournalCard()
                 return
             }
             val status = activeJournalStatus
             settingsScreen.settingsTimelineHelpButton.setText(R.string.get_updated_timeline_file)
+            settingsScreen.settingsWhyImportButton.visibility = View.VISIBLE
             updateSettingsImportButton(loading = false)
             settingsScreen.timelineDataStatus.text = status?.let(::journalStatusDetail)
                 ?: getString(R.string.timeline_range_unavailable)

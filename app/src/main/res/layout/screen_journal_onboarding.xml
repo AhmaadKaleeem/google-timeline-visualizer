@@ -31,7 +31,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:minHeight="48dp"
-            android:text="@string/onboarding_skip_to_choices" />
+            android:text="@string/onboarding_skip" />
     </LinearLayout>
 
     <androidx.viewpager2.widget.ViewPager2
@@ -51,22 +51,38 @@
         android:paddingEnd="20dp"
         android:paddingBottom="14dp">
 
-        <TextView
-            android:id="@+id/onboardingPagePosition"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textAppearance="?attr/textAppearanceLabelLarge" />
-
-        <com.google.android.material.progressindicator.LinearProgressIndicator
-            android:id="@+id/onboardingPageProgress"
-            android:layout_width="96dp"
-            android:layout_height="wrap_content"
+        <LinearLayout
+            android:id="@+id/onboardingPageDots"
+            android:layout_width="wrap_content"
+            android:layout_height="24dp"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="6dp"
-            android:max="5"
-            app:trackCornerRadius="4dp"
-            app:trackThickness="4dp" />
+            android:gravity="center"
+            android:importantForAccessibility="no"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/onboardingDotOne"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:src="@drawable/onboarding_progress_dot"
+                android:tint="?attr/colorPrimary" />
+
+            <ImageView
+                android:id="@+id/onboardingDotTwo"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginStart="10dp"
+                android:src="@drawable/onboarding_progress_dot"
+                android:tint="?attr/colorPrimary" />
+
+            <ImageView
+                android:id="@+id/onboardingDotThree"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginStart="10dp"
+                android:src="@drawable/onboarding_progress_dot"
+                android:tint="?attr/colorPrimary" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/onboardingNavigationActions"
@@ -112,6 +128,14 @@
                 android:minHeight="48dp"
                 android:text="@string/onboarding_choose_export" />
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_horizontal"
+                android:text="@string/onboarding_file_name_hint"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/onboardingSetupMapsButton"
                 style="@style/Widget.Material3.Button.OutlinedButton"
@@ -130,6 +154,28 @@
                 android:layout_marginTop="2dp"
                 android:minHeight="48dp"
                 android:text="@string/not_now" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/onboardingFileDisclosureButton"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:gravity="start|center_vertical"
+                android:minHeight="48dp"
+                android:text="@string/onboarding_file_disclosure_title" />
+
+            <TextView
+                android:id="@+id/onboardingFileDisclosureDetail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="12dp"
+                android:layout_marginBottom="4dp"
+                android:lineSpacingExtra="2dp"
+                android:text="@string/onboarding_file_disclosure_detail"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

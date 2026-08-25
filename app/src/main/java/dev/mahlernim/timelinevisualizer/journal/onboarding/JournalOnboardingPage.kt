@@ -12,42 +12,27 @@ data class JournalOnboardingPage(
 
 enum class JournalOnboardingIllustration {
     JOURNAL,
-    SOURCE,
-    LAYERS,
-    PRESERVE,
-    START,
+    PRIVATE,
+    IMPORT,
 }
 
 object JournalOnboardingPages {
     val all = listOf(
         JournalOnboardingPage(
-            R.string.onboarding_journal_title,
-            R.string.onboarding_journal_body,
+            R.string.onboarding_v11_journal_title,
+            R.string.onboarding_v11_journal_body,
             illustration = JournalOnboardingIllustration.JOURNAL,
         ),
         JournalOnboardingPage(
-            R.string.onboarding_source_title,
-            R.string.onboarding_source_body,
-            R.string.onboarding_source_note,
-            JournalOnboardingIllustration.SOURCE,
+            R.string.onboarding_v11_private_title,
+            R.string.onboarding_v11_private_body,
+            R.string.onboarding_v11_private_note,
+            JournalOnboardingIllustration.PRIVATE,
         ),
         JournalOnboardingPage(
-            R.string.onboarding_layers_title,
-            R.string.onboarding_layers_body,
-            R.string.onboarding_layers_note,
-            JournalOnboardingIllustration.LAYERS,
-        ),
-        JournalOnboardingPage(
-            R.string.onboarding_preserve_title,
-            R.string.onboarding_preserve_body,
-            R.string.onboarding_preserve_note,
-            JournalOnboardingIllustration.PRESERVE,
-        ),
-        JournalOnboardingPage(
-            R.string.onboarding_start_title,
-            R.string.onboarding_start_body,
-            R.string.onboarding_start_note,
-            JournalOnboardingIllustration.START,
+            R.string.onboarding_v11_start_title,
+            R.string.onboarding_v11_start_body,
+            illustration = JournalOnboardingIllustration.IMPORT,
         ),
     )
 }
