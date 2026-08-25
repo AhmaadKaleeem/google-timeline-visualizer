@@ -81,9 +81,6 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
-    sourceSets {
-        getByName("androidTest").assets.srcDir("$projectDir/schemas")
-    }
 }
 
 room {
@@ -116,5 +113,4 @@ dependencies {
     androidTestImplementation("androidx.test:core-ktx:1.7.0")
     androidTestImplementation("androidx.test.ext:junit-ktx:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
-    androidTestImplementation("androidx.room:room-testing:2.8.4")
 }
