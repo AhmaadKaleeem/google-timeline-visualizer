@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RouteProjectionSpanEntity::class,
         RouteProjectionChunkEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class JournalDatabase : RoomDatabase() {
@@ -30,7 +30,7 @@ abstract class JournalDatabase : RoomDatabase() {
             context.applicationContext,
             JournalDatabase::class.java,
             "travel-journal.db",
-        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -62,6 +62,15 @@ abstract class JournalDatabase : RoomDatabase() {
                     WHERE `builtRevision` > 0 AND `spanCount` > 0
                     """.trimIndent(),
                 )
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Existing chunks remain readable. Their null bounds make the range reader use
+                // the conservative fallback until that derived projection is rebuilt.
+                db.execSQL("ALTER TABLE `route_projection_chunks` ADD COLUMN `startEpochMillis` INTEGER")
+                db.execSQL("ALTER TABLE `route_projection_chunks` ADD COLUMN `endExclusiveEpochMillis` INTEGER")
             }
         }
     }

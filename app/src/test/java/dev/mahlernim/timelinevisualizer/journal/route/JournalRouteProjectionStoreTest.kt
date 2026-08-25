@@ -133,6 +133,37 @@ class JournalRouteProjectionStoreTest {
         assertEquals(route, stored.route)
     }
 
+    @Test
+    fun boundedReadSelectsOnlyContributingBinaryChunks() = runBlocking {
+        import("chunk-range", listOf(observation(1)))
+        val state = repository.ensureRouteProjectionState(JOURNAL_ID)
+        val points = (0..3_071).map { index ->
+            GeoPoint(Instant.ofEpochMilli(index.toLong()), 37.0 + index / 100_000.0, 127.0)
+        }
+        val route = JournalRoute(
+            timeline = dev.mahlernim.timelinevisualizer.model.Timeline(points),
+            spans = listOf(RouteSpan(points.first().instant, points.last().instant, RouteSource.DETAILED, points)),
+            detailedInputCount = points.size,
+            detailedUsableCount = points.size,
+            semanticUsableCount = 0,
+        )
+        val store = JournalRouteProjectionStore(database)
+        assertTrue(store.replace(JOURNAL_ID, state.sourceRevision, 1, route, 0L, 3_072L))
+
+        val spanId = database.journalDao().routeProjectionSpans(JOURNAL_ID).single().id
+        val selectedChunks = database.journalDao().routeProjectionChunksInRange(
+            listOf(spanId),
+            1_024L,
+            2_048L,
+        )
+        assertEquals(1, selectedChunks.size)
+
+        val bounded = requireNotNull(
+            store.read(JOURNAL_ID, Instant.ofEpochMilli(1_024L), Instant.ofEpochMilli(2_048L))?.route,
+        )
+        assertEquals((1_024L until 2_048L).toList(), bounded.timeline.points.map { it.instant.toEpochMilli() })
+    }
+
     private suspend fun import(hash: String, observations: List<DetailedObservationInput>) = repository.import(
         JOURNAL_ID,
         JournalImport(

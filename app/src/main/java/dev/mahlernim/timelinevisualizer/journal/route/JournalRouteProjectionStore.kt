@@ -24,39 +24,77 @@ class JournalRouteProjectionStore(
     suspend fun state(journalId: String): RouteProjectionStateEntity? = dao.routeProjectionState(journalId)
 
     suspend fun read(journalId: String): StoredJournalRouteProjection? {
+        return readInternal(journalId, null, null)
+    }
+
+    /** Reads only spans and point chunks that can contribute to the requested range. */
+    suspend fun read(
+        journalId: String,
+        start: Instant,
+        endExclusive: Instant,
+    ): StoredJournalRouteProjection? {
+        require(endExclusive > start)
+        return readInternal(journalId, start.toEpochMilli(), endExclusive.toEpochMilli())
+    }
+
+    private suspend fun readInternal(
+        journalId: String,
+        startEpochMillis: Long?,
+        endExclusiveEpochMillis: Long?,
+    ): StoredJournalRouteProjection? {
         val state = dao.routeProjectionState(journalId) ?: return null
         if (state.builtRevision <= 0L) return StoredJournalRouteProjection(state, null)
         return try {
-            val spanRows = dao.routeProjectionSpans(journalId)
+            val bounded = startEpochMillis != null && endExclusiveEpochMillis != null
+            val spanRows = if (bounded) {
+                dao.routeProjectionSpansInRange(journalId, startEpochMillis, endExclusiveEpochMillis)
+            } else {
+                dao.routeProjectionSpans(journalId)
+            }
             val chunks = if (spanRows.isEmpty()) emptyMap() else {
                 spanRows.map(RouteProjectionSpanEntity::id)
                     .chunked(SQLITE_BIND_CHUNK_SIZE)
-                    .flatMap { ids -> dao.routeProjectionChunks(ids) }
+                    .flatMap { ids ->
+                        if (bounded) {
+                            dao.routeProjectionChunksInRange(ids, startEpochMillis, endExclusiveEpochMillis)
+                        } else {
+                            dao.routeProjectionChunks(ids)
+                        }
+                    }
                     .groupBy(RouteProjectionChunkEntity::spanId)
             }
             val spans = spanRows.map { span ->
                 val spanChunks = chunks[span.id].orEmpty()
-                require(spanChunks.map(RouteProjectionChunkEntity::chunkOrdinal) == spanChunks.indices.toList())
                 val points = spanChunks.flatMap { chunk ->
                     RouteProjectionPointCodec.decode(chunk.pointData, chunk.pointCount, chunk.formatVersion)
+                }.let { decoded ->
+                    if (bounded) decoded.filter { point ->
+                        val instant = point.instant.toEpochMilli()
+                        instant >= startEpochMillis && instant < endExclusiveEpochMillis
+                    } else decoded
                 }
-                require(points.size == span.pointCount)
+                if (!bounded) {
+                    require(spanChunks.map(RouteProjectionChunkEntity::chunkOrdinal) == spanChunks.indices.toList())
+                    require(points.size == span.pointCount)
+                }
                 RouteSpan(
-                    start = Instant.ofEpochMilli(span.startEpochMillis),
-                    end = Instant.ofEpochMilli(span.endEpochMillis),
+                    start = Instant.ofEpochMilli(if (bounded) maxOf(span.startEpochMillis, startEpochMillis) else span.startEpochMillis),
+                    end = Instant.ofEpochMilli(
+                        if (bounded) minOf(span.endEpochMillis, decrementSafely(endExclusiveEpochMillis)) else span.endEpochMillis,
+                    ),
                     source = RouteSource.valueOf(span.source),
                     points = points,
                     transitionReason = span.transitionReason,
                 )
-            }
-            require(spans.size == state.spanCount)
+            }.filter { span -> span.source == RouteSource.GAP || span.points.isNotEmpty() }
+            if (!bounded) require(spans.size == state.spanCount)
             val timelinePoints = spans.asSequence()
                 .filter { it.source != RouteSource.GAP }
                 .flatMap { it.points.asSequence() }
                 .distinctBy(::pointKey)
                 .sortedBy(GeoPoint::instant)
                 .toList()
-            require(timelinePoints.size == state.pointCount)
+            if (!bounded) require(timelinePoints.size == state.pointCount)
             StoredJournalRouteProjection(
                 state,
                 JournalRoute(
@@ -103,12 +141,14 @@ class JournalRouteProjectionStore(
             )
             val chunks = span.points.chunked(RouteProjectionPointCodec.MAX_POINTS_PER_CHUNK)
                 .mapIndexed { chunkOrdinal, points ->
-                    RouteProjectionChunkEntity(
+                RouteProjectionChunkEntity(
                         spanId = spanId,
                         chunkOrdinal = chunkOrdinal,
                         formatVersion = RouteProjectionPointCodec.FORMAT_VERSION,
                         pointCount = points.size,
                         pointData = RouteProjectionPointCodec.encode(points),
+                        startEpochMillis = points.first().instant.toEpochMilli(),
+                        endExclusiveEpochMillis = incrementSafely(points.last().instant.toEpochMilli()),
                     )
                 }
             if (chunks.isNotEmpty()) dao.insertRouteProjectionChunks(chunks)
@@ -138,6 +178,10 @@ class JournalRouteProjectionStore(
         point.latitude.toBits(),
         point.longitude.toBits(),
     )
+
+    private fun incrementSafely(value: Long): Long = if (value == Long.MAX_VALUE) value else value + 1
+
+    private fun decrementSafely(value: Long): Long = if (value == Long.MIN_VALUE) value else value - 1
 
     private companion object {
         const val SQLITE_BIND_CHUNK_SIZE = 900

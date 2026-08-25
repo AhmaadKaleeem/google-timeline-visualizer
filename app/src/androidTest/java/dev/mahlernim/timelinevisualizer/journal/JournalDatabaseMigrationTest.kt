@@ -34,7 +34,11 @@ class JournalDatabaseMigrationTest {
         }
 
         val database = Room.databaseBuilder(context, JournalDatabase::class.java, DATABASE_NAME)
-            .addMigrations(JournalDatabase.MIGRATION_1_2, JournalDatabase.MIGRATION_2_3)
+            .addMigrations(
+                JournalDatabase.MIGRATION_1_2,
+                JournalDatabase.MIGRATION_2_3,
+                JournalDatabase.MIGRATION_3_4,
+            )
             .allowMainThreadQueries()
             .build()
         try {
@@ -78,7 +82,11 @@ class JournalDatabaseMigrationTest {
         }
 
         val database = Room.databaseBuilder(context, JournalDatabase::class.java, DATABASE_NAME)
-            .addMigrations(JournalDatabase.MIGRATION_1_2, JournalDatabase.MIGRATION_2_3)
+            .addMigrations(
+                JournalDatabase.MIGRATION_1_2,
+                JournalDatabase.MIGRATION_2_3,
+                JournalDatabase.MIGRATION_3_4,
+            )
             .allowMainThreadQueries()
             .build()
         try {
@@ -92,6 +100,13 @@ class JournalDatabaseMigrationTest {
             }
             assertEquals(1, migrated.count("route_projection_spans"))
             assertEquals(1, migrated.count("route_projection_chunks"))
+            migrated.query(
+                "SELECT startEpochMillis, endExclusiveEpochMillis FROM route_projection_chunks WHERE spanId = 1",
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(true, cursor.isNull(0))
+                assertEquals(true, cursor.isNull(1))
+            }
         } finally {
             database.close()
         }

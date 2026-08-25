@@ -305,8 +305,40 @@ interface JournalDao {
     @Query("SELECT * FROM route_projection_spans WHERE journalId = :journalId ORDER BY ordinal ASC")
     suspend fun routeProjectionSpans(journalId: String): List<RouteProjectionSpanEntity>
 
+    @Query(
+        """
+        SELECT * FROM route_projection_spans
+        WHERE journalId = :journalId
+          AND endEpochMillis >= :startEpochMillis
+          AND startEpochMillis < :endExclusiveEpochMillis
+        ORDER BY ordinal ASC
+        """,
+    )
+    suspend fun routeProjectionSpansInRange(
+        journalId: String,
+        startEpochMillis: Long,
+        endExclusiveEpochMillis: Long,
+    ): List<RouteProjectionSpanEntity>
+
     @Query("SELECT * FROM route_projection_chunks WHERE spanId IN (:spanIds) ORDER BY spanId ASC, chunkOrdinal ASC")
     suspend fun routeProjectionChunks(spanIds: List<Long>): List<RouteProjectionChunkEntity>
+
+    @Query(
+        """
+        SELECT * FROM route_projection_chunks
+        WHERE spanId IN (:spanIds)
+          AND (
+              startEpochMillis IS NULL OR endExclusiveEpochMillis IS NULL OR
+              (endExclusiveEpochMillis > :startEpochMillis AND startEpochMillis < :endExclusiveEpochMillis)
+          )
+        ORDER BY spanId ASC, chunkOrdinal ASC
+        """,
+    )
+    suspend fun routeProjectionChunksInRange(
+        spanIds: List<Long>,
+        startEpochMillis: Long,
+        endExclusiveEpochMillis: Long,
+    ): List<RouteProjectionChunkEntity>
 
     @Insert
     suspend fun insertRouteProjectionSpan(span: RouteProjectionSpanEntity): Long

@@ -230,4 +230,8 @@ data class RouteProjectionChunkEntity(
     val formatVersion: Int,
     val pointCount: Int,
     val pointData: ByteArray,
+    /** Null only for chunks written before schema 4. */
+    val startEpochMillis: Long? = null,
+    /** Exclusive when possible. Null only for chunks written before schema 4. */
+    val endExclusiveEpochMillis: Long? = null,
 )

@@ -204,6 +204,44 @@ class JournalRouteServiceTest {
     }
 
     @Test
+    fun boundedLegacyRowsMatchClippedFullReconstructionWithoutSnapshotExpansion() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "legacy-bounded",
+                importedAt = minute(200),
+                parserVersion = 1,
+                semantic = (0 until 100).map { index ->
+                    val start = index * 10L
+                    semantic(
+                        start,
+                        start + 9,
+                        listOf(point(start, index.toDouble()), point(start + 9, index + 0.5)),
+                    )
+                },
+            ),
+        )
+        val requestStart = Instant.ofEpochMilli(minute(450))
+        val requestEnd = Instant.ofEpochMilli(minute(480))
+        val full = service.route(
+            JOURNAL_ID,
+            BASE,
+            Instant.ofEpochMilli(minute(1_000)),
+            maximumAccuracyMeters = null,
+        )
+
+        val bounded = service.route(
+            JOURNAL_ID,
+            requestStart,
+            requestEnd,
+            maximumAccuracyMeters = null,
+        )
+
+        assertEquals(full.clippedTo(requestStart, requestEnd).timeline.points, bounded.timeline.points)
+        assertEquals(full.clippedTo(requestStart, requestEnd).spans, bounded.spans)
+    }
+
+    @Test
     fun explicitPartsOfOneStructuredRecordRemainConnected() = runBlocking {
         val first = listOf(point(0, 1.0), point(10, 1.1))
         val second = listOf(point(20, 1.2), point(30, 1.3))
@@ -584,6 +622,42 @@ class JournalRouteServiceTest {
         val state = requireNotNull(database.journalDao().routeProjectionState(JOURNAL_ID))
         assertEquals(cacheStart.toEpochMilli(), state.projectionStartEpochMillis)
         assertEquals(cacheEnd.toEpochMilli(), state.projectionEndExclusiveEpochMillis)
+    }
+
+    @Test
+    fun touchingRequestsExtendCacheAndBothRangesRemainReusable() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "two-ranges",
+                importedAt = minute(100),
+                observations = listOf(
+                    observation(0, 1.0),
+                    observation(10, 1.1),
+                    observation(20, 1.2),
+                    observation(30, 1.3),
+                    observation(40, 1.4),
+                ),
+            ),
+        )
+        val middle = BASE.plus(Duration.ofMinutes(21))
+        val end = BASE.plus(Duration.ofMinutes(41))
+        service.route(JOURNAL_ID, BASE, middle)
+        service.route(JOURNAL_ID, middle, end)
+        val stages = mutableListOf<JournalRoutePreparationStage>()
+
+        val firstRangeAgain = service.route(
+            JOURNAL_ID,
+            BASE,
+            middle,
+            onPreparationStage = stages::add,
+        )
+
+        assertEquals(listOf(1.0, 1.1, 1.2), firstRangeAgain.timeline.points.map(GeoPoint::latitude))
+        assertEquals(emptyList<JournalRoutePreparationStage>(), stages)
+        val state = requireNotNull(database.journalDao().routeProjectionState(JOURNAL_ID))
+        assertEquals(BASE.toEpochMilli(), state.projectionStartEpochMillis)
+        assertEquals(end.toEpochMilli(), state.projectionEndExclusiveEpochMillis)
     }
 
     @Test

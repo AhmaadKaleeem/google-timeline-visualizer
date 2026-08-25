@@ -73,6 +73,11 @@ class JournalRouteService(
         val cacheMatchesAlgorithm = state?.algorithmVersion == PROJECTION_ALGORITHM_VERSION
         val cacheIsCurrent = state != null &&
             state.builtRevision == state.sourceRevision && state.buildStatus == "READY"
+        val cachedRangeTouchesRequest = state?.projectionStartEpochMillis?.let { cachedStart ->
+            val cachedEnd = state.projectionEndExclusiveEpochMillis ?: return@let false
+            startMillis <= cachedEnd && endMillis >= cachedStart
+        } == true
+        val canExtendStoredRoute = cachedRangeTouchesRequest && cacheMatchesAlgorithm && cacheIsCurrent
         val dirtyDoesNotAffectRequest = state?.buildStatus == "DIRTY" &&
             state.dirtyStartEpochMillis != null && state.dirtyEndEpochMillis != null &&
             !overlaps(
@@ -81,15 +86,29 @@ class JournalRouteService(
                 state.dirtyStartEpochMillis,
                 incrementSafely(state.dirtyEndEpochMillis),
             )
-        val mayUseStoredRoute = cachedRangeContainsRequest && cacheMatchesAlgorithm &&
-            (
+        val mayUseStoredRoute = cachedRangeContainsRequest && cacheMatchesAlgorithm && (
                 cacheIsCurrent || dirtyDoesNotAffectRequest ||
                     (state?.buildStatus == "DIRTY" &&
                         state.dirtyStartEpochMillis != null && state.dirtyEndEpochMillis != null)
             )
         // Gate BLOB decoding behind cheap state checks. In particular, migrated lifetime caches
         // from older algorithms are never decoded for a small selected range.
-        val previous = if (mayUseStoredRoute) projectionStore.read(journalId)?.route else null
+        val previous = if (mayUseStoredRoute) {
+            val readWholeProjection = state?.buildStatus == "DIRTY"
+            val readStart = if (readWholeProjection) {
+                Instant.ofEpochMilli(requireNotNull(state.projectionStartEpochMillis))
+            } else {
+                start
+            }
+            val readEnd = if (readWholeProjection) {
+                Instant.ofEpochMilli(requireNotNull(state.projectionEndExclusiveEpochMillis))
+            } else {
+                endExclusive
+            }
+            projectionStore.read(journalId, readStart, readEnd)?.route
+        } else {
+            null
+        }
         if (
             previous != null && cachedRangeContainsRequest && cacheMatchesAlgorithm &&
             (cacheIsCurrent || dirtyDoesNotAffectRequest)
@@ -123,10 +142,23 @@ class JournalRouteService(
             previous.replacingWindow(boundedRefreshStart, boundedRefreshEnd, replacement)
                 .clippedTo(Instant.ofEpochMilli(cachedStart), Instant.ofEpochMilli(cachedEnd))
         } else {
+            val rebuildStart = if (canExtendStoredRoute) {
+                Instant.ofEpochMilli(minOf(requireNotNull(state?.projectionStartEpochMillis), startMillis))
+            } else {
+                start
+            }
+            val rebuildEnd = if (canExtendStoredRoute) {
+                Instant.ofEpochMilli(maxOf(requireNotNull(state?.projectionEndExclusiveEpochMillis), endMillis))
+            } else {
+                endExclusive
+            }
+            // Reconstruct the contiguous union when extending a cache. Splicing independently
+            // fused ranges can lose a gap or inferred transfer at the join and would no longer be
+            // equivalent to an uncached reconstruction.
             reconstructWithContext(
                 journalId,
-                start,
-                endExclusive,
+                rebuildStart,
+                rebuildEnd,
                 maximumAccuracyMeters,
                 discontinuity,
                 onPreparationStage,
@@ -139,15 +171,15 @@ class JournalRouteService(
                 expectedSourceRevision = state.sourceRevision,
                 algorithmVersion = PROJECTION_ALGORITHM_VERSION,
                 route = rebuilt,
-                projectionStartEpochMillis = if (cachedRangeContainsRequest && cacheMatchesAlgorithm) {
-                    requireNotNull(state.projectionStartEpochMillis)
-                } else {
-                    startMillis
+                projectionStartEpochMillis = when {
+                    cachedRangeContainsRequest && cacheMatchesAlgorithm -> requireNotNull(state.projectionStartEpochMillis)
+                    canExtendStoredRoute -> minOf(requireNotNull(state.projectionStartEpochMillis), startMillis)
+                    else -> startMillis
                 },
-                projectionEndExclusiveEpochMillis = if (cachedRangeContainsRequest && cacheMatchesAlgorithm) {
-                    requireNotNull(state.projectionEndExclusiveEpochMillis)
-                } else {
-                    endMillis
+                projectionEndExclusiveEpochMillis = when {
+                    cachedRangeContainsRequest && cacheMatchesAlgorithm -> requireNotNull(state.projectionEndExclusiveEpochMillis)
+                    canExtendStoredRoute -> maxOf(requireNotNull(state.projectionEndExclusiveEpochMillis), endMillis)
+                    else -> endMillis
                 },
             )
             if (!stored) throw StaleJournalRouteBuildException()
@@ -242,10 +274,6 @@ class JournalRouteService(
         boundedRows: List<ActiveSemanticSegment>,
     ): List<ActiveSemanticSegment> {
         if (boundedRows.isEmpty()) return boundedRows
-        val legacySnapshotIds = boundedRows.asSequence()
-            .filter { it.parserVersion <= LEGACY_FLATTENED_PARSER_VERSION }
-            .map(ActiveSemanticSegment::snapshotId)
-            .toSet()
         val groupedParts = boundedRows.mapNotNull { row ->
             val geometry = SemanticGeometryCodec.decodeGeometry(row.geometryJson)
             geometry.continuityGroup?.let { group -> ComponentKey(row.snapshotId, group) to geometry }
@@ -254,12 +282,15 @@ class JournalRouteService(
             val expected = parts.mapNotNull(SemanticGeometryCodec.Geometry::partCount).maxOrNull() ?: 1
             key.takeIf { parts.mapNotNull(SemanticGeometryCodec.Geometry::partIndex).distinct().size < expected }
         }.toSet()
-        val snapshotsToExpand = legacySnapshotIds + incompleteGroups.map(ComponentKey::snapshotId)
+        // Legacy rows were already flattened into time-bounded chunks at import. Re-reading the
+        // complete snapshot can turn a one-week video into a decade-long decode without adding
+        // points inside the requested window. Structured multi-part records are different. Their
+        // complete geometry is needed for direction arbitration, so expand only those groups.
+        val snapshotsToExpand = incompleteGroups.map(ComponentKey::snapshotId).toSet()
         if (snapshotsToExpand.isEmpty()) return boundedRows
 
         val siblings = repository.activeSemanticSegmentsForSnapshots(journalId, snapshotsToExpand)
             .filter { row ->
-                if (row.snapshotId in legacySnapshotIds) return@filter true
                 val group = SemanticGeometryCodec.decodeGeometry(row.geometryJson).continuityGroup
                 group != null && ComponentKey(row.snapshotId, group) in incompleteGroups
             }
