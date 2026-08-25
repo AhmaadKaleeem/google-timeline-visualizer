@@ -228,6 +228,8 @@
     <string name="settings_summary">Legen Sie die Standardeinstellungen für Vorschauen und neue Videos fest.</string>
     <string name="video_defaults">Videostandards</string>
     <string name="video_defaults_summary">Diese Einstellungen steuern gemeinsam Kadrierung und Tempo der Route.</string>
+        <string name="ghost_trail">Ghost Trail (Experimentell)</string>
+    <string name="ghost_trail_summary">Halten Sie zuvor zurückgelegte Routen sichtbar, während die Zeitachse abgespielt wird. Diese Funktion befindet sich in den erweiterten Einstellungen, da sie die Leistung auf älteren Geräten bei sehr langen Fahrten beeinträchtigen kann.</string>
     <string name="aspect_ratio">Seitenverhältnis</string><string name="aspect_square">Quadratisch</string><string name="aspect_portrait">Hochformat</string><string name="aspect_landscape">Querformat</string>
     <string name="reset_video_defaults">Videostandards zurücksetzen</string><string name="video_defaults_restored">Videostandards zurückgesetzt</string>
     <string name="export_quality">Exportqualität</string><string name="export_quality_summary">Höhere Auflösungen erzeugen größere Dateien und werden nicht von jedem Gerät unterstützt.</string>

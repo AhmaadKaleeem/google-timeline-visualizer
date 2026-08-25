@@ -232,6 +232,8 @@
     <string name="settings_summary">Establezca los valores predeterminados utilizados para vistas previas y videos nuevos.</string>
     <string name="video_defaults">Valores predeterminados de vídeo</string>
     <string name="video_defaults_summary">Estos ajustes controlan juntos el encuadre y el ritmo de la ruta.</string>
+        <string name="ghost_trail">Ghost Trail (Experimental)</string>
+    <string name="ghost_trail_summary">Mantenga las rutas recorridas anteriormente visibles mientras se reproduce la línea de tiempo. Esta función se encuentra en los ajustes avanzados porque puede afectar el rendimiento en dispositivos más antiguos durante viajes muy largos.</string>
     <string name="aspect_ratio">Relación de aspecto</string><string name="aspect_square">Cuadrado</string><string name="aspect_portrait">Vertical</string><string name="aspect_landscape">Horizontal</string>
     <string name="reset_video_defaults">Restablecer valores de vídeo</string><string name="video_defaults_restored">Valores de vídeo restablecidos</string>
     <string name="export_quality">Calidad de exportación</string><string name="export_quality_summary">Las resoluciones más altas crean archivos mayores y pueden no funcionar en todos los dispositivos.</string>

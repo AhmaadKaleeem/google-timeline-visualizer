@@ -232,6 +232,8 @@
     <string name="settings_summary">Defina os padrões usados ​​para visualizações e novos vídeos.</string>
     <string name="video_defaults">Padrões de vídeo</string>
     <string name="video_defaults_summary">Essas configurações controlam juntas o enquadramento e o ritmo da rota.</string>
+        <string name="ghost_trail">Ghost Trail (Experimental)</string>
+    <string name="ghost_trail_summary">Mantenha as rotas percorridas anteriormente visíveis enquanto a linha do tempo é reproduzida. Esse recurso está nas configurações avançadas porque pode afetar o desempenho em dispositivos mais antigos durante viagens muito longas.</string>
     <string name="aspect_ratio">Proporção</string><string name="aspect_square">Quadrado</string><string name="aspect_portrait">Retrato</string><string name="aspect_landscape">Paisagem</string>
     <string name="reset_video_defaults">Redefinir padrões de vídeo</string><string name="video_defaults_restored">Padrões de vídeo redefinidos</string>
     <string name="export_quality">Qualidade de exportação</string><string name="export_quality_summary">Resoluções maiores criam arquivos maiores e podem não funcionar em todos os dispositivos.</string>

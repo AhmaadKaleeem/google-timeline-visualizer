@@ -63,6 +63,10 @@ class TimelinePainter {
         strokeWidth = 8f
         alpha = 255
     }
+    private val ghostTrailPaint = Paint(oldTrailPaint).apply {
+        strokeWidth = 4f
+        alpha = 30 // Low opacity
+    }
     private val overviewRoutePaint = Paint(oldTrailPaint).apply {
         strokeWidth = 3.5f
         alpha = 255
@@ -95,6 +99,148 @@ class TimelinePainter {
     private val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(220, 255, 248, 250)
     }
+
+    private class GhostTrailChunk(val startIndex: Int) {
+        val path = Path()
+        var originX: Double = 0.0
+        var originY: Double = 0.0
+        var count = 0
+        
+        fun add(point: WorldPoint) {
+            if (count == 0) {
+                originX = point.x
+                originY = point.y
+                path.moveTo(0f, 0f)
+            } else {
+                path.lineTo((point.x - originX).toFloat(), (point.y - originY).toFloat())
+            }
+            count++
+        }
+    }
+
+    private inner class GhostTrailCache {
+        val chunks = mutableListOf<GhostTrailChunk>()
+        val screenPath = Path()
+        var activeJourney: Journey? = null
+        var lastDistanceKm: Double = -1.0
+        var lastCachedIndex: Int = -1
+
+        var fullRebuildCount = 0
+        var incrementalAppendCount = 0
+        var pointsAppended = 0
+        var pointsProcessedDuringRebuild = 0
+
+        fun reset(journey: Journey) {
+            chunks.clear()
+            activeJourney = journey
+            lastDistanceKm = -1.0
+            lastCachedIndex = -1
+        }
+
+        fun update(journey: Journey, prepared: PreparedJourney, distanceKm: Double) {
+            if (activeJourney !== journey) {
+                reset(journey)
+            }
+            if (distanceKm <= 0.0) return
+
+            val maxCompletedIndex = prepared.lowerBound(distanceKm) - 1
+            if (maxCompletedIndex < 0) return
+
+            if (maxCompletedIndex < lastCachedIndex || lastCachedIndex < 0) {
+                // Backward seek or initialization
+                fullRebuildCount++
+                chunks.clear()
+                var currentChunk = GhostTrailChunk(0)
+                chunks.add(currentChunk)
+
+                for (index in 0..maxCompletedIndex) {
+                    val point = prepared.worldPointAt(index)
+                    currentChunk.add(point)
+                    pointsProcessedDuringRebuild++
+                    if (currentChunk.count >= 256 && index < maxCompletedIndex) {
+                        currentChunk = GhostTrailChunk(index)
+                        chunks.add(currentChunk)
+                        currentChunk.add(point)
+                    }
+                }
+                lastCachedIndex = maxCompletedIndex
+                lastDistanceKm = distanceKm
+            } else if (maxCompletedIndex > lastCachedIndex) {
+                // Forward progress
+                incrementalAppendCount++
+                val start = max(0, lastCachedIndex)
+                var currentChunk = chunks.lastOrNull()
+                if (currentChunk == null) {
+                    currentChunk = GhostTrailChunk(start)
+                    chunks.add(currentChunk)
+                }
+
+                for (index in start..maxCompletedIndex) {
+                    val point = prepared.worldPointAt(index)
+                    currentChunk!!.add(point)
+                    pointsAppended++
+                    if (currentChunk!!.count >= 256 && index < maxCompletedIndex) {
+                        currentChunk = GhostTrailChunk(index)
+                        chunks.add(currentChunk!!)
+                        currentChunk!!.add(point)
+                    }
+                }
+                lastCachedIndex = maxCompletedIndex
+                lastDistanceKm = distanceKm
+            }
+        }
+
+        fun draw(
+            canvas: Canvas,
+            journey: Journey,
+            prepared: PreparedJourney,
+            distanceKm: Double,
+            viewport: Viewport,
+            width: Int,
+            height: Int,
+            paint: Paint,
+            alphaScale: Int
+        ) {
+            if (lastCachedIndex < 0 || chunks.isEmpty()) return
+
+            val previousAlpha = paint.alpha
+            paint.alpha = (previousAlpha * alphaScale / 255f).toInt().coerceIn(0, 255)
+
+            val matrix = android.graphics.Matrix()
+            val scaleX = width / (viewport.maxX - viewport.minX).toFloat()
+            val scaleY = height / (viewport.maxY - viewport.minY).toFloat()
+            
+            for (chunk in chunks) {
+                if (chunk.count == 0) continue
+                
+                val originPoint = WorldPoint(chunk.originX, chunk.originY)
+                val screenOrigin = worldToScreen(originPoint, viewport, width, height)
+                
+                matrix.reset()
+                matrix.postScale(scaleX, scaleY)
+                matrix.postTranslate(screenOrigin.first, screenOrigin.second)
+
+                chunk.path.transform(matrix, screenPath)
+                canvas.drawPath(screenPath, paint)
+            }
+
+            if (distanceKm > 0.0) {
+                val currentPoint = journey.positionAtDistance(distanceKm)
+                val currentScreen = screenPoint(currentPoint, prepared, viewport, width, height)
+                val lastNode = prepared.worldPointAt(lastCachedIndex)
+                val lastNodeScreen = worldToScreen(lastNode, viewport, width, height)
+
+                screenPath.reset()
+                screenPath.moveTo(lastNodeScreen.first, lastNodeScreen.second)
+                screenPath.lineTo(currentScreen.first, currentScreen.second)
+                canvas.drawPath(screenPath, paint)
+            }
+            
+            paint.alpha = previousAlpha
+        }
+    }
+
+    private val ghostTrailCache = GhostTrailCache()
 
     private fun overlayScale(width: Int, height: Int): Float = min(width, height) / 720f
 
@@ -875,6 +1021,13 @@ class TimelinePainter {
         val middleEnd = trailStart + visibleTrail * 0.75
         val activeAlpha = (255 * (1f - easeOutCubic(frame.outroProgress))).toInt().coerceIn(0, 255)
         if (prepared != null) {
+            if (cameraSettings.ghostTrailEnabled) {
+                ghostTrailCache.update(journey, prepared, current.distanceKm)
+                ghostTrailCache.draw(
+                    canvas, journey, prepared, current.distanceKm, viewport, width, height, ghostTrailPaint, activeAlpha
+                )
+            }
+            
             drawRouteRange(
                 canvas, journey, prepared, viewport, width, height,
                 trailStart, min(oldEnd, current.distanceKm), oldTrailPaint, activeAlpha,
@@ -920,7 +1073,7 @@ class TimelinePainter {
         }
         headPaint.alpha = previousHeadAlpha
         headRingPaint.alpha = previousRingAlpha
-        drawOverlay(canvas, width, height, current, title, renderText)
+        drawOverlay(canvas, width, height, current, title, renderText, cameraSettings)
     }
 
     private fun drawBackground(canvas: Canvas, width: Int, height: Int) {
@@ -965,6 +1118,7 @@ class TimelinePainter {
         position: JourneyPosition,
         title: String,
         renderText: RenderText,
+        cameraSettings: CameraSettings,
     ) {
         val scale = overlayScale(width, height)
         val card = overlayCard(width, height)
@@ -990,6 +1144,16 @@ class TimelinePainter {
             bodyPaint,
         )
         canvas.drawText(renderText.attribution, width - 12f * scale, height - 12f * scale, attributionPaint)
+        
+        if (cameraSettings.ghostTrailEnabled) {
+            val experimentalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(200, 50, 50)
+                textSize = 14f * scale
+                typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+                textAlign = Paint.Align.LEFT
+            }
+            canvas.drawText("GHOST TRAIL (EXPERIMENTAL)", 16f * scale, height - 16f * scale, experimentalPaint)
+        }
     }
 
     private fun worldToScreen(point: WorldPoint, viewport: Viewport, width: Int, height: Int): Pair<Float, Float> {

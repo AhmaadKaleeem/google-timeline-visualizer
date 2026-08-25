@@ -174,6 +174,7 @@ data class CameraSettings(
     val exportFormat: ExportFormatSettings? = null,
     val tripDetection: TripDetection = TripDetection.BALANCED,
     val localFraming: LocalFraming = LocalFraming.BALANCED,
+    val ghostTrailEnabled: Boolean = false,
 ) {
     val episodeFramingEnabled: Boolean get() = localFraming.enabled
 

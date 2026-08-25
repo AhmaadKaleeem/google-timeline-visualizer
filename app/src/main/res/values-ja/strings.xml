@@ -231,6 +231,8 @@
     <string name="settings_summary">プレビューと新しい動画に使用する初期値を設定します。</string>
     <string name="video_defaults">動画の初期設定</string>
     <string name="video_defaults_summary">ルートの表示範囲と再生ペースをまとめて調整します。</string>
+        <string name="ghost_trail">ゴーストトレイル（試験運用版）</string>
+    <string name="ghost_trail_summary">タイムラインの再生中、以前に移動したルートを表示したままにします。この機能は、非常に長い移動中に古いデバイスのパフォーマンスに影響を与える可能性があるため、詳細設定に含まれています。</string>
     <string name="aspect_ratio">縦横比</string><string name="aspect_square">正方形</string><string name="aspect_portrait">縦向き</string><string name="aspect_landscape">横向き</string>
     <string name="reset_video_defaults">動画設定をリセット</string><string name="video_defaults_restored">動画設定をリセットしました</string>
     <string name="export_quality">書き出し品質</string><string name="export_quality_summary">高解像度ほどファイルが大きくなり、端末によっては利用できません。</string>

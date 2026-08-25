@@ -509,6 +509,7 @@ class MainActivity : AppCompatActivity() {
         configurePresets()
         restoreDraftSettings(savedInstanceState)
         configureLocationFiltering()
+        configureGhostTrail()
         configureLanguageSelection()
         configureCameraPreparation()
         configureMonthDropdowns()
@@ -2379,6 +2380,16 @@ class MainActivity : AppCompatActivity() {
             locationFilterMode = if (checked) LocationFilterMode.CONSERVATIVE else LocationFilterMode.OFF
             settingsViewModel.updateLocationFilter(locationFilterMode)
             rebuildRenderTimeline(reselect = true)
+        }
+    }
+
+    private fun configureGhostTrail() {
+        settingsScreen.ghostTrailSwitch.isChecked = settingsViewModel.state.value.camera.ghostTrailEnabled
+        settingsScreen.ghostTrailSwitch.setOnCheckedChangeListener { _, checked ->
+            val settings = settingsViewModel.state.value.camera.copy(ghostTrailEnabled = checked)
+            settingsViewModel.updateCamera(settings)
+            applyAdvancedSettings(settings)
+            editor.timelineView.invalidate()
         }
     }
 

@@ -225,6 +225,8 @@
     <string name="settings_summary">設定用於預覽和新影片的預設值。</string>
     <string name="video_defaults">影片預設值</string>
     <string name="video_defaults_summary">這些設定共同控制路線的取景和播放節奏。</string>
+        <string name="ghost_trail">Ghost Trail（實驗性）</string>
+    <string name="ghost_trail_summary">在播放時間軸時保持以前走過的路線可見。此功能位於進階設定中，因為它可能會在極長的旅程中影響舊裝置的效能。</string>
     <string name="aspect_ratio">長寬比</string><string name="aspect_square">正方形</string><string name="aspect_portrait">直向</string><string name="aspect_landscape">橫向</string>
     <string name="reset_video_defaults">重設影片預設值</string><string name="video_defaults_restored">已重設影片預設值</string>
     <string name="export_quality">匯出品質</string><string name="export_quality_summary">解析度越高，檔案越大，且並非所有裝置都支援。</string>

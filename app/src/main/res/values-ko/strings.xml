@@ -231,6 +231,8 @@
     <string name="settings_summary">미리보기와 새 동영상에 사용할 기본값을 설정합니다.</string>
     <string name="video_defaults">동영상 기본값</string>
     <string name="video_defaults_summary">이 설정으로 경로의 화면 구성과 재생 속도를 함께 조절합니다.</string>
+        <string name="ghost_trail">고스트 트레일(실험실 기능)</string>
+    <string name="ghost_trail_summary">타임라인이 재생되는 동안 이전에 이동한 경로를 계속 표시합니다. 이 기능은 매우 긴 이동 중에 구형 기기의 성능에 영향을 줄 수 있으므로 고급 설정에 있습니다.</string>
     <string name="aspect_ratio">화면 비율</string>
     <string name="aspect_square">정사각형</string>
     <string name="aspect_portrait">세로</string>

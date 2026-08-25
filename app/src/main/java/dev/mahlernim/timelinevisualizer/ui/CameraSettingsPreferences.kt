@@ -40,6 +40,7 @@ class CameraSettingsPreferences(context: Context) {
             exportFormat = exportFormat,
             tripDetection = enumValue(KEY_TRIP_DETECTION, TripDetection.BALANCED),
             localFraming = localFraming(existingProductionSettings),
+            ghostTrailEnabled = preferences.getBoolean(KEY_GHOST_TRAIL, false),
         )
         save(settings)
         return settings
@@ -64,6 +65,7 @@ class CameraSettingsPreferences(context: Context) {
             }
             putString(KEY_TRIP_DETECTION, settings.tripDetection.name)
             putString(KEY_EPISODE_LOCAL_FRAMING, settings.localFraming.name)
+            putBoolean(KEY_GHOST_TRAIL, settings.ghostTrailEnabled)
             remove(KEY_ZOOM_IN_TRAVEL_SLOWDOWN)
             remove(KEY_ZOOM_IN_MOVEMENT_REDUCTION)
             remove(KEY_EPISODE_FRAMING_ENABLED)
@@ -118,5 +120,6 @@ class CameraSettingsPreferences(context: Context) {
         const val KEY_EPISODE_FRAMING_ENABLED = "episode-framing-enabled"
         const val KEY_TRIP_DETECTION = "episode-trip-detection"
         const val KEY_EPISODE_LOCAL_FRAMING = "episode-local-framing"
+        const val KEY_GHOST_TRAIL = "ghost-trail-enabled"
     }
 }

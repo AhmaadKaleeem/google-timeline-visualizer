@@ -57,6 +57,13 @@ android {
             buildConfigField("String", "UPDATE_URL", "\"market://details?id=dev.mahlernim.timelinevisualizer\"")
             buildConfigField("String", "UPDATE_FALLBACK_URL", "\"https://play.google.com/store/apps/details?id=dev.mahlernim.timelinevisualizer\"")
         }
+        create("ghostTrailExperimental") {
+            dimension = "distribution"
+            applicationIdSuffix = ".ghosttrail"
+            versionNameSuffix = "-ghost-trail"
+            buildConfigField("String", "UPDATE_URL", "\"\"")
+            buildConfigField("String", "UPDATE_FALLBACK_URL", "\"\"")
+        }
     }
 
     compileOptions {

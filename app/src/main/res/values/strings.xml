@@ -242,6 +242,8 @@
     <string name="settings_summary">Set the defaults used for previews and new videos.</string>
     <string name="video_defaults">Video defaults</string>
     <string name="video_defaults_summary">Together, these control how your route is framed and paced.</string>
+    <string name="ghost_trail">Ghost Trail (Experimental)</string>
+    <string name="ghost_trail_summary">Keep previously traveled routes visible while the timeline plays. This feature is in advanced settings because it may affect performance on older devices during very long journeys.</string>
     <string name="aspect_ratio">Aspect ratio</string>
     <string name="aspect_square">Square</string>
     <string name="aspect_portrait">Portrait</string>
