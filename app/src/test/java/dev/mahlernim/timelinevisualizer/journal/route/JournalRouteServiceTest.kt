@@ -250,6 +250,138 @@ class JournalRouteServiceTest {
     }
 
     @Test
+    fun complementaryStandalonePathRetainsLegitimateCurvedShape() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "curved-path",
+                importedAt = minute(100),
+                semantic = listOf(
+                    semantic(0, 30, listOf(point(0, 1.0), point(30, 1.6))),
+                    semantic(
+                        0,
+                        30,
+                        listOf(point(0, 1.0), point(10, 1.4), point(20, 1.2), point(30, 1.6)),
+                    ).copy(kind = "PATH"),
+                ),
+            ),
+        )
+
+        val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(31)))
+
+        assertEquals(listOf(1.0, 1.4, 1.2, 1.6), route.timeline.points.map(GeoPoint::latitude))
+        assertEquals(listOf(RouteSource.SEMANTIC_PATH), route.spans.map(RouteSpan::source))
+    }
+
+    @Test
+    fun duplicateSemanticHistoriesAreSelectedOnceWithoutBacktracking() = runBlocking {
+        val geometry = listOf(point(0, 4.0), point(10, 4.2), point(20, 4.4), point(30, 4.6))
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "duplicate-history",
+                importedAt = minute(100),
+                semantic = listOf(
+                    semantic(0, 30, geometry),
+                    semantic(0, 30, geometry).copy(kind = "PATH"),
+                ),
+            ),
+        )
+
+        val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(31)))
+
+        assertEquals(listOf(4.0, 4.2, 4.4, 4.6), route.timeline.points.map(GeoPoint::latitude))
+        assertEquals(1, route.spans.size)
+    }
+
+    @Test
+    fun reversedStandaloneHistoryIsRejectedInsideSemanticComponents() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "reversed-history",
+                importedAt = minute(100),
+                semantic = listOf(
+                    semantic(0, 10, listOf(point(0, 10.0), point(10, 20.0))),
+                    semantic(20, 30, listOf(point(20, 20.0), point(30, 10.0))),
+                    semantic(
+                        0,
+                        31,
+                        listOf(
+                            point(5, 20.0),
+                            point(8, 10.0),
+                            point(25, 10.0),
+                            point(28, 20.0),
+                            point(31, 30.0),
+                        ),
+                    ).copy(kind = "PATH"),
+                ),
+            ),
+        )
+
+        val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(32)))
+
+        assertEquals(listOf(10.0, 20.0, 20.0, 10.0, 30.0), route.timeline.points.map(GeoPoint::latitude))
+    }
+
+    @Test
+    fun genuineReturnAndUTurnGeometryIsNotClassifiedAsBacktracking() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "real-return",
+                importedAt = minute(100),
+                semantic = listOf(
+                    semantic(0, 30, listOf(point(0, 3.0), point(30, 3.0))),
+                    semantic(
+                        0,
+                        30,
+                        listOf(point(0, 3.0), point(10, 3.5), point(20, 3.2), point(30, 3.0)),
+                    ).copy(kind = "PATH"),
+                ),
+            ),
+        )
+
+        val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(31)))
+
+        assertEquals(listOf(3.0, 3.5, 3.2, 3.0), route.timeline.points.map(GeoPoint::latitude))
+    }
+
+    @Test
+    fun boundedProjectionRefreshMatchesFullReconstructionAfterDetailedUpdate() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "projection-base",
+                importedAt = minute(100),
+                semantic = listOf(
+                    semantic(0, 60, listOf(point(0, 1.0), point(60, 1.6))),
+                    semantic(
+                        0,
+                        60,
+                        listOf(point(0, 1.0), point(20, 1.2), point(40, 1.4), point(60, 1.6)),
+                    ).copy(kind = "PATH"),
+                ),
+            ),
+        )
+        service.route(JOURNAL_ID, LIFETIME_START, LIFETIME_END)
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "projection-detail",
+                importedAt = minute(200),
+                observations = listOf(observation(20, 7.2), observation(30, 7.3), observation(40, 7.4)),
+            ),
+        )
+
+        val incrementallyRebuilt = service.route(JOURNAL_ID, LIFETIME_START, LIFETIME_END)
+        val fullyReconstructed = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(61)))
+
+        assertEquals(fullyReconstructed.timeline.points, incrementallyRebuilt.timeline.points)
+        assertEquals(fullyReconstructed.spans, incrementallyRebuilt.spans)
+    }
+
+    @Test
     fun severalNewerCoverageIntervalsSplitOlderHistoryAtEveryBoundary() = runBlocking {
         repository.import(
             JOURNAL_ID,
@@ -388,5 +520,7 @@ class JournalRouteServiceTest {
     private companion object {
         const val JOURNAL_ID = "journal-route-test"
         val BASE: Instant = Instant.parse("2026-01-01T00:00:00Z")
+        val LIFETIME_START: Instant = Instant.ofEpochMilli(Long.MIN_VALUE)
+        val LIFETIME_END: Instant = Instant.ofEpochMilli(Long.MAX_VALUE)
     }
 }

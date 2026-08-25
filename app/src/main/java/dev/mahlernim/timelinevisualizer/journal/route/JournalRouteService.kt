@@ -8,6 +8,10 @@ import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Timeline
 import java.time.Duration
 import java.time.Instant
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 data class JournalRoute(
     /** Compatibility projection for consumers that cannot represent route gaps yet. */
@@ -167,25 +171,222 @@ class JournalRouteService(
         val coveredByNewerSnapshots = MergedMillisIntervals()
         val selected = mutableListOf<SemanticRoutePath>()
         segments.groupBy { it.snapshotCapturedAtEpochMillis to it.snapshotId }.forEach { (_, snapshotRows) ->
-            val records = snapshotRecords(snapshotRows, startEpochMillis, endExclusiveEpochMillis)
-            val preferredIntervals = MergedMillisIntervals(records
-                .filter { it.kind in PREFERRED_SEMANTIC_KINDS }
-                .map(StoredSemanticRecord::interval))
-            val withoutSecondaryHistory = records.flatMap { record ->
-                if (record.kind == STRUCTURED_PATH_KIND) {
-                    record.fragmentsOutside(preferredIntervals)
-                } else {
-                    listOf(record)
-                }
-            }
-            withoutSecondaryHistory.forEach { record ->
+            val reconciled = reconcileSnapshotRecords(
+                snapshotRecords(snapshotRows, startEpochMillis, endExclusiveEpochMillis),
+            )
+            reconciled.forEach { record ->
                 record.fragmentsOutside(coveredByNewerSnapshots).forEachIndexed { index, fragment ->
                     selected += fragment.toRoutePath("${fragment.id}:selected:$index")
                 }
             }
-            coveredByNewerSnapshots.addAll(withoutSecondaryHistory.map(StoredSemanticRecord::interval))
+            coveredByNewerSnapshots.addAll(reconciled.map(StoredSemanticRecord::interval))
         }
         return selected.sortedWith(compareBy<SemanticRoutePath> { it.start }.thenBy(SemanticRoutePath::id))
+    }
+
+    /**
+     * Selects one semantic geometry history per covered instant without flattening competing
+     * histories together. A standalone path wins ambiguous overlap because it normally carries
+     * more shape than activity or visit endpoints. Repeated coordinate conflicts or a clear
+     * end-to-start reversal are high-confidence signals that it belongs to a competing history.
+     */
+    private fun reconcileSnapshotRecords(records: List<StoredSemanticRecord>): List<StoredSemanticRecord> {
+        val preferred = records.filter { it.kind in PREFERRED_SEMANTIC_KINDS }
+        val standalonePaths = records.filter { it.kind == STRUCTURED_PATH_KIND }
+        if (preferred.isEmpty() || standalonePaths.isEmpty()) return records
+
+        val preferredIntervals = MergedMillisIntervals(preferred.map(StoredSemanticRecord::interval))
+        val preferredPoints = normalize(preferred.flatMap(StoredSemanticRecord::points))
+        val directionalComponents = directionalComponents(preferred)
+        val acceptedCoverage = MergedMillisIntervals()
+        val acceptedPaths = mutableListOf<StoredSemanticRecord>()
+
+        standalonePaths.forEach { path ->
+            path.fragmentsOutside(acceptedCoverage).forEach { candidate ->
+                if (!preferredIntervals.overlaps(candidate.interval)) {
+                    acceptedPaths += candidate
+                } else if (hasHighConfidenceCompetingHistory(candidate, directionalComponents, preferredPoints)) {
+                    acceptedPaths += candidate.fragmentsOutside(preferredIntervals)
+                } else {
+                    acceptedPaths += candidate.withBoundaryAnchors(preferredPoints)
+                    acceptedCoverage.addAll(listOf(candidate.interval))
+                }
+            }
+        }
+
+        val retainedPreferred = preferred.flatMap { it.fragmentsOutside(acceptedCoverage) }
+        val otherRecords = records.filter { record ->
+            record.kind !in PREFERRED_SEMANTIC_KINDS && record.kind != STRUCTURED_PATH_KIND
+        }
+        return retainedPreferred + acceptedPaths + otherRecords
+    }
+
+    private fun hasHighConfidenceCompetingHistory(
+        path: StoredSemanticRecord,
+        directionalComponents: List<DirectionalComponent>,
+        preferredPoints: List<GeoPoint>,
+    ): Boolean {
+        if (path.points.isEmpty() || preferredPoints.isEmpty()) return false
+        if (hasReversedBoundaryOrder(path, directionalComponents)) return true
+        val relevantStart = preferredPoints.lowerBound(path.startEpochMillis)
+        val relevantEnd = preferredPoints.upperBound(path.endEpochMillis)
+        if (relevantStart >= relevantEnd) return false
+
+        var pathIndex = 0
+        var preferredIndex = relevantStart
+        var sharedInstants = 0
+        var strongConflicts = 0
+        while (pathIndex < path.points.size && preferredIndex < relevantEnd) {
+            val pathPoint = path.points[pathIndex]
+            val preferredPoint = preferredPoints[preferredIndex]
+            val pathTime = pathPoint.instant.toEpochMilli()
+            val preferredTime = preferredPoint.instant.toEpochMilli()
+            when {
+                pathTime < preferredTime -> pathIndex += 1
+                pathTime > preferredTime -> preferredIndex += 1
+                else -> {
+                    var pathGroupEnd = pathIndex + 1
+                    while (
+                        pathGroupEnd < path.points.size &&
+                        path.points[pathGroupEnd].instant.toEpochMilli() == pathTime
+                    ) {
+                        pathGroupEnd += 1
+                    }
+                    var preferredGroupEnd = preferredIndex + 1
+                    while (
+                        preferredGroupEnd < relevantEnd &&
+                        preferredPoints[preferredGroupEnd].instant.toEpochMilli() == preferredTime
+                    ) {
+                        preferredGroupEnd += 1
+                    }
+                    // Multiple coordinates at one instant are ambiguous source evidence, so they
+                    // cannot justify discarding a potentially useful path.
+                    if (pathGroupEnd == pathIndex + 1 && preferredGroupEnd == preferredIndex + 1) {
+                        sharedInstants += 1
+                        if (distanceMeters(pathPoint, preferredPoint) >= STRONG_CONFLICT_DISTANCE_METERS) {
+                            strongConflicts += 1
+                        }
+                    }
+                    pathIndex = pathGroupEnd
+                    preferredIndex = preferredGroupEnd
+                }
+            }
+        }
+        return strongConflicts >= MINIMUM_STRONG_CONFLICTS && strongConflicts * 2 >= sharedInstants
+    }
+
+    private fun hasReversedBoundaryOrder(
+        path: StoredSemanticRecord,
+        components: List<DirectionalComponent>,
+    ): Boolean {
+        if (components.isEmpty()) return false
+        val observations = mutableMapOf<Int, DirectionalObservation>()
+        path.points.forEach { point ->
+            val componentIndex = components.indexAt(point.instant.toEpochMilli())
+            if (componentIndex >= 0) {
+                val existing = observations[componentIndex]
+                observations[componentIndex] = if (existing == null) {
+                    DirectionalObservation(point, point)
+                } else {
+                    existing.copy(last = point)
+                }
+            }
+        }
+        return observations.any { (componentIndex, observation) ->
+            if (observation.first.instant == observation.last.instant) return@any false
+            val component = components[componentIndex]
+            val anchorDistance = distanceMeters(component.startAnchor, component.endAnchor)
+            if (anchorDistance < MINIMUM_DIRECTIONAL_ANCHOR_DISTANCE_METERS) return@any false
+            val firstToStart = distanceMeters(observation.first, component.startAnchor)
+            val firstToEnd = distanceMeters(observation.first, component.endAnchor)
+            val lastToStart = distanceMeters(observation.last, component.startAnchor)
+            val lastToEnd = distanceMeters(observation.last, component.endAnchor)
+            firstToEnd <= DIRECTIONAL_ANCHOR_MATCH_METERS &&
+                lastToStart <= DIRECTIONAL_ANCHOR_MATCH_METERS &&
+                firstToEnd + DIRECTIONAL_ORDER_MARGIN_METERS < firstToStart &&
+                lastToStart + DIRECTIONAL_ORDER_MARGIN_METERS < lastToEnd
+        }
+    }
+
+    private fun directionalComponents(records: List<StoredSemanticRecord>): List<DirectionalComponent> {
+        val ordered = records.mapNotNull { record ->
+            val startAnchor = record.points.firstOrNull() ?: return@mapNotNull null
+            val endAnchor = record.points.lastOrNull() ?: return@mapNotNull null
+            DirectionalComponent(record.startEpochMillis, record.endEpochMillis, startAnchor, endAnchor)
+        }.sortedWith(compareBy<DirectionalComponent> { it.startEpochMillis }.thenBy { it.endEpochMillis })
+        val components = ArrayList<DirectionalComponent>(ordered.size)
+        ordered.forEach { next ->
+            val previous = components.lastOrNull()
+            if (previous == null || next.startEpochMillis >= previous.endEpochMillis) {
+                components += next
+            } else if (next.endEpochMillis > previous.endEpochMillis) {
+                components[components.lastIndex] = previous.copy(
+                    endEpochMillis = next.endEpochMillis,
+                    endAnchor = next.endAnchor,
+                )
+            }
+        }
+        return components
+    }
+
+    private fun List<DirectionalComponent>.indexAt(epochMillis: Long): Int {
+        var low = 0
+        var high = size
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (this[middle].startEpochMillis <= epochMillis) low = middle + 1 else high = middle
+        }
+        val index = low - 1
+        return if (index >= 0 && epochMillis <= this[index].endEpochMillis) index else -1
+    }
+
+    private fun StoredSemanticRecord.withBoundaryAnchors(
+        preferredPoints: List<GeoPoint>,
+    ): StoredSemanticRecord {
+        if (points.isEmpty() || preferredPoints.isEmpty()) return this
+        val enriched = ArrayList<GeoPoint>(points.size + 2)
+        val beforeIndex = preferredPoints.lowerBound(points.first().instant.toEpochMilli()) - 1
+        preferredPoints.getOrNull(beforeIndex)
+            ?.takeIf { it.instant.toEpochMilli() >= startEpochMillis }
+            ?.let(enriched::add)
+        enriched += points
+        val afterIndex = preferredPoints.upperBound(points.last().instant.toEpochMilli())
+        preferredPoints.getOrNull(afterIndex)
+            ?.takeIf { it.instant.toEpochMilli() <= endEpochMillis }
+            ?.let(enriched::add)
+        return copy(points = normalize(enriched))
+    }
+
+    private fun List<GeoPoint>.lowerBound(epochMillis: Long): Int {
+        var low = 0
+        var high = size
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (this[middle].instant.toEpochMilli() < epochMillis) low = middle + 1 else high = middle
+        }
+        return low
+    }
+
+    private fun List<GeoPoint>.upperBound(epochMillis: Long): Int {
+        var low = 0
+        var high = size
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (this[middle].instant.toEpochMilli() <= epochMillis) low = middle + 1 else high = middle
+        }
+        return low
+    }
+
+    private fun distanceMeters(first: GeoPoint, second: GeoPoint): Double {
+        val latitudeDelta = Math.toRadians(second.latitude - first.latitude)
+        val longitudeDelta = Math.toRadians(second.longitude - first.longitude)
+        val firstLatitude = Math.toRadians(first.latitude)
+        val secondLatitude = Math.toRadians(second.latitude)
+        val haversine = sin(latitudeDelta / 2) * sin(latitudeDelta / 2) +
+            cos(firstLatitude) * cos(secondLatitude) *
+            sin(longitudeDelta / 2) * sin(longitudeDelta / 2)
+        val bounded = haversine.coerceIn(0.0, 1.0)
+        return EARTH_RADIUS_METERS * 2 * atan2(sqrt(bounded), sqrt(1 - bounded))
     }
 
     private fun snapshotRecords(
@@ -348,6 +549,18 @@ class JournalRouteService(
         val interval = MillisInterval(startEpochMillis, endEpochMillis)
     }
 
+    private data class DirectionalComponent(
+        val startEpochMillis: Long,
+        val endEpochMillis: Long,
+        val startAnchor: GeoPoint,
+        val endAnchor: GeoPoint,
+    )
+
+    private data class DirectionalObservation(
+        val first: GeoPoint,
+        val last: GeoPoint,
+    )
+
     private data class MillisInterval(
         val start: Long,
         val endInclusive: Long,
@@ -430,10 +643,16 @@ class JournalRouteService(
     }
 
     private companion object {
-        const val PROJECTION_ALGORITHM_VERSION = 1
+        const val PROJECTION_ALGORITHM_VERSION = 2
         const val LEGACY_FLATTENED_PARSER_VERSION = 1
         const val LEGACY_PATH_KIND = "TIMELINE_PATH"
         const val STRUCTURED_PATH_KIND = "PATH"
+        const val MINIMUM_STRONG_CONFLICTS = 2
+        const val STRONG_CONFLICT_DISTANCE_METERS = 5_000.0
+        const val MINIMUM_DIRECTIONAL_ANCHOR_DISTANCE_METERS = 1_000.0
+        const val DIRECTIONAL_ANCHOR_MATCH_METERS = 5_000.0
+        const val DIRECTIONAL_ORDER_MARGIN_METERS = 500.0
+        const val EARTH_RADIUS_METERS = 6_371_000.0
         val PREFERRED_SEMANTIC_KINDS = setOf("ACTIVITY", "VISIT", "ACTIVITY_AND_VISIT")
     }
 }
