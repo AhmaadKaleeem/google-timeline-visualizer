@@ -448,7 +448,10 @@
     <string name="journal_status_due">タイムラインの最新の日付を追加して、旅の記録を充実させましょう。</string>
     <string name="journal_status_at_risk">まだ保存されていない詳しい経路の一部は、今後のエクスポートから間もなく消える可能性があります。</string>
     <string name="journal_status_overdue">可能なときに旅の記録を更新してください。以前のエクスポートにない詳細は、このアプリでは復元できません。</string>
-    <string name="journal_status_detail">詳細な経路\n%1$s · %2$s地点\n\n旅の履歴\n%3$s · 最新のタイムライン内の%4$s件\n\n最終更新 %5$s</string>
+    <string name="journal_status_detail">詳細な経路\n%1$s · %2$s · %3$s地点\n\n旅の履歴\n%4$s · %5$s · 最新のタイムライン内の%6$s件\n\n最終更新 %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="other">%d日</item>
+    </plurals>
     <string name="journal_growth_title">旅の記録が充実しました</string>
     <string name="journal_created_title">旅の記録を利用できます</string>
     <string name="journal_backfill_title">過去の記録がより詳しくなりました</string>

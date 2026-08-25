@@ -445,7 +445,11 @@
     <string name="journal_status_due">Erweitere dein Reisetagebuch um die neuesten Tage aus der Zeitachse.</string>
     <string name="journal_status_at_risk">Einige noch nicht gespeicherte Routendetails könnten bald aus künftigen Exporten verschwinden.</string>
     <string name="journal_status_overdue">Aktualisiere dein Reisetagebuch, wenn du kannst. Details, die in früheren Exporten fehlen, kann die App nicht wiederherstellen.</string>
-    <string name="journal_status_detail">Detaillierte Routen\n%1$s · %2$s Punkte\n\nReiseverlauf\n%3$s · %4$s Einträge in der neuesten Timeline\n\nZuletzt aktualisiert %5$s</string>
+    <string name="journal_status_detail">Detaillierte Routen\n%1$s · %2$s · %3$s Punkte\n\nReiseverlauf\n%4$s · %5$s · %6$s Einträge in der neuesten Timeline\n\nZuletzt aktualisiert %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="one">%d Tag</item>
+        <item quantity="other">%d Tage</item>
+    </plurals>
     <string name="journal_growth_title">Dein Reisetagebuch ist gewachsen</string>
     <string name="journal_created_title">Dein Reisetagebuch ist bereit</string>
     <string name="journal_backfill_title">Ein älterer Abschnitt ist jetzt detaillierter</string>

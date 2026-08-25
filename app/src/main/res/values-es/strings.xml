@@ -450,7 +450,11 @@
     <string name="journal_status_due">Amplía tu diario con los últimos días de Timeline.</string>
     <string name="journal_status_at_risk">Algunos detalles de rutas que aún no se han conservado podrían desaparecer pronto de futuras exportaciones.</string>
     <string name="journal_status_overdue">Actualiza tu diario cuando puedas. La aplicación no puede recuperar los detalles que falten en exportaciones anteriores.</string>
-    <string name="journal_status_detail">Rutas detalladas\n%1$s · %2$s puntos\n\nHistorial del viaje\n%3$s · %4$s entradas en la última cronología\n\nÚltima actualización %5$s</string>
+    <string name="journal_status_detail">Rutas detalladas\n%1$s · %2$s · %3$s puntos\n\nHistorial del viaje\n%4$s · %5$s · %6$s entradas en la última cronología\n\nÚltima actualización %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="one">%d día</item>
+        <item quantity="other">%d días</item>
+    </plurals>
     <string name="journal_growth_title">Tu diario ha crecido</string>
     <string name="journal_created_title">Tu diario de viaje está listo</string>
     <string name="journal_backfill_title">Una parte anterior ahora tiene más detalles</string>

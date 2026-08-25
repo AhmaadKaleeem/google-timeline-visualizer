@@ -450,7 +450,11 @@
     <string name="journal_status_due">Enrichissez votre carnet avec les derniers jours de Timeline.</string>
     <string name="journal_status_at_risk">Certains détails d’itinéraire non conservés pourraient bientôt disparaître des prochaines exportations.</string>
     <string name="journal_status_overdue">Mettez à jour votre carnet dès que possible. L’application ne peut pas récupérer les détails absents des exportations précédentes.</string>
-    <string name="journal_status_detail">Itinéraires détaillés\n%1$s · %2$s points\n\nHistorique des trajets\n%3$s · %4$s entrées dans la dernière chronologie\n\nDernière mise à jour %5$s</string>
+    <string name="journal_status_detail">Itinéraires détaillés\n%1$s · %2$s · %3$s points\n\nHistorique des trajets\n%4$s · %5$s · %6$s entrées dans la dernière chronologie\n\nDernière mise à jour %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="one">%d jour</item>
+        <item quantity="other">%d jours</item>
+    </plurals>
     <string name="journal_growth_title">Votre carnet s’est enrichi</string>
     <string name="journal_created_title">Votre carnet de voyage est prêt</string>
     <string name="journal_backfill_title">Une période plus ancienne est désormais plus détaillée</string>

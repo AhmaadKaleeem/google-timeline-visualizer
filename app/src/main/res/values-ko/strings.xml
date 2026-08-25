@@ -462,7 +462,10 @@
     <string name="journal_status_due">타임라인의 최신 날짜를 추가하여 여행 기록을 늘려 보세요.</string>
     <string name="journal_status_at_risk">아직 보존하지 않은 일부 상세 경로가 향후 내보내기 파일에서 곧 사라질 수 있습니다.</string>
     <string name="journal_status_overdue">가능할 때 여행 기록을 업데이트하세요. 이전 내보내기 파일에서 빠진 상세 정보는 앱에서 복구할 수 없습니다.</string>
-    <string name="journal_status_detail">상세 경로\n%1$s · %2$s개 지점\n\n여행 기록\n%3$s · 최신 타임라인의 항목 %4$s개\n\n마지막 업데이트 %5$s</string>
+    <string name="journal_status_detail">상세 경로\n%1$s · %2$s · %3$s개 지점\n\n여행 기록\n%4$s · %5$s · 최신 타임라인의 항목 %6$s개\n\n마지막 업데이트 %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="other">%d일</item>
+    </plurals>
     <string name="journal_growth_title">여행 기록이 늘어났습니다</string>
     <string name="journal_created_title">여행 기록이 준비되었습니다</string>
     <string name="journal_backfill_title">이전 기간이 더 상세해졌습니다</string>

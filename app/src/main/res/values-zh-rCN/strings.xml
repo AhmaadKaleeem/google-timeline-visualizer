@@ -441,7 +441,10 @@
     <string name="journal_status_due">添加时间轴中的最近日期，让旅行记录继续增长。</string>
     <string name="journal_status_at_risk">一些尚未保留的详细路线可能很快会从未来的导出文件中消失。</string>
     <string name="journal_status_overdue">请在方便时更新旅行记录。应用无法恢复早期导出文件中缺失的详细信息。</string>
-    <string name="journal_status_detail">详细路线\n%1$s · %2$s 个点\n\n旅程历史\n%3$s · 最新时间线中的 %4$s 个条目\n\n上次更新 %5$s</string>
+    <string name="journal_status_detail">详细路线\n%1$s · %2$s · %3$s 个点\n\n旅程历史\n%4$s · %5$s · 最新时间线中的 %6$s 个条目\n\n上次更新 %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="other">%d天</item>
+    </plurals>
     <string name="journal_growth_title">旅行记录已增长</string>
     <string name="journal_created_title">旅行记录已准备就绪</string>
     <string name="journal_backfill_title">较早的记录现在更详细了</string>

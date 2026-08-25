@@ -543,7 +543,11 @@
     <string name="journal_status_due">Grow your Journal with the latest days from Timeline.</string>
     <string name="journal_status_at_risk">Some unpreserved route detail may soon disappear from future exports.</string>
     <string name="journal_status_overdue">Update your Journal when you can. Detail missing from earlier exports cannot be recovered by the app.</string>
-    <string name="journal_status_detail">Detailed routes\n%1$s · %2$s points\n\nJourney history\n%3$s · %4$s entries in the latest Timeline\n\nLast updated %5$s</string>
+    <string name="journal_status_detail">Detailed routes\n%1$s · %2$s · %3$s points\n\nJourney history\n%4$s · %5$s · %6$s entries in the latest Timeline\n\nLast updated %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
     <string name="journal_growth_title">Your Journal grew</string>
     <string name="journal_created_title">Your Travel Journal is ready</string>
     <string name="journal_backfill_title">An older part became more detailed</string>

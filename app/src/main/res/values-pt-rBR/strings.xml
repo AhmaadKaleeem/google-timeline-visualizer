@@ -450,7 +450,11 @@
     <string name="journal_status_due">Amplie seu diário com os dias mais recentes da Linha do tempo.</string>
     <string name="journal_status_at_risk">Alguns detalhes de rotas ainda não preservados podem desaparecer em breve de futuras exportações.</string>
     <string name="journal_status_overdue">Atualize seu diário quando puder. O aplicativo não consegue recuperar detalhes ausentes de exportações anteriores.</string>
-    <string name="journal_status_detail">Rotas detalhadas\n%1$s · %2$s pontos\n\nHistórico de viagens\n%3$s · %4$s entradas na Linha do tempo mais recente\n\nÚltima atualização %5$s</string>
+    <string name="journal_status_detail">Rotas detalhadas\n%1$s · %2$s · %3$s pontos\n\nHistórico de viagens\n%4$s · %5$s · %6$s entradas na Linha do tempo mais recente\n\nÚltima atualização %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="one">%d dia</item>
+        <item quantity="other">%d dias</item>
+    </plurals>
     <string name="journal_growth_title">Seu diário cresceu</string>
     <string name="journal_created_title">Seu diário de viagem está pronto</string>
     <string name="journal_backfill_title">Uma parte mais antiga ficou mais detalhada</string>

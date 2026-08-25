@@ -104,6 +104,7 @@ import dev.mahlernim.timelinevisualizer.journal.JournalRepository
 import dev.mahlernim.timelinevisualizer.journal.JournalEntryDestination
 import dev.mahlernim.timelinevisualizer.journal.JournalSetupNavigation
 import dev.mahlernim.timelinevisualizer.journal.JournalStatusSnapshot
+import dev.mahlernim.timelinevisualizer.journal.inclusiveCalendarDayCount
 import dev.mahlernim.timelinevisualizer.journal.importer.TimelineJournalImportAdapter
 import dev.mahlernim.timelinevisualizer.journal.onboarding.JournalOnboardingAdapter
 import dev.mahlernim.timelinevisualizer.journal.onboarding.JournalOnboardingIllustration
@@ -2362,11 +2363,18 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
+    private fun formatJournalCoverageDays(startEpochMillis: Long?, endEpochMillis: Long?): String {
+        val dayCount = inclusiveCalendarDayCount(startEpochMillis, endEpochMillis)
+        return resources.getQuantityString(R.plurals.journal_coverage_days, dayCount, dayCount)
+    }
+
     private fun journalStatusDetail(status: JournalStatusSnapshot): String = getString(
         R.string.journal_status_detail,
         formatJournalRange(status.detailedStartEpochMillis, status.detailedEndEpochMillis),
+        formatJournalCoverageDays(status.detailedStartEpochMillis, status.detailedEndEpochMillis),
         NumberFormat.getIntegerInstance().format(status.preservedObservationCount),
         formatJournalRange(status.journal.semanticStartEpochMillis, status.journal.semanticEndEpochMillis),
+        formatJournalCoverageDays(status.journal.semanticStartEpochMillis, status.journal.semanticEndEpochMillis),
         NumberFormat.getIntegerInstance().format(status.semanticEntryCount),
         DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(
             Date(status.lastSuccessfulImportAtEpochMillis ?: status.journal.createdAtEpochMillis),

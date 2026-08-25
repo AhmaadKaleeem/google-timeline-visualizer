@@ -180,6 +180,7 @@ class JournalLabUiTest {
         val status = activity.findViewById<TextView>(R.id.timelineDataStatus).text
         assertTrue(status.contains("Detailed routes"))
         assertTrue(status.contains("Journey history"))
+        assertTrue(status.contains("1 day"))
         assertTrue(status.contains("points"))
         assertTrue(status.contains("entries"))
         assertFalse(
