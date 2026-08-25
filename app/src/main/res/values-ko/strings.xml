@@ -158,7 +158,13 @@
     <string name="save_as_failed">영상 사본을 저장하지 못했습니다</string>
     <string name="video_copy_saved">영상 사본 저장 완료</string>
     <string name="advanced_settings">고급 설정</string>
-    <string name="advanced_settings_summary">줌 방식, 장거리 재생 시간, 내보내기 형식을 선택합니다.</string>
+    <string name="advanced_settings_summary">지도 보기와 내보내기 형식을 선택하세요. 경로 재생 속도는 자동으로 조절됩니다.</string>
+    <string name="map_view">지도 보기</string>
+    <string name="map_view_fixed">고정 축척</string>
+    <string name="map_view_wide">넓게</string>
+    <string name="map_view_balanced">균형</string>
+    <string name="map_view_close_up">가까이</string>
+    <string name="automatic_visual_pacing_summary">움직임이 화면에 보이는 지도 축척에 맞춰집니다. 넓은 이동은 빠르게, 가까운 경로는 차분하게 진행됩니다.</string>
     <string name="camera_movement">줌 방식</string>
     <string name="camera_fixed">고정</string>
     <string name="camera_steady">균형</string>
@@ -230,7 +236,7 @@
     <string name="settings">설정</string>
     <string name="settings_summary">미리보기와 새 동영상에 사용할 기본값을 설정합니다.</string>
     <string name="video_defaults">동영상 기본값</string>
-    <string name="video_defaults_summary">이 설정으로 경로의 화면 구성과 재생 속도를 함께 조절합니다.</string>
+    <string name="video_defaults_summary">지도 보기와 형식을 선택하세요. 움직임 속도는 화면에 보이는 축척에 맞춰 자동으로 조절됩니다.</string>
     <string name="aspect_ratio">화면 비율</string>
     <string name="aspect_square">정사각형</string>
     <string name="aspect_portrait">세로</string>

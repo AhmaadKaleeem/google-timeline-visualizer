@@ -166,7 +166,13 @@
     <string name="save_as_failed">No se pudo guardar una copia del video.</string>
     <string name="video_copy_saved">Copia de vídeo guardada</string>
     <string name="advanced_settings">Configuraciones avanzadas</string>
-    <string name="advanced_settings_summary">Elija el estilo de zoom, el tiempo de viaje largo y el formato de exportación.</string>
+    <string name="advanced_settings_summary">Elige la vista del mapa y el formato de exportación. El ritmo de la ruta se adapta automáticamente.</string>
+    <string name="map_view">Vista del mapa</string>
+    <string name="map_view_fixed">Escala fija</string>
+    <string name="map_view_wide">Amplia</string>
+    <string name="map_view_balanced">Equilibrada</string>
+    <string name="map_view_close_up">Primer plano</string>
+    <string name="automatic_visual_pacing_summary">El movimiento se adapta a la escala visible del mapa. Los viajes amplios avanzan con rapidez y las rutas cercanas se mantienen tranquilas.</string>
     <string name="camera_movement">Estilo de zoom</string>
     <string name="camera_fixed">Fijo</string><string name="camera_steady">Equilibrado</string><string name="camera_dynamic">Activo</string><string name="camera_close_up">Cercano</string>
     <string name="camera_fixed_summary">Sigue la ruta sin cambiar la escala.</string>
@@ -231,7 +237,7 @@
     <string name="settings">Ajustes</string>
     <string name="settings_summary">Establezca los valores predeterminados utilizados para vistas previas y videos nuevos.</string>
     <string name="video_defaults">Valores predeterminados de vídeo</string>
-    <string name="video_defaults_summary">Estos ajustes controlan juntos el encuadre y el ritmo de la ruta.</string>
+    <string name="video_defaults_summary">Elige la vista del mapa y el formato. El ritmo del movimiento se adapta automáticamente a la escala visible.</string>
     <string name="aspect_ratio">Relación de aspecto</string><string name="aspect_square">Cuadrado</string><string name="aspect_portrait">Vertical</string><string name="aspect_landscape">Horizontal</string>
     <string name="reset_video_defaults">Restablecer valores de vídeo</string><string name="video_defaults_restored">Valores de vídeo restablecidos</string>
     <string name="export_quality">Calidad de exportación</string><string name="export_quality_summary">Las resoluciones más altas crean archivos mayores y pueden no funcionar en todos los dispositivos.</string>

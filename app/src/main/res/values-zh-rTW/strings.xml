@@ -159,7 +159,13 @@
     <string name="save_as_failed">無法另存影片檔</string>
     <string name="video_copy_saved">已另存影片檔</string>
     <string name="advanced_settings">進階設定</string>
-    <string name="advanced_settings_summary">選擇縮放方式、長途播放時間和輸出格式。</string>
+    <string name="advanced_settings_summary">選擇地圖視野和輸出格式。路線節奏會自動調整。</string>
+    <string name="map_view">地圖視野</string>
+    <string name="map_view_fixed">固定比例</string>
+    <string name="map_view_wide">寬廣</string>
+    <string name="map_view_balanced">均衡</string>
+    <string name="map_view_close_up">近景</string>
+    <string name="automatic_visual_pacing_summary">移動速度會適應目前地圖比例。大範圍旅程快速推進，近景路線則保持平穩。</string>
     <string name="camera_movement">縮放方式</string>
     <string name="camera_fixed">固定</string><string name="camera_steady">平衡</string><string name="camera_dynamic">主動</string><string name="camera_close_up">近距離</string>
     <string name="camera_fixed_summary">跟隨路線而不改變比例。</string>
@@ -224,7 +230,7 @@
     <string name="settings">設定</string>
     <string name="settings_summary">設定用於預覽和新影片的預設值。</string>
     <string name="video_defaults">影片預設值</string>
-    <string name="video_defaults_summary">這些設定共同控制路線的取景和播放節奏。</string>
+    <string name="video_defaults_summary">選擇地圖視野和格式。移動節奏會根據目前地圖比例自動調整。</string>
     <string name="aspect_ratio">長寬比</string><string name="aspect_square">正方形</string><string name="aspect_portrait">直向</string><string name="aspect_landscape">橫向</string>
     <string name="reset_video_defaults">重設影片預設值</string><string name="video_defaults_restored">已重設影片預設值</string>
     <string name="export_quality">匯出品質</string><string name="export_quality_summary">解析度越高，檔案越大，且並非所有裝置都支援。</string>

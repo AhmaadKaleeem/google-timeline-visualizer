@@ -242,7 +242,7 @@ class MainActivityTest {
         val activity = launchActivity(intent)
 
         assertEquals(
-            activity.getString(R.string.camera_steady),
+            activity.getString(R.string.map_view_wide),
             activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
         )
         val dialog = ShadowDialog.getLatestDialog() as AlertDialog
@@ -253,7 +253,7 @@ class MainActivityTest {
         shadowOf(Looper.getMainLooper()).idle()
 
         assertEquals(
-            activity.getString(R.string.camera_close_up),
+            activity.getString(R.string.map_view_close_up),
             activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
         )
         assertEquals(activity.getString(R.string.preset_custom), activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown).text.toString())
@@ -540,13 +540,12 @@ class MainActivityTest {
         activity.findViewById<View>(R.id.navigationSettings).performClick()
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsScreen).visibility)
         assertEquals(
-            activity.getString(R.string.camera_steady),
+            activity.getString(R.string.map_view_wide),
             activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
         )
-        assertEquals(
-            activity.getString(R.string.compression_balanced),
-            activity.findViewById<AutoCompleteTextView>(R.id.longTripDropdown).text.toString(),
-        )
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.tripDetectionInputLayout).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.localFramingInputLayout).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.longTripInputLayout).visibility)
         assertEquals(
             activity.getString(R.string.preset_resolution_selected, 480, 480, 480),
             activity.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown).text.toString(),
@@ -1327,7 +1326,7 @@ class MainActivityTest {
         dialog.findViewById<View>(R.id.applyButton)!!.performClick()
 
         assertEquals(
-            activity.getString(R.string.camera_dynamic),
+            activity.getString(R.string.map_view_balanced),
             activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
         )
         activity.findViewById<View>(R.id.customizeSettingsButton).performClick()

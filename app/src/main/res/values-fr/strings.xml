@@ -166,7 +166,13 @@
     <string name="save_as_failed">Impossible d\'enregistrer une copie de la vidéo</string>
     <string name="video_copy_saved">Copie vidéo enregistrée</string>
     <string name="advanced_settings">Paramètres avancés</string>
-    <string name="advanced_settings_summary">Choisissez le style de zoom, la synchronisation des longs trajets et le format de l\'exportation.</string>
+    <string name="advanced_settings_summary">Choisissez la vue de la carte et le format d\'exportation. Le rythme du trajet s\'adapte automatiquement.</string>
+    <string name="map_view">Vue de la carte</string>
+    <string name="map_view_fixed">Échelle fixe</string>
+    <string name="map_view_wide">Large</string>
+    <string name="map_view_balanced">Équilibrée</string>
+    <string name="map_view_close_up">Rapprochée</string>
+    <string name="automatic_visual_pacing_summary">Le mouvement s\'adapte à l\'échelle visible de la carte. Les longs trajets avancent rapidement et les parcours rapprochés restent calmes.</string>
     <string name="camera_movement">Style de zoom</string>
     <string name="camera_fixed">Fixe</string><string name="camera_steady">Équilibré</string><string name="camera_dynamic">Actif</string><string name="camera_close_up">Rapproché</string>
     <string name="camera_fixed_summary">Suit l\'itinéraire sans changer d\'échelle.</string>
@@ -231,7 +237,7 @@
     <string name="settings">Paramètres</string>
     <string name="settings_summary">Définissez les valeurs par défaut utilisées pour les aperçus et les nouvelles vidéos.</string>
     <string name="video_defaults">Paramètres vidéo par défaut</string>
-    <string name="video_defaults_summary">Ces réglages contrôlent ensemble le cadrage et le rythme du trajet.</string>
+    <string name="video_defaults_summary">Choisissez la vue de la carte et le format. Le rythme du mouvement s\'adapte automatiquement à l\'échelle visible.</string>
     <string name="aspect_ratio">Format d’image</string><string name="aspect_square">Carré</string><string name="aspect_portrait">Portrait</string><string name="aspect_landscape">Paysage</string>
     <string name="reset_video_defaults">Réinitialiser les réglages vidéo</string><string name="video_defaults_restored">Réglages vidéo réinitialisés</string>
     <string name="export_quality">Qualité d’exportation</string><string name="export_quality_summary">Les résolutions élevées créent des fichiers plus grands et peuvent ne pas fonctionner sur tous les appareils.</string>

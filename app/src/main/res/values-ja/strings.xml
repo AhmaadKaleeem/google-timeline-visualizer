@@ -158,7 +158,13 @@
     <string name="save_as_failed">動画のコピーを保存できませんでした</string>
     <string name="video_copy_saved">動画のコピーを保存しました</string>
     <string name="advanced_settings">詳細設定</string>
-    <string name="advanced_settings_summary">ズーム方式、長距離の再生時間、書き出し形式を選択します。</string>
+    <string name="advanced_settings_summary">地図の表示範囲と書き出し形式を選びます。ルートの進行速度は自動調整されます。</string>
+    <string name="map_view">地図の表示範囲</string>
+    <string name="map_view_fixed">固定縮尺</string>
+    <string name="map_view_wide">広域</string>
+    <string name="map_view_balanced">バランス</string>
+    <string name="map_view_close_up">クローズアップ</string>
+    <string name="automatic_visual_pacing_summary">移動速度は表示中の地図縮尺に合わせて変化します。広域の移動は速く、近距離のルートは穏やかに進みます。</string>
     <string name="camera_movement">ズーム方式</string>
     <string name="camera_fixed">固定</string>
     <string name="camera_steady">バランス</string>
@@ -230,7 +236,7 @@
     <string name="settings">設定</string>
     <string name="settings_summary">プレビューと新しい動画に使用する初期値を設定します。</string>
     <string name="video_defaults">動画の初期設定</string>
-    <string name="video_defaults_summary">ルートの表示範囲と再生ペースをまとめて調整します。</string>
+    <string name="video_defaults_summary">地図の表示範囲と形式を選びます。移動速度は表示中の縮尺に合わせて自動調整されます。</string>
     <string name="aspect_ratio">縦横比</string><string name="aspect_square">正方形</string><string name="aspect_portrait">縦向き</string><string name="aspect_landscape">横向き</string>
     <string name="reset_video_defaults">動画設定をリセット</string><string name="video_defaults_restored">動画設定をリセットしました</string>
     <string name="export_quality">書き出し品質</string><string name="export_quality_summary">高解像度ほどファイルが大きくなり、端末によっては利用できません。</string>

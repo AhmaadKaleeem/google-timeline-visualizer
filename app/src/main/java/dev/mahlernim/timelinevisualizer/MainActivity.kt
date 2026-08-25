@@ -305,6 +305,9 @@ class MainActivity : AppCompatActivity() {
     private var selectedDetectionYear: Int? = null
     private var detectionYears: List<Int> = emptyList()
     private var tripDiscoveryRequested = false
+    private var tripDetectionRunning = false
+    private var tripDetectionRequestId = 0L
+    private var tripDetectionJob: Job? = null
     private var settingsReturnToCreate = false
     private var journalSetupMode = false
     private var journalSetupReturnToCreate = false
@@ -324,7 +327,7 @@ class MainActivity : AppCompatActivity() {
     private var journalRouteProgressDelayJob: Job? = null
     private var journalRouteProgressExpanded = false
     private var journalRoutePreparationStage = JournalRoutePreparationStage.PREPARING_DETAILED_ROUTES
-    private var pendingJournalRouteAction: (() -> Unit)? = null
+    private var activeJournalRouteRequest: JournalRouteRequest? = null
     private var journalImportIsInitial: Boolean? = null
     private var updatingJournalReminderSwitch = false
     private var pendingJournalReminderId: String? = null
@@ -817,6 +820,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showVideos(acknowledgeCompletion: Boolean = false) {
+        if (currentCreateStep == CreateStep.DISCOVERY) cancelTripDetection()
         if (acknowledgeCompletion) acknowledgeCompletedExport()
         releaseVideoPlayer()
         currentScreen = Screen.VIDEOS
@@ -911,6 +915,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSettings(fromCreate: Boolean = false) {
+        if (currentCreateStep == CreateStep.DISCOVERY) cancelTripDetection()
         releaseVideoPlayer()
         journalSetupMode = false
         journalSetupReturnToCreate = false
@@ -1099,7 +1104,7 @@ class MainActivity : AppCompatActivity() {
         var working = cameraSettings
 
         val aspectLabels = listOf(R.string.aspect_square, R.string.aspect_portrait, R.string.aspect_landscape).map(::getString)
-        val cameraLabels = listOf(R.string.camera_fixed, R.string.camera_steady, R.string.camera_dynamic, R.string.camera_close_up).map(::getString)
+        val cameraLabels = mapViewLabelResources.map(::getString)
         val detectionLabels = listOf(R.string.trip_detection_conservative, R.string.trip_detection_balanced, R.string.trip_detection_sensitive).map(::getString)
         val framingLabels = listOf(R.string.local_framing_off, R.string.local_framing_balanced, R.string.local_framing_close).map(::getString)
         val pacingLabels = listOf(R.string.compression_off, R.string.compression_balanced, R.string.compression_strong, R.string.compression_stronger).map(::getString)
@@ -1159,7 +1164,7 @@ class MainActivity : AppCompatActivity() {
             working = working.copy(videoQuality = working.videoQuality.withAspectRatio(VideoAspectRatio.entries[position]))
         }
         sheet.cameraMovementDropdown.setOnItemClickListener { _, _, position, _ ->
-            working = working.copy(cameraMovement = CameraMovement.entries[position])
+            working = working.withAutomaticMapView(CameraMovement.entries[position])
         }
         sheet.tripDetectionDropdown.setOnItemClickListener { _, _, position, _ ->
             working = working.copy(tripDetection = TripDetection.entries[position])
@@ -1299,7 +1304,15 @@ class MainActivity : AppCompatActivity() {
         editor.saveTripButton.visibility = View.GONE
         editor.saveAsNewTripButton.visibility = View.GONE
         if (isTripSource) renderCreateTripSources()
-        if (isDiscovery) renderTripSuggestions()
+        if (isDiscovery) {
+            editor.runTripDetectionButton.isEnabled = !tripDetectionRunning
+            editor.runTripDetectionButton.setText(
+                if (tripDetectionRunning) R.string.detecting_trips else R.string.recommend_trips,
+            )
+            editor.detectionRangeDropdown.isEnabled = !tripDetectionRunning
+            editor.detectionCustomRangeButton.isEnabled = !tripDetectionRunning
+            renderTripSuggestions()
+        }
         if (isProject) updateProjectDateLabel()
         updateRawDataAvailability()
         if (isPreview) editor.previewSettingsSummary.text = currentVideoSettingsSummary()
@@ -1367,6 +1380,7 @@ class MainActivity : AppCompatActivity() {
                 showVideos()
                 return
             }
+            if (currentCreateStep == CreateStep.DISCOVERY) cancelTripDetection()
             currentCreateStep = when (currentCreateStep) {
                 CreateStep.TYPE -> CreateStep.TYPE
                 CreateStep.TRIP_SOURCE -> CreateStep.TYPE
@@ -1402,7 +1416,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderCreateTripSources() {
         val savedTrips = tripsStore.list().filter { it.kind == TripKind.TRIP }
-        editor.findTripsButton.isEnabled = timeline != null && !rawOnlyImport
+        editor.findTripsButton.isEnabled = semanticDateBounds() != null && !rawOnlyImport
         editor.emptySavedTripsText.visibility = if (savedTrips.isEmpty()) View.VISIBLE else View.GONE
         editor.savedTripsList.removeAllViews()
         savedTrips.forEach { project ->
@@ -1799,32 +1813,37 @@ class MainActivity : AppCompatActivity() {
     private fun loadJournalRouteForRange(
         startDate: LocalDate,
         endDateInclusive: LocalDate,
-        afterReady: (() -> Unit)? = null,
+        onComplete: ((JournalRouteLoadOutcome) -> Unit)? = null,
     ) {
         if (!BuildConfig.IS_JOURNAL_LAB) {
-            afterReady?.invoke()
+            onComplete?.invoke(JournalRouteLoadOutcome.READY)
             return
         }
         val zone = ZoneId.systemDefault()
         val requestedStart = startDate.atStartOfDay(zone).toInstant()
         val requestedEndExclusive = endDateInclusive.plusDays(1).atStartOfDay(zone).toInstant()
         if (journalRouteCovers(requestedStart, requestedEndExclusive)) {
-            if (journalRouteLoadJob?.isActive == true) {
-                journalRouteRequestId += 1
-                journalRouteLoadJob?.cancel()
-                journalRouteLoadJob = null
-                journalRouteProgressDelayJob?.cancel()
-                journalRouteProgressDelayJob = null
-                journalRouteProgressExpanded = false
-                pendingJournalRouteAction = null
-                renderCreateStep()
-            }
-            afterReady?.invoke()
+            onComplete?.invoke(JournalRouteLoadOutcome.READY)
             return
         }
-        pendingJournalRouteAction = afterReady
+        val inFlight = activeJournalRouteRequest
+        if (
+            journalRouteLoadJob?.isActive == true &&
+            inFlight?.start == requestedStart &&
+            inFlight.endExclusive == requestedEndExclusive
+        ) {
+            onComplete?.let(inFlight.callbacks::add)
+            return
+        }
+        completeJournalRouteRequest(JournalRouteLoadOutcome.CANCELLED)
         journalRouteLoadJob?.cancel()
         val requestId = ++journalRouteRequestId
+        activeJournalRouteRequest = JournalRouteRequest(
+            id = requestId,
+            start = requestedStart,
+            endExclusive = requestedEndExclusive,
+            callbacks = onComplete?.let { mutableListOf(it) } ?: mutableListOf(),
+        )
         journalRouteProgressExpanded = false
         journalRoutePreparationStage = JournalRoutePreparationStage.PREPARING_DETAILED_ROUTES
         journalRouteProgressDelayJob?.cancel()
@@ -1840,19 +1859,27 @@ class MainActivity : AppCompatActivity() {
             try {
                 val journal = activeJournal ?: withContext(Dispatchers.IO) { journalRepository.primaryJournal() }
                 if (journal == null) {
+                    completeJournalRouteRequest(JournalRouteLoadOutcome.FAILED, requestId)
                     showJournalSetup(returnToCreate = true)
                     return@launch
                 }
                 if (activeJournal == null) loadJournalMetadata(journal.id)
-                loadJournalRange(
+                val loaded = loadJournalRange(
                     journalId = journal.id,
                     start = requestedStart,
                     endExclusive = requestedEndExclusive,
                     requestId = requestId,
                 )
+                completeJournalRouteRequest(
+                    if (loaded) JournalRouteLoadOutcome.READY else JournalRouteLoadOutcome.FAILED,
+                    requestId,
+                )
             } catch (error: Throwable) {
-                if (error is kotlinx.coroutines.CancellationException) throw error
-                pendingJournalRouteAction = null
+                if (error is kotlinx.coroutines.CancellationException) {
+                    completeJournalRouteRequest(JournalRouteLoadOutcome.CANCELLED, requestId)
+                    throw error
+                }
+                completeJournalRouteRequest(JournalRouteLoadOutcome.FAILED, requestId)
                 Log.e(TAG, "Travel Journal route load failed", error)
                 Snackbar.make(binding.root, R.string.journal_route_load_failed, Snackbar.LENGTH_LONG).show()
             } finally {
@@ -1866,6 +1893,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun completeJournalRouteRequest(
+        outcome: JournalRouteLoadOutcome,
+        requestId: Long? = null,
+    ) {
+        val request = activeJournalRouteRequest ?: return
+        if (requestId != null && request.id != requestId) return
+        activeJournalRouteRequest = null
+        request.callbacks.toList().forEach { callback -> callback(outcome) }
+    }
+
     private fun journalRouteCovers(start: Instant, endExclusive: Instant): Boolean =
         activeJournalRoute != null &&
             activeJournalRouteStart?.let { !it.isAfter(start) } == true &&
@@ -1876,8 +1913,8 @@ class MainActivity : AppCompatActivity() {
         start: Instant,
         endExclusive: Instant,
         requestId: Long,
-    ) {
-        val loadedJournal = withContext(Dispatchers.IO) { journalRepository.journal(journalId) } ?: return
+    ): Boolean {
+        val loadedJournal = withContext(Dispatchers.IO) { journalRepository.journal(journalId) } ?: return false
         val route = withContext(Dispatchers.IO) {
             journalRouteService.route(
                 journalId = journalId,
@@ -1891,7 +1928,7 @@ class MainActivity : AppCompatActivity() {
                 },
             )
         }
-        if (requestId != journalRouteRequestId) return
+        if (requestId != journalRouteRequestId) return false
         applyJournalRoute(
             journal = loadedJournal,
             route = route,
@@ -1900,6 +1937,7 @@ class MainActivity : AppCompatActivity() {
             routeEndExclusive = endExclusive,
             updateDetailedFreshness = false,
         )
+        return true
     }
 
     private fun JournalRoutePreparationStage.labelResource(): Int = when (this) {
@@ -1941,12 +1979,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun invalidateJournalRouteRequest() {
         journalRouteRequestId += 1
+        completeJournalRouteRequest(JournalRouteLoadOutcome.CANCELLED)
         journalRouteLoadJob?.cancel()
         journalRouteLoadJob = null
         journalRouteProgressDelayJob?.cancel()
         journalRouteProgressDelayJob = null
         journalRouteProgressExpanded = false
-        pendingJournalRouteAction = null
     }
 
     private suspend fun applyJournalRoute(
@@ -2026,10 +2064,6 @@ class MainActivity : AppCompatActivity() {
         renderTrips()
         renderCreateStep()
         updateTimelineSettingsCard()
-        pendingJournalRouteAction?.also {
-            pendingJournalRouteAction = null
-            editor.root.post { it() }
-        }
     }
 
     private fun showRawOnlyImportChoice(uri: Uri, points: List<RawSignalPoint>, remembered: Boolean) {
@@ -2659,7 +2693,9 @@ class MainActivity : AppCompatActivity() {
                 val requestedStart = requestedDates.first.atStartOfDay(zone).toInstant()
                 val requestedEnd = requestedDates.second.plusDays(1).atStartOfDay(zone).toInstant()
                 if (!journalRouteCovers(requestedStart, requestedEnd)) {
-                    loadJournalRouteForRange(requestedDates.first, requestedDates.second) { selectRange() }
+                    loadJournalRouteForRange(requestedDates.first, requestedDates.second) { outcome ->
+                        if (outcome == JournalRouteLoadOutcome.READY) selectRange()
+                    }
                     return
                 }
             }
@@ -3076,12 +3112,7 @@ class MainActivity : AppCompatActivity() {
             R.string.aspect_portrait,
             R.string.aspect_landscape,
         ).map(::getString)
-        val cameraLabels = listOf(
-            R.string.camera_fixed,
-            R.string.camera_steady,
-            R.string.camera_dynamic,
-            R.string.camera_close_up,
-        ).map(::getString)
+        val cameraLabels = mapViewLabelResources.map(::getString)
         val compressionLabels = listOf(
             R.string.compression_off,
             R.string.compression_balanced,
@@ -3129,7 +3160,7 @@ class MainActivity : AppCompatActivity() {
             )
         }
         settingsScreen.cameraMovementDropdown.setOnItemClickListener { _, _, position, _ ->
-            updateAdvancedSettings(cameraSettings.copy(cameraMovement = CameraMovement.values()[position]))
+            updateAdvancedSettings(cameraSettings.withAutomaticMapView(CameraMovement.entries[position]))
         }
         settingsScreen.tripDetectionDropdown.setOnItemClickListener { _, _, position, _ ->
             updateAdvancedSettings(cameraSettings.copy(tripDetection = TripDetection.entries[position]))
@@ -3537,28 +3568,7 @@ class MainActivity : AppCompatActivity() {
             R.string.aspect_portrait,
             R.string.aspect_landscape,
         )[values.aspectRatio.ordinal],
-        R.string.camera_movement to listOf(
-            R.string.camera_fixed,
-            R.string.camera_steady,
-            R.string.camera_dynamic,
-            R.string.camera_close_up,
-        )[values.cameraMovement.ordinal],
-        R.string.trip_detection to listOf(
-            R.string.trip_detection_conservative,
-            R.string.trip_detection_balanced,
-            R.string.trip_detection_sensitive,
-        )[values.tripDetection.ordinal],
-        R.string.episode_framing to listOf(
-            R.string.local_framing_off,
-            R.string.local_framing_balanced,
-            R.string.local_framing_close,
-        )[values.localFraming.ordinal],
-        R.string.long_trip_compression to listOf(
-            R.string.compression_off,
-            R.string.compression_balanced,
-            R.string.compression_strong,
-            R.string.compression_stronger,
-        )[values.longTripCompression.ordinal],
+        R.string.map_view to mapViewLabelResources[values.cameraMovement.ordinal],
     ).joinToString("\n") { (label, value) ->
         getString(R.string.preset_value_format, getString(label), if (value is Int) getString(value) else value)
     }
@@ -3762,12 +3772,7 @@ class MainActivity : AppCompatActivity() {
         )
         settingsScreen.cameraMovementDropdown.setText(
             getString(
-                listOf(
-                    R.string.camera_fixed,
-                    R.string.camera_steady,
-                    R.string.camera_dynamic,
-                    R.string.camera_close_up,
-                )[settings.cameraMovement.ordinal],
+                mapViewLabelResources[settings.cameraMovement.ordinal],
             ),
             false,
         )
@@ -4432,26 +4437,69 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runTripDetection() {
+        if (tripDetectionRunning) return
         val start = detectionStartDate ?: return
         val end = detectionEndDate ?: return
         tripDiscoveryRequested = true
-        editor.runTripDetectionButton.isEnabled = false
-        editor.runTripDetectionButton.setText(R.string.detecting_trips)
-        loadJournalRouteForRange(start, end) {
-            val loaded = timeline
-            if (loaded == null) {
-                editor.runTripDetectionButton.isEnabled = true
-                editor.runTripDetectionButton.setText(R.string.recommend_trips)
+        val requestId = ++tripDetectionRequestId
+        setTripDetectionRunning(true)
+        loadJournalRouteForRange(start, end) { outcome ->
+            if (requestId != tripDetectionRequestId) return@loadJournalRouteForRange
+            if (outcome != JournalRouteLoadOutcome.READY) {
+                finishTripDetection(requestId)
                 return@loadJournalRouteForRange
             }
-            lifecycleScope.launch {
-                tripSuggestions = detectTrips(loaded, start, end)
-                suggestionsExpanded = false
-                editor.runTripDetectionButton.isEnabled = true
-                editor.runTripDetectionButton.setText(R.string.recommend_trips)
-                renderTrips()
+            val loaded = timeline
+            if (loaded == null) {
+                finishTripDetection(requestId)
+                return@loadJournalRouteForRange
+            }
+            tripDetectionJob = lifecycleScope.launch {
+                try {
+                    val detected = detectTrips(loaded, start, end)
+                    if (
+                        requestId == tripDetectionRequestId &&
+                        detectionStartDate == start &&
+                        detectionEndDate == end
+                    ) {
+                        tripSuggestions = detected
+                        suggestionsExpanded = false
+                        renderTrips()
+                    }
+                } catch (error: Throwable) {
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    Log.e(TAG, "Trip detection failed", error)
+                    Snackbar.make(binding.root, R.string.journal_route_load_failed, Snackbar.LENGTH_LONG).show()
+                } finally {
+                    finishTripDetection(requestId)
+                }
             }
         }
+    }
+
+    private fun setTripDetectionRunning(running: Boolean) {
+        tripDetectionRunning = running
+        editor.runTripDetectionButton.isEnabled = !running
+        editor.runTripDetectionButton.setText(
+            if (running) R.string.detecting_trips else R.string.recommend_trips,
+        )
+        editor.detectionRangeDropdown.isEnabled = !running
+        editor.detectionCustomRangeButton.isEnabled = !running
+        if (currentCreateStep == CreateStep.DISCOVERY) renderTripSuggestions()
+    }
+
+    private fun finishTripDetection(requestId: Long) {
+        if (requestId != tripDetectionRequestId) return
+        tripDetectionJob = null
+        setTripDetectionRunning(false)
+    }
+
+    private fun cancelTripDetection() {
+        if (!tripDetectionRunning) return
+        tripDetectionRequestId += 1
+        tripDetectionJob?.cancel()
+        tripDetectionJob = null
+        setTripDetectionRunning(false)
     }
 
     private suspend fun refreshRequestedTripSuggestions(loaded: Timeline): List<TripSuggestion> {
@@ -4540,8 +4588,9 @@ class MainActivity : AppCompatActivity() {
     private fun renderTripSuggestions() {
         val confirmedDates = tripsStore.list().map { it.startDate to it.endDate }.toSet()
         val suggestions = tripSuggestions.filterNot { it.startDate to it.endDate in confirmedDates }
-        editor.emptySuggestionsText.visibility = if (suggestions.isEmpty()) View.VISIBLE else View.GONE
+        editor.emptySuggestionsText.visibility = if (suggestions.isEmpty() && !tripDetectionRunning) View.VISIBLE else View.GONE
         editor.showAllSuggestionsButton.visibility = if (suggestions.size > COLLAPSED_CREATION_COUNT) View.VISIBLE else View.GONE
+        editor.showAllSuggestionsButton.isEnabled = !tripDetectionRunning
         editor.showAllSuggestionsButton.text = if (suggestionsExpanded) {
             getString(R.string.show_fewer_suggestions)
         } else {
@@ -4560,9 +4609,11 @@ class MainActivity : AppCompatActivity() {
             )
             showTripCoverage(card, coverageFor(suggestion.startDate, suggestion.endDate))
             card.tripPrimaryButton.setText(R.string.confirm_and_create)
+            card.tripPrimaryButton.isEnabled = !tripDetectionRunning
             card.tripPrimaryButton.setOnClickListener { confirmSuggestion(suggestion) }
             card.tripSecondaryButton.visibility = View.VISIBLE
             card.tripSecondaryButton.setText(R.string.dismiss_suggestion)
+            card.tripSecondaryButton.isEnabled = !tripDetectionRunning
             card.tripSecondaryButton.setOnClickListener {
                 tripsStore.dismissSuggestion(suggestion.id)
                 tripSuggestions = tripSuggestions.filterNot { it.id == suggestion.id }
@@ -4673,7 +4724,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun coverageFor(start: LocalDate, end: LocalDate): TripCoverage? =
         if (BuildConfig.IS_JOURNAL_LAB) {
-            activeJournalRoute?.let { route ->
+            val zone = ZoneId.systemDefault()
+            val rangeLoaded = journalRouteCovers(
+                start.atStartOfDay(zone).toInstant(),
+                end.plusDays(1).atStartOfDay(zone).toInstant(),
+            )
+            activeJournalRoute?.takeIf { rangeLoaded }?.let { route ->
                 TripCoverageCalculator.calculateConnected(route.connectedTimelines(), start, end)
             }
         } else {
@@ -4788,7 +4844,9 @@ class MainActivity : AppCompatActivity() {
         if (!BuildConfig.IS_JOURNAL_LAB) return
         val start = activeStartDate ?: return
         val end = activeEndDate ?: return
-        loadJournalRouteForRange(start, end) { applyActiveProjectDates() }
+        loadJournalRouteForRange(start, end) { outcome ->
+            if (outcome == JournalRouteLoadOutcome.READY) applyActiveProjectDates()
+        }
     }
 
     private fun applyActiveProjectDates() {
@@ -5312,8 +5370,22 @@ class MainActivity : AppCompatActivity() {
         listOf(R.string.aspect_square, R.string.aspect_portrait, R.string.aspect_landscape)[value.ordinal],
     )
 
-    private fun cameraMovementLabel(value: CameraMovement): String = getString(
-        listOf(R.string.camera_fixed, R.string.camera_steady, R.string.camera_dynamic, R.string.camera_close_up)[value.ordinal],
+    private fun cameraMovementLabel(value: CameraMovement): String =
+        getString(mapViewLabelResources[value.ordinal])
+
+    private fun CameraSettings.withAutomaticMapView(movement: CameraMovement): CameraSettings = copy(
+        cameraMovement = movement,
+        tripDetection = when (movement) {
+            CameraMovement.FIXED, CameraMovement.STEADY -> TripDetection.BALANCED
+            CameraMovement.DYNAMIC -> TripDetection.BALANCED
+            CameraMovement.CLOSE_UP -> TripDetection.SENSITIVE
+        },
+        localFraming = when (movement) {
+            CameraMovement.FIXED, CameraMovement.STEADY -> LocalFraming.OFF
+            CameraMovement.DYNAMIC -> LocalFraming.BALANCED
+            CameraMovement.CLOSE_UP -> LocalFraming.CLOSE
+        },
+        longTripCompression = LongTripCompression.BALANCED,
     )
 
     private fun tripDetectionLabel(value: TripDetection): String = getString(
@@ -5326,6 +5398,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun compressionLabel(value: LongTripCompression): String = getString(
         listOf(R.string.compression_off, R.string.compression_balanced, R.string.compression_strong, R.string.compression_stronger)[value.ordinal],
+    )
+
+    private val mapViewLabelResources = listOf(
+        R.string.map_view_fixed,
+        R.string.map_view_wide,
+        R.string.map_view_balanced,
+        R.string.map_view_close_up,
     )
 
     private fun resolutionLabel(value: VideoResolution): String = getString(
@@ -5737,6 +5816,14 @@ class MainActivity : AppCompatActivity() {
 
     private enum class Screen { VIDEOS, NEW_VIDEO, SETTINGS, PLAYER, ONBOARDING }
     private enum class CreateStep { TYPE, TRIP_SOURCE, DISCOVERY, PROJECT, STYLE, PREVIEW }
+    private enum class JournalRouteLoadOutcome { READY, FAILED, CANCELLED }
+
+    private data class JournalRouteRequest(
+        val id: Long,
+        val start: Instant,
+        val endExclusive: Instant,
+        val callbacks: MutableList<(JournalRouteLoadOutcome) -> Unit>,
+    )
 
     private data class PreparedTimeline(
         val source: Timeline,

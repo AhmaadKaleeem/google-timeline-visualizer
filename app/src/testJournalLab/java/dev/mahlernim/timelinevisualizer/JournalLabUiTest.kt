@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Looper
 import android.view.View
 import android.widget.TextView
+import com.google.android.material.button.MaterialButton
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.journal.JournalOnboardingStore
@@ -16,6 +17,7 @@ import dev.mahlernim.timelinevisualizer.journal.JournalRepository
 import dev.mahlernim.timelinevisualizer.presets.PresetRepository
 import dev.mahlernim.timelinevisualizer.videos.VideoDataSource
 import java.io.File
+import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -267,6 +269,64 @@ class JournalLabUiTest {
         assertTrue(activity.findViewById<View>(R.id.tripVideoChoice).isEnabled)
         assertTrue(activity.findViewById<View>(R.id.recapVideoChoice).isEnabled)
         assertTrue(activity.findViewById<View>(R.id.customRecapChoice).isEnabled)
+    }
+
+    @Test
+    fun findTripsIsAvailableFromJournalMetadataBeforeGeometryLoads() {
+        val database = JournalDatabase.open(context)
+        runBlocking {
+            JournalRepository(database).createJournal(
+                JournalEntity(
+                    id = "trip-metadata",
+                    name = "Travel Journal",
+                    isPrimary = true,
+                    createdAtEpochMillis = 1_000L,
+                    semanticStartEpochMillis = Instant.parse("2025-01-01T00:00:00Z").toEpochMilli(),
+                    semanticEndEpochMillis = Instant.parse("2026-08-01T00:00:00Z").toEpochMilli(),
+                ),
+            )
+        }
+        database.close()
+
+        val activity = launchActivity()
+        waitUntil(activity::journalMetadataReady)
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
+        activity.findViewById<View>(R.id.tripVideoChoice).performClick()
+
+        assertFalse(activity.journalRouteReady())
+        assertTrue(activity.findViewById<View>(R.id.findTripsButton).isEnabled)
+
+        activity.findViewById<View>(R.id.findTripsButton).performClick()
+        val findButton = activity.findViewById<MaterialButton>(R.id.runTripDetectionButton)
+        findButton.performClick()
+        assertFalse(findButton.isEnabled)
+        waitUntil(findButton::isEnabled)
+        assertEquals(activity.getString(R.string.recommend_trips), findButton.text.toString())
+    }
+
+    @Test
+    fun leavingTripDiscoveryRestoresTheFindingTripsControls() {
+        val activity = launchActivity()
+        val source = Uri.fromFile(repoRoot().resolve("test-fixtures/semantic-and-raw-ranges.json"))
+        activity.importTimeline(source)
+        waitUntil {
+            activity.journalMetadataReady() &&
+                activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE
+        }
+        ShadowDialog.getLatestDialog()?.dismiss()
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
+        activity.findViewById<View>(R.id.tripVideoChoice).performClick()
+        activity.findViewById<View>(R.id.findTripsButton).performClick()
+
+        val findButton = activity.findViewById<MaterialButton>(R.id.runTripDetectionButton)
+        findButton.performClick()
+        assertFalse(findButton.isEnabled)
+        assertEquals(activity.getString(R.string.detecting_trips), findButton.text.toString())
+
+        activity.findViewById<View>(R.id.wizardBackButton).performClick()
+
+        assertTrue(findButton.isEnabled)
+        assertEquals(activity.getString(R.string.recommend_trips), findButton.text.toString())
     }
 
     @Test

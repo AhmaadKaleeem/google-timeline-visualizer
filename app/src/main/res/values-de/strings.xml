@@ -162,7 +162,13 @@
     <string name="save_as_failed">Eine Kopie des Videos konnte nicht gespeichert werden</string>
     <string name="video_copy_saved">Videokopie gespeichert</string>
     <string name="advanced_settings">Erweiterte Einstellungen</string>
-    <string name="advanced_settings_summary">Wählen Sie Zoomstil, Langstrecken-Timing und Exportformat.</string>
+    <string name="advanced_settings_summary">Wählen Sie Kartenansicht und Exportformat. Das Routentempo passt sich automatisch an.</string>
+    <string name="map_view">Kartenansicht</string>
+    <string name="map_view_fixed">Fester Maßstab</string>
+    <string name="map_view_wide">Weit</string>
+    <string name="map_view_balanced">Ausgewogen</string>
+    <string name="map_view_close_up">Nahansicht</string>
+    <string name="automatic_visual_pacing_summary">Die Bewegung passt sich dem sichtbaren Kartenmaßstab an. Weite Reisen bewegen sich zügig, während Nahaufnahmen ruhig bleiben.</string>
     <string name="camera_movement">Zoomstil</string>
     <string name="camera_fixed">Fest</string><string name="camera_steady">Ausgewogen</string><string name="camera_dynamic">Aktiv</string><string name="camera_close_up">Nah</string>
     <string name="camera_fixed_summary">Folgt der Route, ohne den Maßstab zu ändern.</string>
@@ -227,7 +233,7 @@
     <string name="settings">Einstellungen</string>
     <string name="settings_summary">Legen Sie die Standardeinstellungen für Vorschauen und neue Videos fest.</string>
     <string name="video_defaults">Videostandards</string>
-    <string name="video_defaults_summary">Diese Einstellungen steuern gemeinsam Kadrierung und Tempo der Route.</string>
+    <string name="video_defaults_summary">Wählen Sie Kartenansicht und Format. Das Bewegungstempo passt sich automatisch an den sichtbaren Maßstab an.</string>
     <string name="aspect_ratio">Seitenverhältnis</string><string name="aspect_square">Quadratisch</string><string name="aspect_portrait">Hochformat</string><string name="aspect_landscape">Querformat</string>
     <string name="reset_video_defaults">Videostandards zurücksetzen</string><string name="video_defaults_restored">Videostandards zurückgesetzt</string>
     <string name="export_quality">Exportqualität</string><string name="export_quality_summary">Höhere Auflösungen erzeugen größere Dateien und werden nicht von jedem Gerät unterstützt.</string>
