@@ -1,6 +1,7 @@
 package dev.mahlernim.timelinevisualizer.journal
 
 import androidx.room.withTransaction
+import dev.mahlernim.timelinevisualizer.data.RawSignalProcessor
 import java.util.UUID
 
 data class DetailedObservationInput(
@@ -194,6 +195,13 @@ class JournalRepository(
     ): List<ActiveSemanticSegment> {
         require(endExclusiveEpochMillis > startEpochMillis) { "The route range must not be empty" }
         return dao.activeSemanticSegmentsNewestFirst(journalId, startEpochMillis, endExclusiveEpochMillis)
+    }
+
+    suspend fun activeSemanticSegmentsForSnapshots(
+        journalId: String,
+        snapshotIds: Collection<String>,
+    ): List<ActiveSemanticSegment> = snapshotIds.chunked(SQLITE_BIND_CHUNK_SIZE).flatMap { chunk ->
+        dao.activeSemanticSegmentsForSnapshotsNewestFirst(journalId, chunk)
     }
 
     suspend fun import(
@@ -401,12 +409,17 @@ class JournalRepository(
                 ),
             )
             val capturedThrough = maxOfNullable(journal.detailedCapturedThroughEpochMillis, detailedEnd)
+            val usableThrough = dao.latestUsableDetailedEpochMillis(
+                journalId,
+                RawSignalProcessor.DEFAULT_MAXIMUM_ACCURACY_METERS,
+            )
             val advanced = detailedEnd != null &&
                 (journal.detailedCapturedThroughEpochMillis == null || detailedEnd > journal.detailedCapturedThroughEpochMillis)
             dao.updateJournal(
                 journal.copy(
                     lastAdvancedAtEpochMillis = if (advanced) input.importedAtEpochMillis else journal.lastAdvancedAtEpochMillis,
                     detailedCapturedThroughEpochMillis = capturedThrough,
+                    detailedUsableThroughEpochMillis = usableThrough,
                     semanticStartEpochMillis = minOfNullable(journal.semanticStartEpochMillis, semanticStart),
                     semanticEndEpochMillis = maxOfNullable(journal.semanticEndEpochMillis, semanticEnd),
                 ),

@@ -241,7 +241,7 @@ class JournalLabUiTest {
     }
 
     @Test
-    fun routePreparationStartsCompactWithoutExtraProgressDetails() {
+    fun openingCreateDoesNotStartRoutePreparation() {
         val database = JournalDatabase.open(context)
         runBlocking {
             JournalRepository(database).createJournal(
@@ -260,10 +260,10 @@ class JournalLabUiTest {
         activity.findViewById<View>(R.id.navigationCreate).performClick()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.createTypeStepGroup).visibility)
-        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.journalRoutePreparingGroup).visibility)
-        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.journalRouteCompactProgressGroup).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.journalRoutePreparingGroup).visibility)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.journalRouteProgressBar).visibility)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.journalRouteProgressStageText).visibility)
+        assertFalse(activity.journalRouteReady())
         assertTrue(activity.findViewById<View>(R.id.tripVideoChoice).isEnabled)
         assertTrue(activity.findViewById<View>(R.id.recapVideoChoice).isEnabled)
         assertTrue(activity.findViewById<View>(R.id.customRecapChoice).isEnabled)
@@ -285,23 +285,27 @@ class JournalLabUiTest {
     }
 
     @Test
-    fun importPersistsFusedJournalAcrossActivityRecreationWithoutRememberedFile() {
+    fun recreatedCreateLoadsGeometryOnlyAfterAChoice() {
         val activity = launchActivity()
         val source = Uri.fromFile(repoRoot().resolve("test-fixtures/semantic-and-raw-ranges.json"))
 
         activity.importTimeline(source)
-        waitForImportedRoute(activity)
-        val imported = activity.currentJourneyPoints()
-
+        waitUntil {
+            activity.journalMetadataReady() &&
+                activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE
+        }
         assertEquals(null, TimelineSourceStore(context).load())
         assertEquals(VideoDataSource.JOURNAL, activity.currentVideoDataSource())
 
         controller = requireNotNull(controller).recreate()
         val recreated = requireNotNull(controller).get()
         waitUntil(recreated::journalMetadataReady)
-        waitUntil { recreated.currentJourneyPoints() == imported }
+        recreated.findViewById<View>(R.id.navigationCreate).performClick()
 
-        assertEquals(imported, recreated.currentJourneyPoints())
+        assertFalse(recreated.journalRouteReady())
+        recreated.findViewById<View>(R.id.customRecapChoice).performClick()
+        waitUntil(recreated::journalRouteReady)
+        assertTrue(recreated.currentJourneyPoints().isNotEmpty())
     }
 
     @Test
@@ -311,6 +315,7 @@ class JournalLabUiTest {
 
         activity.importTimeline(Uri.fromFile(source))
         waitForImportedRoute(activity)
+        activity.findViewById<View>(R.id.wizardBackButton).performClick()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.createTypeStepGroup).visibility)
         assertTrue(activity.findViewById<View>(R.id.tripVideoChoice).isEnabled)
@@ -418,6 +423,12 @@ class JournalLabUiTest {
     }
 
     private fun waitForImportedRoute(activity: MainActivity) {
+        waitUntil {
+            activity.journalMetadataReady() &&
+                activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE
+        }
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
+        activity.findViewById<View>(R.id.customRecapChoice).performClick()
         waitUntil {
             activity.currentJourneyPoints().size >= 2 &&
                 activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE

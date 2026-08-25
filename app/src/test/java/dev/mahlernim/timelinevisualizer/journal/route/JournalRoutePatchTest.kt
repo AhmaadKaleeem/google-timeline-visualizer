@@ -8,6 +8,31 @@ import org.junit.Test
 
 class JournalRoutePatchTest {
     @Test
+    fun clippingSelectsPointsAndTrimsGapWithoutInventingBoundaryPoints() {
+        val route = JournalRoute(
+            timeline = Timeline(listOf(point(0, 1.0), point(10, 1.1), point(20, 1.2), point(30, 1.3))),
+            spans = listOf(
+                RouteSpan(instant(0), instant(10), RouteSource.DETAILED, listOf(point(0, 1.0), point(10, 1.1))),
+                RouteSpan(instant(10), instant(20), RouteSource.GAP, emptyList()),
+                RouteSpan(instant(20), instant(30), RouteSource.SEMANTIC_PATH, listOf(point(20, 1.2), point(30, 1.3))),
+            ),
+            detailedInputCount = 2,
+            detailedUsableCount = 2,
+            semanticUsableCount = 2,
+        )
+
+        val clipped = route.clippedTo(instant(5), instant(25))
+
+        assertEquals(listOf(10L, 20L), clipped.timeline.points.map { it.instant.epochSecond })
+        assertEquals(
+            listOf(RouteSource.DETAILED, RouteSource.GAP, RouteSource.SEMANTIC_PATH),
+            clipped.spans.map(RouteSpan::source),
+        )
+        assertEquals(5L, clipped.spans[0].start.epochSecond)
+        assertEquals(24L, clipped.spans.last().end.epochSecond)
+    }
+
+    @Test
     fun `replaces only the requested window`() {
         val existing = route(
             span(RouteSource.SEMANTIC_PATH, point(1), point(2), point(3), point(4), point(5)),

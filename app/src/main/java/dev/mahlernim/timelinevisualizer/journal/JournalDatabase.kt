@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RouteProjectionSpanEntity::class,
         RouteProjectionChunkEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class JournalDatabase : RoomDatabase() {
@@ -30,7 +30,7 @@ abstract class JournalDatabase : RoomDatabase() {
             context.applicationContext,
             JournalDatabase::class.java,
             "travel-journal.db",
-        ).addMigrations(MIGRATION_1_2).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -46,6 +46,22 @@ abstract class JournalDatabase : RoomDatabase() {
                     """CREATE TABLE IF NOT EXISTS `route_projection_chunks` (`spanId` INTEGER NOT NULL, `chunkOrdinal` INTEGER NOT NULL, `formatVersion` INTEGER NOT NULL, `pointCount` INTEGER NOT NULL, `pointData` BLOB NOT NULL, PRIMARY KEY(`spanId`, `chunkOrdinal`), FOREIGN KEY(`spanId`) REFERENCES `route_projection_spans`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)""",
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_route_projection_chunks_spanId` ON `route_projection_chunks` (`spanId`)")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `route_projection_states` ADD COLUMN `projectionStartEpochMillis` INTEGER")
+                db.execSQL("ALTER TABLE `route_projection_states` ADD COLUMN `projectionEndExclusiveEpochMillis` INTEGER")
+                // Every v2 projection was produced only for the lifetime sentinel range.
+                db.execSQL(
+                    """
+                    UPDATE `route_projection_states`
+                    SET `projectionStartEpochMillis` = ${Long.MIN_VALUE},
+                        `projectionEndExclusiveEpochMillis` = ${Long.MAX_VALUE}
+                    WHERE `builtRevision` > 0 AND `spanCount` > 0
+                    """.trimIndent(),
+                )
             }
         }
     }

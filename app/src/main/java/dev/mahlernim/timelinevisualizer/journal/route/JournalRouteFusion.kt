@@ -120,7 +120,7 @@ object JournalRouteFusion {
         if (islands.isEmpty()) return listOf(points)
         val fragments = mutableListOf<MutableList<GeoPoint>>()
         var current: MutableList<GeoPoint>? = null
-        var islandIndex = 0
+        var islandIndex = firstIslandEndingAtOrAfter(islands, points.first().instant)
         points.forEach { point ->
             val active = current
             val previousInstant = active?.lastOrNull()?.instant

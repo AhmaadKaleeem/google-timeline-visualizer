@@ -100,6 +100,39 @@ class JournalRouteProjectionStoreTest {
         assertEquals("READY", rebuilt.buildStatus)
     }
 
+    @Test
+    fun boundedProjectionPersistsItsLogicalCoverageAndRoundTrips() = runBlocking {
+        import("bounded", listOf(observation(10), observation(20), observation(30)))
+        val state = repository.ensureRouteProjectionState(JOURNAL_ID)
+        val points = listOf(10L, 20L, 30L).map { instant ->
+            GeoPoint(Instant.ofEpochMilli(instant), 37.0 + instant / 1_000.0, 127.0)
+        }
+        val route = JournalRoute(
+            timeline = dev.mahlernim.timelinevisualizer.model.Timeline(points),
+            spans = listOf(RouteSpan(points.first().instant, points.last().instant, RouteSource.DETAILED, points)),
+            detailedInputCount = 3,
+            detailedUsableCount = 3,
+            semanticUsableCount = 0,
+        )
+        val store = JournalRouteProjectionStore(database)
+
+        assertTrue(
+            store.replace(
+                journalId = JOURNAL_ID,
+                expectedSourceRevision = state.sourceRevision,
+                algorithmVersion = 1,
+                route = route,
+                projectionStartEpochMillis = 10L,
+                projectionEndExclusiveEpochMillis = 31L,
+            ),
+        )
+
+        val stored = requireNotNull(store.read(JOURNAL_ID))
+        assertEquals(10L, stored.state.projectionStartEpochMillis)
+        assertEquals(31L, stored.state.projectionEndExclusiveEpochMillis)
+        assertEquals(route, stored.route)
+    }
+
     private suspend fun import(hash: String, observations: List<DetailedObservationInput>) = repository.import(
         JOURNAL_ID,
         JournalImport(

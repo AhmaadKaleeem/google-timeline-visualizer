@@ -2,11 +2,13 @@ package dev.mahlernim.timelinevisualizer.journal
 
 import android.content.Context
 import androidx.room.Room
+import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -116,6 +118,73 @@ class JournalRepositoryTest {
         assertEquals(2_000L, better.changedStartEpochMillis)
         assertEquals(2_000L, better.changedEndEpochMillis)
         assertEquals(5.0, repository.activeDetailedObservations(JOURNAL_ID, 0, 3_000).single().accuracyMeters, 0.0)
+    }
+
+    @Test
+    fun importAdvancesFreshnessOnlyThroughCanonicallyUsableDetail() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                "freshness",
+                10_000,
+                listOf(
+                    observation(2_000, accuracy = 5.0),
+                    observation(3_000, accuracy = 150.0),
+                ),
+            ),
+        )
+
+        val journal = requireNotNull(repository.journal(JOURNAL_ID))
+        assertEquals(3_000L, journal.detailedCapturedThroughEpochMillis)
+        assertEquals(2_000L, journal.detailedUsableThroughEpochMillis)
+    }
+
+    @Test
+    fun latestUsableDetailScansNewestObservationsThroughTheTimeIndex() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                "freshness-plan",
+                10_000,
+                listOf(
+                    observation(2_000, accuracy = 5.0),
+                    observation(3_000, accuracy = 150.0),
+                ),
+            ),
+        )
+
+        assertEquals(2_000L, requireNotNull(dao.latestUsableDetailedEpochMillis(JOURNAL_ID, 100.0)))
+        val plan = database.openHelper.readableDatabase.query(
+            SimpleSQLiteQuery(
+                """
+                EXPLAIN QUERY PLAN
+                SELECT detailed_observations.instantEpochMillis
+                FROM detailed_observations
+                WHERE detailed_observations.journalId = ?
+                  AND (
+                      SELECT MIN(observation_imports.accuracyMeters)
+                      FROM observation_imports
+                      INNER JOIN import_batches
+                          ON import_batches.id = observation_imports.importBatchId
+                      WHERE observation_imports.observationId = detailed_observations.id
+                        AND import_batches.status = 'COMMITTED'
+                        AND observation_imports.accuracyMeters IS NOT NULL
+                  ) <= ?
+                ORDER BY detailed_observations.instantEpochMillis DESC,
+                         detailed_observations.id DESC
+                LIMIT 1
+                """.trimIndent(),
+                arrayOf(JOURNAL_ID, 100.0),
+            ),
+        ).use { cursor ->
+            val details = mutableListOf<String>()
+            val detailColumn = cursor.getColumnIndexOrThrow("detail")
+            while (cursor.moveToNext()) details += cursor.getString(detailColumn)
+            details
+        }
+        assertTrue(plan.any { it.contains("index_detailed_observations_journalId_instantEpochMillis") })
+        assertTrue(plan.any { it.contains("index_observation_imports_observationId") })
+        assertTrue(plan.none { it.contains("USE TEMP B-TREE FOR ORDER BY") })
     }
 
     @Test

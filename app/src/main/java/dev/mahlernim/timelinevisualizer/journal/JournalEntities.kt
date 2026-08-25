@@ -175,6 +175,8 @@ data class RouteProjectionStateEntity(
     val buildStatus: String,
     val dirtyStartEpochMillis: Long? = null,
     val dirtyEndEpochMillis: Long? = null,
+    val projectionStartEpochMillis: Long? = null,
+    val projectionEndExclusiveEpochMillis: Long? = null,
     val updatedAtEpochMillis: Long? = null,
     val spanCount: Int = 0,
     val pointCount: Int = 0,

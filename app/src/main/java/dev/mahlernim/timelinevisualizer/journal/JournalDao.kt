@@ -191,6 +191,29 @@ interface JournalDao {
 
     @Query(
         """
+        SELECT semantic_segments.*,
+               import_batches.parserVersion AS parserVersion,
+               semantic_snapshots.capturedAtEpochMillis AS snapshotCapturedAtEpochMillis
+        FROM semantic_segments
+        INNER JOIN semantic_snapshots
+            ON semantic_snapshots.id = semantic_segments.snapshotId
+        INNER JOIN import_batches
+            ON import_batches.id = semantic_snapshots.importBatchId
+        WHERE import_batches.journalId = :journalId
+          AND import_batches.status = 'COMMITTED'
+          AND semantic_snapshots.id IN (:snapshotIds)
+        ORDER BY semantic_snapshots.capturedAtEpochMillis DESC,
+                 semantic_snapshots.id DESC,
+                 semantic_segments.sourceOrdinal ASC
+        """,
+    )
+    suspend fun activeSemanticSegmentsForSnapshotsNewestFirst(
+        journalId: String,
+        snapshotIds: List<String>,
+    ): List<ActiveSemanticSegment>
+
+    @Query(
+        """
         SELECT MIN(detailed_observations.instantEpochMillis) AS startEpochMillis,
                MAX(detailed_observations.instantEpochMillis) AS endEpochMillis
         FROM detailed_observations
@@ -203,6 +226,30 @@ interface JournalDao {
         """,
     )
     suspend fun committedDetailedBounds(journalId: String): CommittedDetailedBounds
+
+    @Query(
+        """
+        SELECT detailed_observations.instantEpochMillis
+        FROM detailed_observations
+        WHERE detailed_observations.journalId = :journalId
+          AND (
+              SELECT MIN(observation_imports.accuracyMeters)
+              FROM observation_imports
+              INNER JOIN import_batches
+                  ON import_batches.id = observation_imports.importBatchId
+              WHERE observation_imports.observationId = detailed_observations.id
+                AND import_batches.status = 'COMMITTED'
+                AND observation_imports.accuracyMeters IS NOT NULL
+          ) <= :maximumAccuracyMeters
+        ORDER BY detailed_observations.instantEpochMillis DESC,
+                 detailed_observations.id DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun latestUsableDetailedEpochMillis(
+        journalId: String,
+        maximumAccuracyMeters: Double,
+    ): Long?
 
     @Query(
         """

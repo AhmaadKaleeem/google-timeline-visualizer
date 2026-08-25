@@ -325,6 +325,63 @@ class JournalRouteServiceTest {
     }
 
     @Test
+    fun boundedReconciliationExpandsSplitComponentsBeforeDirectionArbitration() = runBlocking {
+        val activityParts = listOf(
+            listOf(point(0, 10.0)),
+            listOf(point(55, 14.0), point(65, 16.0)),
+            listOf(point(120, 20.0)),
+        )
+        val reversedPathParts = listOf(
+            listOf(point(0, 20.0)),
+            listOf(point(55, 30.0), point(65, 31.0)),
+            listOf(point(120, 10.0)),
+        )
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "split-reversal-anchors",
+                importedAt = minute(200),
+                semantic = activityParts.mapIndexed { index, points ->
+                    semantic(
+                        Duration.between(BASE, points.first().instant).toMinutes(),
+                        Duration.between(BASE, points.last().instant).toMinutes(),
+                        points,
+                    ).copy(geometryJson = SemanticGeometryCodec.encodePart(points, "activity:split", index, 3))
+                } + reversedPathParts.mapIndexed { index, points ->
+                    semantic(
+                        Duration.between(BASE, points.first().instant).toMinutes(),
+                        Duration.between(BASE, points.last().instant).toMinutes(),
+                        points,
+                    ).copy(
+                        kind = "PATH",
+                        geometryJson = SemanticGeometryCodec.encodePart(points, "path:split", index, 3),
+                    )
+                },
+            ),
+        )
+        val requestStart = BASE.plus(Duration.ofMinutes(50))
+        val requestEnd = BASE.plus(Duration.ofMinutes(71))
+        val full = service.route(
+            JOURNAL_ID,
+            BASE,
+            BASE.plus(Duration.ofMinutes(121)),
+            maximumAccuracyMeters = null,
+        )
+
+        val bounded = service.route(
+            JOURNAL_ID,
+            requestStart,
+            requestEnd,
+            maximumAccuracyMeters = null,
+        )
+
+        val expected = full.clippedTo(requestStart, requestEnd)
+        assertEquals(expected.timeline.points, bounded.timeline.points)
+        assertEquals(expected.spans, bounded.spans)
+        assertEquals(listOf(14.0, 16.0), bounded.timeline.points.map(GeoPoint::latitude))
+    }
+
+    @Test
     fun genuineReturnAndUTurnGeometryIsNotClassifiedAsBacktracking() = runBlocking {
         repository.import(
             JOURNAL_ID,
@@ -345,6 +402,32 @@ class JournalRouteServiceTest {
         val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(31)))
 
         assertEquals(listOf(3.0, 3.5, 3.2, 3.0), route.timeline.points.map(GeoPoint::latitude))
+    }
+
+    @Test
+    fun reverseOrderedComplementaryPathsPreserveChronologicalOutput() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "reverse-ordered-paths",
+                importedAt = minute(100),
+                semantic = listOf(
+                    semantic(0, 10, listOf(point(0, 1.0), point(10, 1.5))),
+                    semantic(20, 30, listOf(point(20, 2.0), point(30, 2.5))),
+                    semantic(40, 50, listOf(point(40, 3.0), point(50, 3.5))),
+                    semantic(40, 50, listOf(point(40, 3.0), point(50, 3.5))).copy(kind = "PATH"),
+                    semantic(20, 30, listOf(point(20, 2.0), point(30, 2.5))).copy(kind = "PATH"),
+                    semantic(0, 10, listOf(point(0, 1.0), point(10, 1.5))).copy(kind = "PATH"),
+                ),
+            ),
+        )
+
+        val route = service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(51)))
+
+        assertEquals(
+            listOf(1.0, 1.5, 2.0, 2.5, 3.0, 3.5),
+            route.timeline.points.map(GeoPoint::latitude),
+        )
     }
 
     @Test
@@ -472,6 +555,149 @@ class JournalRouteServiceTest {
         )
 
         assertEquals(emptyList<JournalRoutePreparationStage>(), stages)
+    }
+
+    @Test
+    fun boundedProjectionServesAContainedRangeWithoutReconstruction() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "bounded-cache",
+                importedAt = minute(100),
+                observations = listOf(observation(0, 1.0), observation(10, 1.1), observation(20, 1.2), observation(30, 1.3)),
+            ),
+        )
+        val cacheStart = BASE.plus(Duration.ofMinutes(5))
+        val cacheEnd = BASE.plus(Duration.ofMinutes(26))
+        service.route(JOURNAL_ID, cacheStart, cacheEnd)
+        val stages = mutableListOf<JournalRoutePreparationStage>()
+
+        val contained = service.route(
+            journalId = JOURNAL_ID,
+            start = BASE.plus(Duration.ofMinutes(10)),
+            endExclusive = BASE.plus(Duration.ofMinutes(21)),
+            onPreparationStage = stages::add,
+        )
+
+        assertEquals(listOf(1.1, 1.2), contained.timeline.points.map(GeoPoint::latitude))
+        assertEquals(emptyList<JournalRoutePreparationStage>(), stages)
+        val state = requireNotNull(database.journalDao().routeProjectionState(JOURNAL_ID))
+        assertEquals(cacheStart.toEpochMilli(), state.projectionStartEpochMillis)
+        assertEquals(cacheEnd.toEpochMilli(), state.projectionEndExclusiveEpochMillis)
+    }
+
+    @Test
+    fun dirtyChangeOutsideRequestedCachedRangeDoesNotForceARebuild() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "bounded-base",
+                importedAt = minute(100),
+                observations = listOf(observation(0, 1.0), observation(10, 1.1), observation(20, 1.2)),
+            ),
+        )
+        service.route(JOURNAL_ID, BASE, BASE.plus(Duration.ofMinutes(21)))
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "outside-change",
+                importedAt = minute(200),
+                observations = listOf(observation(40, 4.0)),
+            ),
+        )
+        val stages = mutableListOf<JournalRoutePreparationStage>()
+
+        val cached = service.route(
+            journalId = JOURNAL_ID,
+            start = BASE,
+            endExclusive = BASE.plus(Duration.ofMinutes(21)),
+            onPreparationStage = stages::add,
+        )
+
+        assertEquals(listOf(1.0, 1.1, 1.2), cached.timeline.points.map(GeoPoint::latitude))
+        assertEquals(emptyList<JournalRoutePreparationStage>(), stages)
+        assertEquals("DIRTY", database.journalDao().routeProjectionState(JOURNAL_ID)?.buildStatus)
+    }
+
+    @Test
+    fun dirtyChangeInsideCachedRangeRebuildsAndPersistsTheWindow() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "inside-base",
+                importedAt = minute(100),
+                observations = listOf(observation(0, 1.0), observation(10, 1.1), observation(20, 1.2)),
+            ),
+        )
+        val rangeEnd = BASE.plus(Duration.ofMinutes(21))
+        service.route(JOURNAL_ID, BASE, rangeEnd)
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "inside-change",
+                importedAt = minute(200),
+                observations = listOf(observation(15, 7.5)),
+            ),
+        )
+        val stages = mutableListOf<JournalRoutePreparationStage>()
+
+        val rebuilt = service.route(
+            journalId = JOURNAL_ID,
+            start = BASE,
+            endExclusive = rangeEnd,
+            onPreparationStage = stages::add,
+        )
+
+        assertEquals(listOf(1.0, 1.1, 7.5, 1.2), rebuilt.timeline.points.map(GeoPoint::latitude))
+        assertEquals(JournalRoutePreparationStage.SAVING_FOR_FASTER_STARTS, stages.last())
+        val state = requireNotNull(database.journalDao().routeProjectionState(JOURNAL_ID))
+        assertEquals("READY", state.buildStatus)
+        assertEquals(BASE.toEpochMilli(), state.projectionStartEpochMillis)
+        assertEquals(rangeEnd.toEpochMilli(), state.projectionEndExclusiveEpochMillis)
+    }
+
+    @Test
+    fun sourceRevisionChangeWhileSavingCancelsTheStaleRouteBuild() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "stale-build-base",
+                importedAt = minute(100),
+                observations = listOf(observation(0, 1.0), observation(10, 1.1)),
+            ),
+        )
+        var failure: Throwable? = null
+        var advancedSource = false
+
+        try {
+            service.route(
+                JOURNAL_ID,
+                BASE,
+                BASE.plus(Duration.ofMinutes(11)),
+                onPreparationStage = { stage ->
+                    if (stage == JournalRoutePreparationStage.SAVING_FOR_FASTER_STARTS && !advancedSource) {
+                        advancedSource = true
+                        repository.import(
+                            JOURNAL_ID,
+                            importInput(
+                                hash = "stale-build-update",
+                                importedAt = minute(200),
+                                observations = listOf(observation(20, 2.0)),
+                            ),
+                        )
+                    }
+                },
+            )
+        } catch (caught: Throwable) {
+            failure = caught
+        }
+
+        assertEquals(StaleJournalRouteBuildException::class.java, failure?.javaClass)
+        val state = requireNotNull(database.journalDao().routeProjectionState(JOURNAL_ID))
+        assertEquals("DIRTY", state.buildStatus)
+        assertEquals(2L, state.sourceRevision)
+        assertEquals(0L, state.builtRevision)
+        assertEquals(null, JournalRouteProjectionStore(database).read(JOURNAL_ID)?.route)
     }
 
     private fun importInput(

@@ -34,7 +34,7 @@ class JournalDatabaseMigrationTest {
         }
 
         val database = Room.databaseBuilder(context, JournalDatabase::class.java, DATABASE_NAME)
-            .addMigrations(JournalDatabase.MIGRATION_1_2)
+            .addMigrations(JournalDatabase.MIGRATION_1_2, JournalDatabase.MIGRATION_2_3)
             .allowMainThreadQueries()
             .build()
         try {
@@ -58,6 +58,40 @@ class JournalDatabaseMigrationTest {
             assertEquals(1L, state.sourceRevision)
             assertEquals("DIRTY", state.buildStatus)
             assertNotNull(database.journalDao().journal("journal"))
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun versionTwoLifetimeProjectionKeepsItsRowsAndReceivesLifetimeBounds() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.openOrCreateDatabase(DATABASE_NAME, Context.MODE_PRIVATE, null).apply {
+            VERSION_ONE_SCHEMA.forEach(::execSQL)
+            VERSION_TWO_PROJECTION_SCHEMA.forEach(::execSQL)
+            execSQL("INSERT INTO journals VALUES ('journal', 'My Journal', 1, 100, 200, 300, 250, 10, 400, 1, 1)")
+            execSQL("INSERT INTO route_projection_states VALUES ('journal', 4, 4, 1, 'READY', NULL, NULL, 500, 1, 2, 2, 2, 0)")
+            execSQL("INSERT INTO route_projection_spans VALUES (1, 'journal', 0, 10, 20, 'DETAILED', NULL, 2)")
+            execSQL("INSERT INTO route_projection_chunks VALUES (1, 0, 1, 2, X'0001')")
+            version = 2
+            close()
+        }
+
+        val database = Room.databaseBuilder(context, JournalDatabase::class.java, DATABASE_NAME)
+            .addMigrations(JournalDatabase.MIGRATION_1_2, JournalDatabase.MIGRATION_2_3)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val migrated = database.openHelper.writableDatabase
+            migrated.query(
+                "SELECT projectionStartEpochMillis, projectionEndExclusiveEpochMillis FROM route_projection_states WHERE journalId = 'journal'",
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(Long.MIN_VALUE, cursor.getLong(0))
+                assertEquals(Long.MAX_VALUE, cursor.getLong(1))
+            }
+            assertEquals(1, migrated.count("route_projection_spans"))
+            assertEquals(1, migrated.count("route_projection_chunks"))
         } finally {
             database.close()
         }
@@ -88,6 +122,14 @@ class JournalDatabaseMigrationTest {
             "CREATE INDEX index_semantic_segments_snapshotId ON semantic_segments (snapshotId)",
             "CREATE UNIQUE INDEX index_semantic_segments_snapshotId_sourceOrdinal ON semantic_segments (snapshotId, sourceOrdinal)",
             "CREATE INDEX index_semantic_segments_startEpochMillis_endEpochMillis ON semantic_segments (startEpochMillis, endEpochMillis)",
+        )
+        val VERSION_TWO_PROJECTION_SCHEMA = listOf(
+            "CREATE TABLE route_projection_states (journalId TEXT NOT NULL PRIMARY KEY, sourceRevision INTEGER NOT NULL, builtRevision INTEGER NOT NULL, algorithmVersion INTEGER NOT NULL, buildStatus TEXT NOT NULL, dirtyStartEpochMillis INTEGER, dirtyEndEpochMillis INTEGER, updatedAtEpochMillis INTEGER, spanCount INTEGER NOT NULL, pointCount INTEGER NOT NULL, detailedInputCount INTEGER NOT NULL, detailedUsableCount INTEGER NOT NULL, semanticUsableCount INTEGER NOT NULL, FOREIGN KEY(journalId) REFERENCES journals(id) ON UPDATE NO ACTION ON DELETE CASCADE)",
+            "CREATE TABLE route_projection_spans (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, journalId TEXT NOT NULL, ordinal INTEGER NOT NULL, startEpochMillis INTEGER NOT NULL, endEpochMillis INTEGER NOT NULL, source TEXT NOT NULL, transitionReason TEXT, pointCount INTEGER NOT NULL, FOREIGN KEY(journalId) REFERENCES journals(id) ON UPDATE NO ACTION ON DELETE CASCADE)",
+            "CREATE UNIQUE INDEX index_route_projection_spans_journalId_ordinal ON route_projection_spans (journalId, ordinal)",
+            "CREATE INDEX index_route_projection_spans_journalId_startEpochMillis_endEpochMillis ON route_projection_spans (journalId, startEpochMillis, endEpochMillis)",
+            "CREATE TABLE route_projection_chunks (spanId INTEGER NOT NULL, chunkOrdinal INTEGER NOT NULL, formatVersion INTEGER NOT NULL, pointCount INTEGER NOT NULL, pointData BLOB NOT NULL, PRIMARY KEY(spanId, chunkOrdinal), FOREIGN KEY(spanId) REFERENCES route_projection_spans(id) ON UPDATE NO ACTION ON DELETE CASCADE)",
+            "CREATE INDEX index_route_projection_chunks_spanId ON route_projection_chunks (spanId)",
         )
     }
 }

@@ -128,6 +128,28 @@ class JournalRouteFusionTest {
         )
     }
 
+    @Test
+    fun semanticPathAfterManyDetailedIslandsKeepsTheSameTopology() {
+        val detailed = (0L until 600L step 60L).mapIndexed { index, minute ->
+            point(minute, 100.0 + index)
+        }
+        val semantic = SemanticRoutePath(
+            "late-semantic",
+            instant(610),
+            instant(620),
+            listOf(point(610, 10.0), point(620, 11.0)),
+        )
+
+        val result = JournalRouteFusion.fuseSemanticPaths(
+            semanticPaths = listOf(semantic),
+            detailedPoints = detailed,
+        )
+
+        assertEquals(RouteSource.SEMANTIC_PATH, result.last().source)
+        assertEquals(listOf(10.0, 11.0), result.last().points.map(GeoPoint::latitude))
+        assertEquals(detailed.size, result.count { it.source == RouteSource.DETAILED })
+    }
+
     private fun point(minutes: Long, latitude: Double): GeoPoint = GeoPoint(
         instant = instant(minutes),
         latitude = latitude,

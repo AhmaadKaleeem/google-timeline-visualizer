@@ -21,6 +21,8 @@ class JournalRouteProjectionStore(
 ) {
     private val dao = database.journalDao()
 
+    suspend fun state(journalId: String): RouteProjectionStateEntity? = dao.routeProjectionState(journalId)
+
     suspend fun read(journalId: String): StoredJournalRouteProjection? {
         val state = dao.routeProjectionState(journalId) ?: return null
         if (state.builtRevision <= 0L) return StoredJournalRouteProjection(state, null)
@@ -78,8 +80,11 @@ class JournalRouteProjectionStore(
         expectedSourceRevision: Long,
         algorithmVersion: Int,
         route: JournalRoute,
+        projectionStartEpochMillis: Long = Long.MIN_VALUE,
+        projectionEndExclusiveEpochMillis: Long = Long.MAX_VALUE,
         updatedAtEpochMillis: Long = System.currentTimeMillis(),
     ): Boolean = database.withTransaction {
+        require(projectionEndExclusiveEpochMillis > projectionStartEpochMillis)
         val current = dao.routeProjectionState(journalId) ?: return@withTransaction false
         if (current.sourceRevision != expectedSourceRevision) return@withTransaction false
 
@@ -115,6 +120,8 @@ class JournalRouteProjectionStore(
                 buildStatus = "READY",
                 dirtyStartEpochMillis = null,
                 dirtyEndEpochMillis = null,
+                projectionStartEpochMillis = projectionStartEpochMillis,
+                projectionEndExclusiveEpochMillis = projectionEndExclusiveEpochMillis,
                 updatedAtEpochMillis = updatedAtEpochMillis,
                 spanCount = route.spans.size,
                 pointCount = route.timeline.points.size,

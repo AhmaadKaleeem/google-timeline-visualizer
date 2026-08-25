@@ -8,6 +8,7 @@ import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Timeline
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CancellationException
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -21,6 +22,11 @@ data class JournalRoute(
     val detailedInputCount: Int,
     val detailedUsableCount: Int,
     val semanticUsableCount: Int,
+)
+
+/** The Journal changed while a derived route was being persisted, so this result is stale. */
+class StaleJournalRouteBuildException : CancellationException(
+    "The Journal changed while its route was being prepared",
 )
 
 enum class JournalRoutePreparationStage {
@@ -45,9 +51,8 @@ class JournalRouteService(
         require(endExclusive > start) { "The route range must not be empty" }
         val usesCanonicalSettings = maximumAccuracyMeters == RawSignalProcessor.DEFAULT_MAXIMUM_ACCURACY_METERS &&
             discontinuity == JournalRouteFusion.DEFAULT_DISCONTINUITY
-        val isLifetimeRange = start.toEpochMilli() == Long.MIN_VALUE && endExclusive.toEpochMilli() == Long.MAX_VALUE
-        if (!usesCanonicalSettings || !isLifetimeRange) {
-            return reconstruct(
+        if (!usesCanonicalSettings) {
+            return reconstructWithContext(
                 journalId,
                 start,
                 endExclusive,
@@ -58,38 +63,67 @@ class JournalRouteService(
         }
 
         repository.ensureRouteProjectionState(journalId)
-        val stored = projectionStore.read(journalId)
-        val state = stored?.state
-        val previous = stored?.route
-        if (
-            state != null && previous != null &&
-            state.algorithmVersion == PROJECTION_ALGORITHM_VERSION &&
+        val startMillis = start.toEpochMilli()
+        val endMillis = endExclusive.toEpochMilli()
+        val state = projectionStore.state(journalId)
+        val cachedRangeContainsRequest = state?.projectionStartEpochMillis?.let { cachedStart ->
+            val cachedEnd = state.projectionEndExclusiveEpochMillis ?: return@let false
+            cachedStart <= startMillis && cachedEnd >= endMillis
+        } == true
+        val cacheMatchesAlgorithm = state?.algorithmVersion == PROJECTION_ALGORITHM_VERSION
+        val cacheIsCurrent = state != null &&
             state.builtRevision == state.sourceRevision && state.buildStatus == "READY"
+        val dirtyDoesNotAffectRequest = state?.buildStatus == "DIRTY" &&
+            state.dirtyStartEpochMillis != null && state.dirtyEndEpochMillis != null &&
+            !overlaps(
+                startMillis,
+                endMillis,
+                state.dirtyStartEpochMillis,
+                incrementSafely(state.dirtyEndEpochMillis),
+            )
+        val mayUseStoredRoute = cachedRangeContainsRequest && cacheMatchesAlgorithm &&
+            (
+                cacheIsCurrent || dirtyDoesNotAffectRequest ||
+                    (state?.buildStatus == "DIRTY" &&
+                        state.dirtyStartEpochMillis != null && state.dirtyEndEpochMillis != null)
+            )
+        // Gate BLOB decoding behind cheap state checks. In particular, migrated lifetime caches
+        // from older algorithms are never decoded for a small selected range.
+        val previous = if (mayUseStoredRoute) projectionStore.read(journalId)?.route else null
+        if (
+            previous != null && cachedRangeContainsRequest && cacheMatchesAlgorithm &&
+            (cacheIsCurrent || dirtyDoesNotAffectRequest)
         ) {
-            return previous
+            return previous.clippedTo(start, endExclusive)
         }
 
         val rebuilt = if (
             state != null && previous != null &&
-            state.algorithmVersion == PROJECTION_ALGORITHM_VERSION &&
+            cachedRangeContainsRequest && cacheMatchesAlgorithm &&
             state.dirtyStartEpochMillis != null && state.dirtyEndEpochMillis != null
         ) {
-            val dirtyEndExclusive = incrementSafely(state.dirtyEndEpochMillis)
+            val cachedStart = requireNotNull(state.projectionStartEpochMillis)
+            val cachedEnd = requireNotNull(state.projectionEndExclusiveEpochMillis)
+            val dirtyStart = maxOf(cachedStart, state.dirtyStartEpochMillis)
+            val dirtyEndExclusive = minOf(cachedEnd, incrementSafely(state.dirtyEndEpochMillis))
             val (refreshStart, refreshEnd) = previous.expandedRefreshWindow(
-                Instant.ofEpochMilli(state.dirtyStartEpochMillis),
+                Instant.ofEpochMilli(dirtyStart),
                 Instant.ofEpochMilli(dirtyEndExclusive),
             )
-            val replacement = reconstruct(
+            val boundedRefreshStart = maxOf(Instant.ofEpochMilli(cachedStart), refreshStart)
+            val boundedRefreshEnd = minOf(Instant.ofEpochMilli(cachedEnd), refreshEnd)
+            val replacement = reconstructWithContext(
                 journalId,
-                refreshStart,
-                refreshEnd,
+                boundedRefreshStart,
+                boundedRefreshEnd,
                 maximumAccuracyMeters,
                 discontinuity,
                 onPreparationStage,
             )
-            previous.replacingWindow(refreshStart, refreshEnd, replacement)
+            previous.replacingWindow(boundedRefreshStart, boundedRefreshEnd, replacement)
+                .clippedTo(Instant.ofEpochMilli(cachedStart), Instant.ofEpochMilli(cachedEnd))
         } else {
-            reconstruct(
+            reconstructWithContext(
                 journalId,
                 start,
                 endExclusive,
@@ -100,14 +134,46 @@ class JournalRouteService(
         }
         if (state != null) {
             onPreparationStage(JournalRoutePreparationStage.SAVING_FOR_FASTER_STARTS)
-            projectionStore.replace(
+            val stored = projectionStore.replace(
                 journalId = journalId,
                 expectedSourceRevision = state.sourceRevision,
                 algorithmVersion = PROJECTION_ALGORITHM_VERSION,
                 route = rebuilt,
+                projectionStartEpochMillis = if (cachedRangeContainsRequest && cacheMatchesAlgorithm) {
+                    requireNotNull(state.projectionStartEpochMillis)
+                } else {
+                    startMillis
+                },
+                projectionEndExclusiveEpochMillis = if (cachedRangeContainsRequest && cacheMatchesAlgorithm) {
+                    requireNotNull(state.projectionEndExclusiveEpochMillis)
+                } else {
+                    endMillis
+                },
             )
+            if (!stored) throw StaleJournalRouteBuildException()
         }
-        return rebuilt
+        return rebuilt.clippedTo(start, endExclusive)
+    }
+
+    private suspend fun reconstructWithContext(
+        journalId: String,
+        start: Instant,
+        endExclusive: Instant,
+        maximumAccuracyMeters: Double?,
+        discontinuity: Duration,
+        onPreparationStage: suspend (JournalRoutePreparationStage) -> Unit,
+    ): JournalRoute {
+        val contextMillis = discontinuity.toMillis()
+        val queryStart = Instant.ofEpochMilli(subtractSafely(start.toEpochMilli(), contextMillis))
+        val queryEnd = Instant.ofEpochMilli(addSafely(endExclusive.toEpochMilli(), contextMillis))
+        return reconstruct(
+            journalId,
+            queryStart,
+            queryEnd,
+            maximumAccuracyMeters,
+            discontinuity,
+            onPreparationStage,
+        ).clippedTo(start, endExclusive)
     }
 
     private suspend fun reconstruct(
@@ -136,10 +202,9 @@ class JournalRouteService(
             maximumAccuracyMeters = maximumAccuracyMeters,
         ).points
         onPreparationStage(JournalRoutePreparationStage.COMBINING_JOURNEY_HISTORY)
+        val boundedSemanticRows = repository.activeSemanticSegments(journalId, startMillis, endMillis)
         val semanticPaths = coverageAwareSemanticPaths(
-            repository.activeSemanticSegments(journalId, startMillis, endMillis),
-            startMillis,
-            endMillis,
+            expandOverlappingSemanticComponents(journalId, boundedSemanticRows),
         )
         val spans = JournalRouteFusion.fuseSemanticPaths(
             semanticPaths = semanticPaths,
@@ -163,16 +228,56 @@ class JournalRouteService(
 
     private fun incrementSafely(value: Long): Long = if (value == Long.MAX_VALUE) value else value + 1
 
+    private fun addSafely(value: Long, amount: Long): Long =
+        if (amount > 0 && value > Long.MAX_VALUE - amount) Long.MAX_VALUE else value + amount
+
+    private fun subtractSafely(value: Long, amount: Long): Long =
+        if (amount > 0 && value < Long.MIN_VALUE + amount) Long.MIN_VALUE else value - amount
+
+    private fun overlaps(firstStart: Long, firstEnd: Long, secondStart: Long, secondEnd: Long): Boolean =
+        firstStart < secondEnd && secondStart < firstEnd
+
+    private suspend fun expandOverlappingSemanticComponents(
+        journalId: String,
+        boundedRows: List<ActiveSemanticSegment>,
+    ): List<ActiveSemanticSegment> {
+        if (boundedRows.isEmpty()) return boundedRows
+        val legacySnapshotIds = boundedRows.asSequence()
+            .filter { it.parserVersion <= LEGACY_FLATTENED_PARSER_VERSION }
+            .map(ActiveSemanticSegment::snapshotId)
+            .toSet()
+        val groupedParts = boundedRows.mapNotNull { row ->
+            val geometry = SemanticGeometryCodec.decodeGeometry(row.geometryJson)
+            geometry.continuityGroup?.let { group -> ComponentKey(row.snapshotId, group) to geometry }
+        }.groupBy({ it.first }, { it.second })
+        val incompleteGroups = groupedParts.mapNotNull { (key, parts) ->
+            val expected = parts.mapNotNull(SemanticGeometryCodec.Geometry::partCount).maxOrNull() ?: 1
+            key.takeIf { parts.mapNotNull(SemanticGeometryCodec.Geometry::partIndex).distinct().size < expected }
+        }.toSet()
+        val snapshotsToExpand = legacySnapshotIds + incompleteGroups.map(ComponentKey::snapshotId)
+        if (snapshotsToExpand.isEmpty()) return boundedRows
+
+        val siblings = repository.activeSemanticSegmentsForSnapshots(journalId, snapshotsToExpand)
+            .filter { row ->
+                if (row.snapshotId in legacySnapshotIds) return@filter true
+                val group = SemanticGeometryCodec.decodeGeometry(row.geometryJson).continuityGroup
+                group != null && ComponentKey(row.snapshotId, group) in incompleteGroups
+            }
+        return (boundedRows + siblings).distinctBy(ActiveSemanticSegment::id).sortedWith(
+            compareByDescending<ActiveSemanticSegment> { it.snapshotCapturedAtEpochMillis }
+                .thenByDescending(ActiveSemanticSegment::snapshotId)
+                .thenBy(ActiveSemanticSegment::sourceOrdinal),
+        )
+    }
+
     private fun coverageAwareSemanticPaths(
         segments: List<ActiveSemanticSegment>,
-        startEpochMillis: Long,
-        endExclusiveEpochMillis: Long,
     ): List<SemanticRoutePath> {
         val coveredByNewerSnapshots = MergedMillisIntervals()
         val selected = mutableListOf<SemanticRoutePath>()
         segments.groupBy { it.snapshotCapturedAtEpochMillis to it.snapshotId }.forEach { (_, snapshotRows) ->
             val reconciled = reconcileSnapshotRecords(
-                snapshotRecords(snapshotRows, startEpochMillis, endExclusiveEpochMillis),
+                snapshotRecords(snapshotRows),
             )
             reconciled.forEach { record ->
                 record.fragmentsOutside(coveredByNewerSnapshots).forEachIndexed { index, fragment ->
@@ -209,7 +314,7 @@ class JournalRouteService(
                     acceptedPaths += candidate.fragmentsOutside(preferredIntervals)
                 } else {
                     acceptedPaths += candidate.withBoundaryAnchors(preferredPoints)
-                    acceptedCoverage.addAll(listOf(candidate.interval))
+                    acceptedCoverage.add(candidate.interval)
                 }
             }
         }
@@ -391,24 +496,18 @@ class JournalRouteService(
 
     private fun snapshotRecords(
         rows: List<ActiveSemanticSegment>,
-        startEpochMillis: Long,
-        endExclusiveEpochMillis: Long,
     ): List<StoredSemanticRecord> {
         if (rows.isEmpty()) return emptyList()
         val ordered = rows.sortedBy(ActiveSemanticSegment::sourceOrdinal)
         if (ordered.first().parserVersion <= LEGACY_FLATTENED_PARSER_VERSION) {
             val points = ordered.flatMap { SemanticGeometryCodec.decode(it.geometryJson) }
-                .filterToRange(startEpochMillis, endExclusiveEpochMillis)
             if (points.isEmpty()) return emptyList()
             return listOf(
                 StoredSemanticRecord(
                     id = "${ordered.first().snapshotId}:legacy",
                     kind = LEGACY_PATH_KIND,
-                    startEpochMillis = maxOf(startEpochMillis, ordered.minOf(ActiveSemanticSegment::startEpochMillis)),
-                    endEpochMillis = minOf(
-                        endExclusiveEpochMillis - 1,
-                        ordered.maxOf(ActiveSemanticSegment::endEpochMillis),
-                    ),
+                    startEpochMillis = ordered.minOf(ActiveSemanticSegment::startEpochMillis),
+                    endEpochMillis = ordered.maxOf(ActiveSemanticSegment::endEpochMillis),
                     points = points,
                 ),
             )
@@ -416,22 +515,20 @@ class JournalRouteService(
 
         val decoded = ordered.mapNotNull { row ->
             val geometry = SemanticGeometryCodec.decodeGeometry(row.geometryJson)
-            val points = geometry.points.filterToRange(startEpochMillis, endExclusiveEpochMillis)
+            val points = geometry.points
             if (points.isEmpty()) null else DecodedRow(row, geometry, points)
         }
         val grouped = decoded.groupBy { decodedRow ->
             decodedRow.geometry.continuityGroup?.let { "group:$it" } ?: "row:${decodedRow.row.id}"
         }
         return grouped.values.flatMap { parts ->
-            coalescedRecord(parts, startEpochMillis, endExclusiveEpochMillis)?.let(::listOf)
-                ?: parts.map { part -> part.toRecord(startEpochMillis, endExclusiveEpochMillis) }
+            coalescedRecord(parts)?.let(::listOf)
+                ?: parts.map { part -> part.toRecord() }
         }
     }
 
     private fun coalescedRecord(
         parts: List<DecodedRow>,
-        startEpochMillis: Long,
-        endExclusiveEpochMillis: Long,
     ): StoredSemanticRecord? {
         val ordered = parts.sortedBy { it.geometry.partIndex }
         val expectedCount = ordered.firstOrNull()?.geometry?.partCount ?: return null
@@ -445,20 +542,17 @@ class JournalRouteService(
         return StoredSemanticRecord(
             id = "${ordered.first().row.snapshotId}:${ordered.first().geometry.continuityGroup}",
             kind = ordered.first().row.kind,
-            startEpochMillis = maxOf(startEpochMillis, ordered.minOf { it.row.startEpochMillis }),
-            endEpochMillis = minOf(endExclusiveEpochMillis - 1, ordered.maxOf { it.row.endEpochMillis }),
+            startEpochMillis = ordered.minOf { it.row.startEpochMillis },
+            endEpochMillis = ordered.maxOf { it.row.endEpochMillis },
             points = normalize(ordered.flatMap(DecodedRow::points)),
         )
     }
 
-    private fun DecodedRow.toRecord(
-        startEpochMillis: Long,
-        endExclusiveEpochMillis: Long,
-    ) = StoredSemanticRecord(
+    private fun DecodedRow.toRecord() = StoredSemanticRecord(
         id = "${row.snapshotId}:row:${row.id}",
         kind = row.kind,
-        startEpochMillis = maxOf(startEpochMillis, row.startEpochMillis),
-        endEpochMillis = minOf(endExclusiveEpochMillis - 1, row.endEpochMillis),
+        startEpochMillis = row.startEpochMillis,
+        endEpochMillis = row.endEpochMillis,
         points = points,
     )
 
@@ -468,7 +562,7 @@ class JournalRouteService(
         if (!excluded.overlaps(interval)) return listOf(this)
         val fragments = mutableListOf<MutableList<GeoPoint>>()
         var current: MutableList<GeoPoint>? = null
-        var exclusionIndex = 0
+        var exclusionIndex = excluded.firstEndingAtOrAfter(points.first().instant.toEpochMilli())
         points.forEach { point ->
             val instant = point.instant.toEpochMilli()
             val active = current
@@ -520,9 +614,6 @@ class JournalRouteService(
         points = points,
     )
 
-    private fun List<GeoPoint>.filterToRange(start: Long, endExclusive: Long): List<GeoPoint> =
-        normalize(filter { it.instant.toEpochMilli() in start until endExclusive })
-
     private fun normalize(points: List<GeoPoint>): List<GeoPoint> = points
         .sortedBy(GeoPoint::instant)
         .distinctBy(::pointKey)
@@ -537,6 +628,11 @@ class JournalRouteService(
         val row: ActiveSemanticSegment,
         val geometry: SemanticGeometryCodec.Geometry,
         val points: List<GeoPoint>,
+    )
+
+    private data class ComponentKey(
+        val snapshotId: String,
+        val continuityGroup: String,
     )
 
     private data class StoredSemanticRecord(
@@ -572,7 +668,7 @@ class JournalRouteService(
 
     /** Sorted, non-overlapping intervals used for linear point exclusion sweeps. */
     private class MergedMillisIntervals(intervals: List<MillisInterval> = emptyList()) {
-        private var values: List<MillisInterval> = merge(intervals)
+        private val values = ArrayList(merge(intervals))
 
         val size: Int get() = values.size
 
@@ -581,18 +677,56 @@ class JournalRouteService(
         fun getOrNull(index: Int): MillisInterval? = values.getOrNull(index)
 
         fun overlaps(interval: MillisInterval): Boolean {
+            val low = firstEndingAtOrAfter(interval.start)
+            return low < values.size && values[low].start <= interval.endInclusive
+        }
+
+        fun firstEndingAtOrAfter(epochMillis: Long): Int {
             var low = 0
             var high = values.size
             while (low < high) {
                 val middle = (low + high) ushr 1
-                if (values[middle].endInclusive < interval.start) low = middle + 1 else high = middle
+                if (values[middle].endInclusive < epochMillis) low = middle + 1 else high = middle
             }
-            return low < values.size && values[low].start <= interval.endInclusive
+            return low
+        }
+
+        /** Adds one interval without sorting and merging the complete existing coverage again. */
+        fun add(interval: MillisInterval) {
+            if (values.isEmpty()) {
+                values.add(interval)
+                return
+            }
+
+            val firstOverlap = firstEndingAtOrAfter(interval.start)
+            if (firstOverlap == values.size) {
+                values.add(interval)
+                return
+            }
+            if (interval.endInclusive < values[firstOverlap].start) {
+                values.add(firstOverlap, interval)
+                return
+            }
+
+            var mergedStart = minOf(interval.start, values[firstOverlap].start)
+            var mergedEnd = maxOf(interval.endInclusive, values[firstOverlap].endInclusive)
+            var afterOverlap = firstOverlap + 1
+            while (afterOverlap < values.size && values[afterOverlap].start <= mergedEnd) {
+                mergedStart = minOf(mergedStart, values[afterOverlap].start)
+                mergedEnd = maxOf(mergedEnd, values[afterOverlap].endInclusive)
+                afterOverlap += 1
+            }
+            values[firstOverlap] = MillisInterval(mergedStart, mergedEnd)
+            if (afterOverlap > firstOverlap + 1) {
+                values.subList(firstOverlap + 1, afterOverlap).clear()
+            }
         }
 
         fun addAll(intervals: List<MillisInterval>) {
             if (intervals.isEmpty()) return
-            values = mergeSorted(values, merge(intervals))
+            val combined = mergeSorted(values, merge(intervals))
+            values.clear()
+            values.addAll(combined)
         }
 
         private fun merge(intervals: List<MillisInterval>): List<MillisInterval> {
@@ -643,7 +777,7 @@ class JournalRouteService(
     }
 
     private companion object {
-        const val PROJECTION_ALGORITHM_VERSION = 2
+        const val PROJECTION_ALGORITHM_VERSION = 3
         const val LEGACY_FLATTENED_PARSER_VERSION = 1
         const val LEGACY_PATH_KIND = "TIMELINE_PATH"
         const val STRUCTURED_PATH_KIND = "PATH"

@@ -15,6 +15,7 @@ import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -169,13 +170,17 @@ class JournalOnboardingUiTest {
         val activity = requireNotNull(controller).get()
 
         assertEquals(View.GONE, activity.findViewById<View>(R.id.journalOnboardingScreen).visibility)
-        waitUntil { activity.currentJourneyPoints().size >= 2 }
+        waitUntil { activity.journalMetadataReady() }
         assertNull(activity.intent.data)
-        val imported = activity.currentJourneyPoints()
+        assertFalse(activity.journalRouteReady())
 
         controller = requireNotNull(controller).recreate()
         val recreated = requireNotNull(controller).get()
-        waitUntil { recreated.currentJourneyPoints() == imported }
+        waitUntil { recreated.journalMetadataReady() }
+        assertFalse(recreated.journalRouteReady())
+        recreated.findViewById<View>(R.id.navigationCreate).performClick()
+        recreated.findViewById<View>(R.id.customRecapChoice).performClick()
+        waitUntil { recreated.currentJourneyPoints().size >= 2 }
         assertEquals(View.GONE, recreated.findViewById<View>(R.id.journalOnboardingScreen).visibility)
     }
 

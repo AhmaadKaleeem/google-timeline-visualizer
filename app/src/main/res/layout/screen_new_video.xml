@@ -79,27 +79,15 @@
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/createTypeStepGroup"
+            android:id="@+id/journalRoutePreparingGroup"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/automaticJournalSourceText"
-                style="@style/JournalAutomaticSourceMessage"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-
-            <LinearLayout
-                android:id="@+id/journalRoutePreparingGroup"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:orientation="vertical"
-                android:paddingVertical="6dp"
-                android:visibility="gone"
-                android:accessibilityLiveRegion="polite">
+            android:layout_marginBottom="10dp"
+            android:orientation="vertical"
+            android:paddingVertical="6dp"
+            android:visibility="gone"
+            android:accessibilityLiveRegion="polite">
 
                 <LinearLayout
                     android:id="@+id/journalRouteCompactProgressGroup"
@@ -139,7 +127,20 @@
                     android:importantForAccessibility="no"
                     android:indeterminate="true"
                     android:visibility="gone" />
-            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/createTypeStepGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/automaticJournalSourceText"
+                style="@style/JournalAutomaticSourceMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
 
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/tripVideoChoice"

@@ -4,6 +4,41 @@ import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Timeline
 import java.time.Instant
 
+/** Selects one logical cache range without inventing points at its boundaries. */
+fun JournalRoute.clippedTo(start: Instant, endExclusive: Instant): JournalRoute {
+    require(endExclusive > start) { "The clipped range must not be empty" }
+    val endInclusive = Instant.ofEpochMilli(
+        if (endExclusive.toEpochMilli() == Long.MIN_VALUE) Long.MIN_VALUE else endExclusive.toEpochMilli() - 1,
+    )
+    val clippedSpans = spans.mapNotNull { span ->
+        if (span.end < start || span.start >= endExclusive) return@mapNotNull null
+        if (span.source == RouteSource.GAP) {
+            val clippedStart = maxOf(span.start, start)
+            val clippedEnd = minOf(span.end, endInclusive)
+            return@mapNotNull if (clippedEnd >= clippedStart) {
+                span.copy(start = clippedStart, end = clippedEnd)
+            } else {
+                null
+            }
+        }
+        val points = span.points.filter { it.instant >= start && it.instant < endExclusive }
+        if (points.isEmpty()) return@mapNotNull null
+        if (span.source == RouteSource.INFERRED_TRANSFER && points.size < 2) return@mapNotNull null
+        span.copy(
+            start = maxOf(span.start, start),
+            end = minOf(span.end, endInclusive),
+            points = points,
+        )
+    }
+    val flattened = clippedSpans.asSequence()
+        .filter { it.source != RouteSource.GAP }
+        .flatMap { it.points.asSequence() }
+        .distinctBy(::routePointKey)
+        .sortedBy(GeoPoint::instant)
+        .toList()
+    return copy(timeline = Timeline(flattened), spans = clippedSpans)
+}
+
 /** Replaces one prepared time window without reconstructing the lifetime Journal route. */
 fun JournalRoute.replacingWindow(
     start: Instant,
