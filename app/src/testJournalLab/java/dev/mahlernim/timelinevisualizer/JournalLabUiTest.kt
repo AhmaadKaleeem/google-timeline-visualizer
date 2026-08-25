@@ -257,6 +257,7 @@ class JournalLabUiTest {
 
         val activity = launchActivity()
         waitUntil(activity::journalMetadataReady)
+        activity.findViewById<View>(R.id.navigationCreate).performClick()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.createTypeStepGroup).visibility)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.journalRoutePreparingGroup).visibility)
