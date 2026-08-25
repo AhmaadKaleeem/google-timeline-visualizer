@@ -76,7 +76,7 @@ data class JournalStatusSnapshot(
 )
 
 class JournalRepository(
-    private val database: JournalDatabase,
+    internal val database: JournalDatabase,
     private val idFactory: () -> String = { UUID.randomUUID().toString() },
 ) {
     private val dao = database.journalDao()
@@ -119,6 +119,23 @@ class JournalRepository(
 
     suspend fun setDetailedUsableThrough(journalId: String, usableThroughEpochMillis: Long?) =
         dao.setDetailedUsableThrough(journalId, usableThroughEpochMillis)
+
+    /** Lazily seeds projection metadata for Journals created before the projection schema existed. */
+    suspend fun ensureRouteProjectionState(journalId: String): RouteProjectionStateEntity =
+        database.withTransaction {
+            dao.routeProjectionState(journalId)?.let { return@withTransaction it }
+            requireNotNull(dao.journal(journalId)) { "Journal does not exist" }
+            val hasCommittedSource = dao.committedImportCount(journalId) > 0
+            val initial = RouteProjectionStateEntity(
+                journalId = journalId,
+                sourceRevision = if (hasCommittedSource) 1 else 0,
+                builtRevision = 0,
+                algorithmVersion = 0,
+                buildStatus = if (hasCommittedSource) "DIRTY" else "EMPTY",
+            )
+            dao.insertRouteProjectionState(initial)
+            requireNotNull(dao.routeProjectionState(journalId))
+        }
 
     suspend fun committedImport(journalId: String, sourceHash: String): ImportBatchEntity? {
         require(sourceHash.isNotBlank()) { "sourceHash must not be blank" }
@@ -394,22 +411,37 @@ class JournalRepository(
                     semanticEndEpochMillis = maxOfNullable(journal.semanticEndEpochMillis, semanticEnd),
                 ),
             )
+            val changedStartEpochMillis = minOfNullable(
+                minOfNullable(insertedStart, improvedAccuracyStart),
+                semanticChangeBounds?.first,
+            )
+            val changedEndEpochMillis = maxOfNullable(
+                maxOfNullable(insertedEnd, improvedAccuracyEnd),
+                semanticChangeBounds?.second,
+            )
+            val needsRouteRefresh = insertedCount > 0 || improvedAccuracyStart != null || semanticChangeBounds != null
+            if (needsRouteRefresh) {
+                dao.insertRouteProjectionState(
+                    RouteProjectionStateEntity(
+                        journalId = journalId,
+                        sourceRevision = 0,
+                        builtRevision = 0,
+                        algorithmVersion = 0,
+                        buildStatus = "DIRTY",
+                    ),
+                )
+                dao.markRouteProjectionDirty(journalId, changedStartEpochMillis, changedEndEpochMillis)
+            }
             JournalImportResult.Committed(
                 batchId = batchId,
                 insertedObservationCount = insertedCount,
                 duplicateObservationCount = duplicateCount,
                 semanticSegmentCount = if (shouldStoreSemanticSnapshot) input.semanticSegments.size else 0,
                 changeKind = changeKind,
-                changedStartEpochMillis = minOfNullable(
-                    minOfNullable(insertedStart, improvedAccuracyStart),
-                    semanticChangeBounds?.first,
-                ),
-                changedEndEpochMillis = maxOfNullable(
-                    maxOfNullable(insertedEnd, improvedAccuracyEnd),
-                    semanticChangeBounds?.second,
-                ),
+                changedStartEpochMillis = changedStartEpochMillis,
+                changedEndEpochMillis = changedEndEpochMillis,
                 activeSemanticChanged = semanticChangeBounds != null,
-                needsRouteRefresh = insertedCount > 0 || improvedAccuracyStart != null || semanticChangeBounds != null,
+                needsRouteRefresh = needsRouteRefresh,
             )
         }
 

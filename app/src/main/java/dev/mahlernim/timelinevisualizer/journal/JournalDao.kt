@@ -93,6 +93,9 @@ interface JournalDao {
     @Query("SELECT MAX(importedAtEpochMillis) FROM import_batches WHERE journalId = :journalId AND status = 'COMMITTED'")
     suspend fun latestCommittedImportAt(journalId: String): Long?
 
+    @Query("SELECT COUNT(*) FROM import_batches WHERE journalId = :journalId AND status = 'COMMITTED'")
+    suspend fun committedImportCount(journalId: String): Int
+
     @Query("UPDATE journals SET reminderEligible = :eligible WHERE id = :journalId")
     suspend fun setReminderEligible(journalId: String, eligible: Boolean)
 
@@ -218,4 +221,52 @@ interface JournalDao {
         journalId: String,
         observationKeys: List<String>,
     ): Int
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertRouteProjectionState(state: RouteProjectionStateEntity): Long
+
+    @Query("SELECT * FROM route_projection_states WHERE journalId = :journalId")
+    suspend fun routeProjectionState(journalId: String): RouteProjectionStateEntity?
+
+    @Update
+    suspend fun updateRouteProjectionState(state: RouteProjectionStateEntity)
+
+    @Query(
+        """
+        UPDATE route_projection_states
+        SET sourceRevision = sourceRevision + 1,
+            buildStatus = 'DIRTY',
+            dirtyStartEpochMillis = CASE
+                WHEN dirtyStartEpochMillis IS NULL THEN :changedStartEpochMillis
+                WHEN :changedStartEpochMillis IS NULL THEN NULL
+                ELSE MIN(dirtyStartEpochMillis, :changedStartEpochMillis)
+            END,
+            dirtyEndEpochMillis = CASE
+                WHEN dirtyEndEpochMillis IS NULL THEN :changedEndEpochMillis
+                WHEN :changedEndEpochMillis IS NULL THEN NULL
+                ELSE MAX(dirtyEndEpochMillis, :changedEndEpochMillis)
+            END
+        WHERE journalId = :journalId
+        """,
+    )
+    suspend fun markRouteProjectionDirty(
+        journalId: String,
+        changedStartEpochMillis: Long?,
+        changedEndEpochMillis: Long?,
+    )
+
+    @Query("SELECT * FROM route_projection_spans WHERE journalId = :journalId ORDER BY ordinal ASC")
+    suspend fun routeProjectionSpans(journalId: String): List<RouteProjectionSpanEntity>
+
+    @Query("SELECT * FROM route_projection_chunks WHERE spanId IN (:spanIds) ORDER BY spanId ASC, chunkOrdinal ASC")
+    suspend fun routeProjectionChunks(spanIds: List<Long>): List<RouteProjectionChunkEntity>
+
+    @Insert
+    suspend fun insertRouteProjectionSpan(span: RouteProjectionSpanEntity): Long
+
+    @Insert
+    suspend fun insertRouteProjectionChunks(chunks: List<RouteProjectionChunkEntity>)
+
+    @Query("DELETE FROM route_projection_spans WHERE journalId = :journalId")
+    suspend fun deleteRouteProjectionSpans(journalId: String)
 }

@@ -22,6 +22,7 @@ data class JournalRoute(
 /** Reconstructs the active Journal projection and applies detailed-first route fusion. */
 class JournalRouteService(
     private val repository: JournalRepository,
+    private val projectionStore: JournalRouteProjectionStore = JournalRouteProjectionStore(repository.database),
 ) {
     suspend fun route(
         journalId: String,
@@ -31,6 +32,64 @@ class JournalRouteService(
         discontinuity: Duration = JournalRouteFusion.DEFAULT_DISCONTINUITY,
     ): JournalRoute {
         require(endExclusive > start) { "The route range must not be empty" }
+        val usesCanonicalSettings = maximumAccuracyMeters == RawSignalProcessor.DEFAULT_MAXIMUM_ACCURACY_METERS &&
+            discontinuity == JournalRouteFusion.DEFAULT_DISCONTINUITY
+        val isLifetimeRange = start.toEpochMilli() == Long.MIN_VALUE && endExclusive.toEpochMilli() == Long.MAX_VALUE
+        if (!usesCanonicalSettings || !isLifetimeRange) {
+            return reconstruct(journalId, start, endExclusive, maximumAccuracyMeters, discontinuity)
+        }
+
+        repository.ensureRouteProjectionState(journalId)
+        val stored = projectionStore.read(journalId)
+        val state = stored?.state
+        val previous = stored?.route
+        if (
+            state != null && previous != null &&
+            state.algorithmVersion == PROJECTION_ALGORITHM_VERSION &&
+            state.builtRevision == state.sourceRevision && state.buildStatus == "READY"
+        ) {
+            return previous
+        }
+
+        val rebuilt = if (
+            state != null && previous != null &&
+            state.algorithmVersion == PROJECTION_ALGORITHM_VERSION &&
+            state.dirtyStartEpochMillis != null && state.dirtyEndEpochMillis != null
+        ) {
+            val dirtyEndExclusive = incrementSafely(state.dirtyEndEpochMillis)
+            val (refreshStart, refreshEnd) = previous.expandedRefreshWindow(
+                Instant.ofEpochMilli(state.dirtyStartEpochMillis),
+                Instant.ofEpochMilli(dirtyEndExclusive),
+            )
+            val replacement = reconstruct(
+                journalId,
+                refreshStart,
+                refreshEnd,
+                maximumAccuracyMeters,
+                discontinuity,
+            )
+            previous.replacingWindow(refreshStart, refreshEnd, replacement)
+        } else {
+            reconstruct(journalId, start, endExclusive, maximumAccuracyMeters, discontinuity)
+        }
+        if (state != null) {
+            projectionStore.replace(
+                journalId = journalId,
+                expectedSourceRevision = state.sourceRevision,
+                algorithmVersion = PROJECTION_ALGORITHM_VERSION,
+                route = rebuilt,
+            )
+        }
+        return rebuilt
+    }
+
+    private suspend fun reconstruct(
+        journalId: String,
+        start: Instant,
+        endExclusive: Instant,
+        maximumAccuracyMeters: Double?,
+        discontinuity: Duration,
+    ): JournalRoute {
         val startMillis = start.toEpochMilli()
         val endMillis = endExclusive.toEpochMilli()
         val detailedRows = repository.activeDetailedObservations(journalId, startMillis, endMillis)
@@ -71,6 +130,8 @@ class JournalRouteService(
             semanticUsableCount = semanticPaths.sumOf { it.points.size },
         )
     }
+
+    private fun incrementSafely(value: Long): Long = if (value == Long.MAX_VALUE) value else value + 1
 
     private fun coverageAwareSemanticPaths(
         segments: List<ActiveSemanticSegment>,
@@ -343,6 +404,7 @@ class JournalRouteService(
     }
 
     private companion object {
+        const val PROJECTION_ALGORITHM_VERSION = 1
         const val LEGACY_FLATTENED_PARSER_VERSION = 1
         const val LEGACY_PATH_KIND = "TIMELINE_PATH"
         const val STRUCTURED_PATH_KIND = "PATH"

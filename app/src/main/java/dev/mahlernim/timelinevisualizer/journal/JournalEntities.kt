@@ -155,3 +155,77 @@ data class SemanticSegmentEntity(
     val placeId: String? = null,
     val geometryJson: String? = null,
 )
+
+@Entity(
+    tableName = "route_projection_states",
+    foreignKeys = [
+        ForeignKey(
+            entity = JournalEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["journalId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class RouteProjectionStateEntity(
+    @androidx.room.PrimaryKey val journalId: String,
+    val sourceRevision: Long,
+    val builtRevision: Long,
+    val algorithmVersion: Int,
+    val buildStatus: String,
+    val dirtyStartEpochMillis: Long? = null,
+    val dirtyEndEpochMillis: Long? = null,
+    val updatedAtEpochMillis: Long? = null,
+    val spanCount: Int = 0,
+    val pointCount: Int = 0,
+    val detailedInputCount: Int = 0,
+    val detailedUsableCount: Int = 0,
+    val semanticUsableCount: Int = 0,
+)
+
+@Entity(
+    tableName = "route_projection_spans",
+    foreignKeys = [
+        ForeignKey(
+            entity = JournalEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["journalId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [
+        Index(value = ["journalId", "ordinal"], unique = true),
+        Index(value = ["journalId", "startEpochMillis", "endEpochMillis"]),
+    ],
+)
+data class RouteProjectionSpanEntity(
+    @androidx.room.PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val journalId: String,
+    val ordinal: Int,
+    val startEpochMillis: Long,
+    val endEpochMillis: Long,
+    val source: String,
+    val transitionReason: String? = null,
+    val pointCount: Int,
+)
+
+@Entity(
+    tableName = "route_projection_chunks",
+    primaryKeys = ["spanId", "chunkOrdinal"],
+    foreignKeys = [
+        ForeignKey(
+            entity = RouteProjectionSpanEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["spanId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("spanId")],
+)
+data class RouteProjectionChunkEntity(
+    val spanId: Long,
+    val chunkOrdinal: Int,
+    val formatVersion: Int,
+    val pointCount: Int,
+    val pointData: ByteArray,
+)
