@@ -1,7 +1,9 @@
 package dev.mahlernim.timelinevisualizer.render
 
 import dev.mahlernim.timelinevisualizer.model.Journey
-import kotlin.math.pow
+import dev.mahlernim.timelinevisualizer.model.WebMercator
+import kotlin.math.abs
+import kotlin.math.hypot
 
 /** Maps elapsed video progress to original route distance without changing route geometry. */
 class JourneyTiming private constructor(
@@ -32,63 +34,71 @@ class JourneyTiming private constructor(
     companion object {
         fun create(
             journey: Journey,
+            @Suppress("UNUSED_PARAMETER")
             compression: LongTripCompression,
+            @Suppress("UNUSED_PARAMETER")
             tripDetection: TripDetection = TripDetection.BALANCED,
         ): JourneyTiming {
-            if (compression == LongTripCompression.OFF || journey.points.size < 2) {
-                return JourneyTiming(doubleArrayOf(), doubleArrayOf(), doubleArrayOf(), journey.totalDistanceKm)
-            }
-            val distances = DoubleArray(journey.cumulativeDistanceKm.size)
-            val effective = DoubleArray(journey.cumulativeDistanceKm.size)
-            var count = 1
-            var effectiveTotal = 0.0
-            val transferCutoffKm = (
-                journey.transferThresholdKm * tripDetection.thresholdMultiplier
-                ).coerceAtLeast(1.0)
-            var index = 1
-            while (index <= journey.cumulativeDistanceKm.lastIndex) {
-                val segmentKm = segmentDistance(journey, index)
-                if (segmentKm <= 0.0) {
-                    index += 1
-                    continue
-                }
-                if (segmentKm < transferCutoffKm) {
-                    effectiveTotal += segmentKm
-                    distances[count] = journey.cumulativeDistanceKm[index]
-                    effective[count] = effectiveTotal
-                    count += 1
-                    index += 1
-                    continue
-                }
-
-                val transferStart = index
-                var transferKm = 0.0
-                while (
-                    index <= journey.cumulativeDistanceKm.lastIndex &&
-                    segmentDistance(journey, index) >= transferCutoffKm
-                ) {
-                    transferKm += segmentDistance(journey, index)
-                    index += 1
-                }
-                val transferWeight = transferKm.pow(compression.exponent)
-                for (transferIndex in transferStart until index) {
-                    val transferSegmentKm = segmentDistance(journey, transferIndex)
-                    effectiveTotal += transferWeight * transferSegmentKm / transferKm
-                    distances[count] = journey.cumulativeDistanceKm[transferIndex]
-                    effective[count] = effectiveTotal
-                    count += 1
-                }
-            }
-            if (effectiveTotal <= 0.0 || count < 2) {
-                return JourneyTiming(doubleArrayOf(), doubleArrayOf(), doubleArrayOf(), journey.totalDistanceKm)
-            }
-            val x = DoubleArray(count) { effective[it] / effectiveTotal }
-            val y = distances.copyOf(count)
-            return JourneyTiming(x, y, monotoneSlopes(x, y), null)
+            return linear(journey)
         }
 
-        private fun segmentDistance(journey: Journey, toIndex: Int): Double =
-            journey.cumulativeDistanceKm[toIndex] - journey.cumulativeDistanceKm[toIndex - 1]
+        internal fun createViewportRelative(
+            journey: Journey,
+            viewports: List<Viewport>,
+            aspect: Double,
+        ): JourneyTiming {
+            if (journey.points.size < 2 || journey.totalDistanceKm <= 0.0 || viewports.size < 2) {
+                return linear(journey)
+            }
+            val sampleCount = viewports.size
+            val distances = DoubleArray(sampleCount) { index ->
+                journey.totalDistanceKm * index / (sampleCount - 1).toDouble()
+            }
+            val work = DoubleArray(sampleCount - 1)
+            var previous = WebMercator.project(journey.positionAtDistance(distances[0]).point)
+            for (index in 1 until sampleCount) {
+                val current = WebMercator.project(journey.positionAtDistance(distances[index]).point)
+                val viewport = viewports[index - 1]
+                val nextViewport = viewports[index]
+                val spanY = geometricMean(
+                    viewport.maxY - viewport.minY,
+                    nextViewport.maxY - nextViewport.minY,
+                ).coerceAtLeast(MIN_VIEWPORT_SPAN)
+                val spanX = (spanY * aspect).coerceAtLeast(MIN_VIEWPORT_SPAN)
+                val deltaX = wrappedDelta(current.x - previous.x)
+                val deltaY = current.y - previous.y
+                work[index - 1] = hypot(deltaX / spanX, deltaY / spanY)
+                previous = current
+            }
+
+            val positive = work.filter { it.isFinite() && it > MIN_VISUAL_WORK }.sorted()
+            if (positive.isEmpty()) return linear(journey)
+            val median = positive[positive.size / 2]
+            val floor = median * MIN_WORK_RATIO
+            val ceiling = median * MAX_WORK_RATIO
+            var total = 0.0
+            val cumulative = DoubleArray(sampleCount)
+            work.forEachIndexed { index, raw ->
+                val guarded = if (raw.isFinite()) raw.coerceIn(floor, ceiling) else median
+                total += guarded
+                cumulative[index + 1] = total
+            }
+            if (!total.isFinite() || total <= MIN_VISUAL_WORK) return linear(journey)
+            val elapsed = DoubleArray(sampleCount) { cumulative[it] / total }
+            return JourneyTiming(elapsed, distances, monotoneSlopes(elapsed, distances), null)
+        }
+
+        private fun linear(journey: Journey) =
+            JourneyTiming(doubleArrayOf(), doubleArrayOf(), doubleArrayOf(), journey.totalDistanceKm)
+
+        private fun geometricMean(first: Double, second: Double): Double =
+            kotlin.math.sqrt(abs(first * second))
+
+        private fun wrappedDelta(delta: Double): Double = when {
+            delta > 0.5 -> delta - 1.0
+            delta < -0.5 -> delta + 1.0
+            else -> delta
+        }
 
         private fun monotoneSlopes(x: DoubleArray, y: DoubleArray): DoubleArray {
             val segmentCount = x.size - 1
@@ -128,5 +138,10 @@ class JourneyTiming private constructor(
                 else -> slope
             }
         }
+
+        private const val MIN_VIEWPORT_SPAN = 1e-9
+        private const val MIN_VISUAL_WORK = 1e-12
+        private const val MIN_WORK_RATIO = 0.05
+        private const val MAX_WORK_RATIO = 20.0
     }
 }

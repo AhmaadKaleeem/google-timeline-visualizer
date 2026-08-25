@@ -340,7 +340,7 @@ class TimelinePainterTest {
         frames.forEachIndexed { index, frame ->
             val progress = index.toDouble() / frames.lastIndex
             val marker = WebMercator.project(
-                journey.positionAtDistance(journey.totalDistanceKm * progress).point,
+                journey.positionAtDistance(track.timing.distanceAt(progress.toFloat())).point,
             )
             val markerX = unwrapNear(marker.x, frame.centerX)
             val xOffset = kotlin.math.abs(markerX - frame.centerX)
@@ -353,7 +353,7 @@ class TimelinePainterTest {
             val progress = sample.toFloat() / (frames.lastIndex * 10)
             val viewport = track.viewportAt(progress)
             val marker = WebMercator.project(
-                journey.positionAtDistance(journey.totalDistanceKm * progress).point,
+                journey.positionAtDistance(track.timing.distanceAt(progress)).point,
             )
             val centerX = (viewport.minX + viewport.maxX) / 2.0
             val centerY = (viewport.minY + viewport.maxY) / 2.0
@@ -529,6 +529,65 @@ class TimelinePainterTest {
         assertTrue(
             "Camera evaluated ${painter.cameraRoutePointEvaluations} route points",
             painter.cameraRoutePointEvaluations < 100_000,
+        )
+    }
+
+    @Test
+    fun backgroundCameraPreparationInstallsTheSameViewportTiming() {
+        val journey = roundTripJourney()
+        val settings = CameraSettings(cameraMovement = CameraMovement.DYNAMIC)
+        val backgroundPainter = TimelinePainter()
+        val preparation = backgroundPainter.buildCameraTrackForBackground(journey, SIZE, SIZE, settings)
+        val installedPainter = TimelinePainter()
+        installedPainter.installCameraPreparation(journey, SIZE, SIZE, settings, preparation)
+
+        listOf(0f, 0.1f, 0.35f, 0.7f, 1f).forEach { progress ->
+            assertEquals(
+                backgroundPainter.playbackDistanceForTest(journey, progress, SIZE, SIZE, settings),
+                installedPainter.playbackDistanceForTest(journey, progress, SIZE, SIZE, settings),
+                1e-7,
+            )
+        }
+    }
+
+    @Test
+    fun automaticRendererTimingIgnoresLegacyCompressionSetting() {
+        val journey = roundTripJourney()
+        val natural = CameraSettings(
+            cameraMovement = CameraMovement.FIXED,
+            longTripCompression = LongTripCompression.OFF,
+        )
+        val strongest = natural.copy(longTripCompression = LongTripCompression.STRONGER)
+        val naturalPainter = TimelinePainter()
+        val strongestPainter = TimelinePainter()
+
+        (0..20).forEach { step ->
+            val progress = step / 20f
+            assertEquals(
+                naturalPainter.playbackDistanceForTest(journey, progress, SIZE, SIZE, natural),
+                strongestPainter.playbackDistanceForTest(journey, progress, SIZE, SIZE, strongest),
+                1e-7,
+            )
+        }
+    }
+
+    @Test
+    fun rendererPlaybackIsMonotonicAndReachesBothEndpoints() {
+        val journey = roundTripJourney()
+        val painter = TimelinePainter()
+        val settings = CameraSettings(cameraMovement = CameraMovement.CLOSE_UP)
+        var previous = -1.0
+
+        (0..1_000).forEach { step ->
+            val distance = painter.playbackDistanceForTest(journey, step / 1_000f, SIZE, SIZE, settings)
+            assertTrue(distance + 1e-8 >= previous)
+            previous = distance
+        }
+        assertEquals(0.0, painter.playbackDistanceForTest(journey, 0f, SIZE, SIZE, settings), 0.0)
+        assertEquals(
+            journey.totalDistanceKm,
+            painter.playbackDistanceForTest(journey, 1f, SIZE, SIZE, settings),
+            1e-6,
         )
     }
 

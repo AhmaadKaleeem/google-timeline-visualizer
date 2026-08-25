@@ -194,9 +194,11 @@ class TimelinePainter {
         cameraSettings: CameraSettings,
         useRangeIndex: Boolean = true,
         episodeLegsOverride: List<JourneyLeg>? = null,
+        distanceOverrideKm: Double? = null,
     ): Viewport {
         val prepared = prepare(journey)
-        val current = playbackPosition(journey, progress, cameraSettings)
+        val current = distanceOverrideKm?.let(journey::positionAtDistance)
+            ?: playbackPosition(journey, progress, cameraSettings)
         val movement = cameraSettings.cameraMovement
         val proportionalContextKm = (journey.totalDistanceKm * movement.contextFraction)
             .coerceIn(movement.minimumContextKm, movement.maximumContextKm)
@@ -325,6 +327,17 @@ class TimelinePainter {
         useRangeIndex: Boolean,
     ): Viewport = rawViewport(journey, progress, width, height, cameraSettings, useRangeIndex)
 
+    internal fun playbackDistanceForTest(
+        journey: Journey,
+        progress: Float,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings = CameraSettings.DEFAULT,
+    ): Double {
+        cameraTrack(journey, width, height, cameraSettings)
+        return checkNotNull(cachedTiming).distanceAt(progress)
+    }
+
     private fun playbackPosition(
         journey: Journey,
         progress: Float,
@@ -359,6 +372,7 @@ class TimelinePainter {
             cachedCameraHeight == height &&
             cachedCameraSettings == cameraSettings
         ) {
+            installTiming(journey, cameraSettings, cachedCameraTrack!!.timing)
             return cachedCameraTrack!!
         }
         val track = buildCameraTrack(journey, width, height, cameraSettings)
@@ -375,11 +389,15 @@ class TimelinePainter {
         width: Int,
         height: Int,
         cameraSettings: CameraSettings,
-    ): CameraTrack? = cachedCameraTrack?.takeIf {
-        cachedCameraJourney === journey &&
+    ): CameraTrack? {
+        val track = cachedCameraTrack?.takeIf {
+            cachedCameraJourney === journey &&
             cachedCameraWidth == width &&
             cachedCameraHeight == height &&
             cachedCameraSettings == cameraSettings
+        } ?: return null
+        installTiming(journey, cameraSettings, track.timing)
+        return track
     }
 
     internal fun buildCameraTrackForBackground(
@@ -390,7 +408,7 @@ class TimelinePainter {
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> },
     ): CameraPreparation {
         val track = buildCameraTrack(journey, width, height, cameraSettings, onProgress)
-        return CameraPreparation(track, prepare(journey))
+        return CameraPreparation(track, prepare(journey), checkNotNull(cachedTiming))
     }
 
     internal fun installCameraPreparation(
@@ -407,6 +425,7 @@ class TimelinePainter {
         cachedCameraHeight = height
         cachedCameraSettings = cameraSettings
         cachedCameraTrack = preparation.track
+        installTiming(journey, cameraSettings, preparation.timing)
     }
 
     private fun buildCameraTrack(
@@ -419,19 +438,34 @@ class TimelinePainter {
         val aspect = width.toDouble() / height.coerceAtLeast(1)
         val movement = cameraSettings.cameraMovement
         val episodeLegs = cameraEpisodeLegs(journey, cameraSettings)
-        val rawSamples = (0..CAMERA_TRACK_SAMPLES).map { sample ->
-            val progress = sample.toFloat() / CAMERA_TRACK_SAMPLES
-            val raw = rawViewport(
+        val distanceFraming = (0..CAMERA_TRACK_SAMPLES).map { sample ->
+            val distanceFraction = sample.toDouble() / CAMERA_TRACK_SAMPLES
+            val viewport = rawViewport(
                 journey,
-                progress,
+                distanceFraction.toFloat(),
                 width,
                 height,
                 cameraSettings,
                 episodeLegsOverride = episodeLegs,
+                distanceOverrideKm = journey.totalDistanceKm * distanceFraction,
             )
+            reportCameraProgress(sample + 1, onProgress)
+            viewport
+        }
+        cachedTimingJourney = journey
+        cachedCompression = cameraSettings.longTripCompression
+        cachedTripDetection = cameraSettings.tripDetection
+        cachedTiming = JourneyTiming.createViewportRelative(journey, distanceFraming, aspect)
+        val rawSamples = (0..CAMERA_TRACK_SAMPLES).map { sample ->
+            val progress = sample.toFloat() / CAMERA_TRACK_SAMPLES
+            val current = playbackPosition(journey, progress, cameraSettings)
+            val distanceFraction = if (journey.totalDistanceKm <= 0.0) 0.0 else {
+                current.distanceKm / journey.totalDistanceKm
+            }
+            val raw = viewportAtDistanceFraction(distanceFraming, distanceFraction, width, height)
             val result = RawCameraSample(
                 viewport = raw,
-                marker = WebMercator.project(playbackPosition(journey, progress, cameraSettings).point),
+                marker = WebMercator.project(current.point),
                 arrivalZoomIntensity = episodeArrivalZoomIntensity(
                     journey,
                     progress,
@@ -439,10 +473,7 @@ class TimelinePainter {
                     episodeLegs,
                 ),
             )
-            val completed = sample + 1
-            if (sample == 0 || completed % CAMERA_PROGRESS_INTERVAL == 0 || sample == CAMERA_TRACK_SAMPLES) {
-                onProgress(completed, CAMERA_TRACK_SAMPLES + 1)
-            }
+            reportCameraProgress(CAMERA_TRACK_SAMPLES + 1 + sample + 1, onProgress)
             result
         }
         val fixedSpanY = if (movement.fixedZoom) {
@@ -523,7 +554,40 @@ class TimelinePainter {
             aspect,
             episodeLegs,
         )
-        return CameraTrack(frames, aspect)
+        return CameraTrack(frames, aspect, checkNotNull(cachedTiming))
+    }
+
+    private fun installTiming(
+        journey: Journey,
+        cameraSettings: CameraSettings,
+        timing: JourneyTiming,
+    ) {
+        cachedTimingJourney = journey
+        cachedCompression = cameraSettings.longTripCompression
+        cachedTripDetection = cameraSettings.tripDetection
+        cachedTiming = timing
+    }
+
+    private fun viewportAtDistanceFraction(
+        viewports: List<Viewport>,
+        distanceFraction: Double,
+        width: Int,
+        height: Int,
+    ): Viewport {
+        val position = distanceFraction.coerceIn(0.0, 1.0) * viewports.lastIndex
+        val from = floor(position).toInt().coerceIn(0, viewports.lastIndex)
+        val to = (from + 1).coerceAtMost(viewports.lastIndex)
+        return blendViewport(viewports[from], viewports[to], (position - from).toFloat(), width, height)
+    }
+
+    private fun reportCameraProgress(
+        completed: Int,
+        onProgress: (completed: Int, total: Int) -> Unit,
+    ) {
+        val total = (CAMERA_TRACK_SAMPLES + 1) * 2
+        if (completed == 1 || completed % CAMERA_PROGRESS_INTERVAL == 0 || completed == total) {
+            onProgress(completed, total)
+        }
     }
 
     private fun episodeArrivalZoomIntensity(
@@ -603,8 +667,8 @@ class TimelinePainter {
             } else {
                 val markerX = unwrapNear(marker.x, previous.centerX)
                 val spanX = base.spanY * aspect
-                val deadHalfX = spanX * CAMERA_DEAD_ZONE_HALF
-                val deadHalfY = base.spanY * CAMERA_DEAD_ZONE_HALF
+                val deadHalfX = spanX * CAMERA_INTERPOLATION_ZONE_HALF
+                val deadHalfY = base.spanY * CAMERA_INTERPOLATION_ZONE_HALF
                 var centerX = when {
                     markerX < previous.centerX - deadHalfX -> markerX + deadHalfX
                     markerX > previous.centerX + deadHalfX -> markerX - deadHalfX
@@ -1315,6 +1379,7 @@ class TimelinePainter {
     internal class CameraTrack(
         internal val frames: List<CameraFrame>,
         private val aspect: Double,
+        internal val timing: JourneyTiming,
     ) {
         fun viewportAt(progress: Float): Viewport {
             if (frames.size == 1) return frames.first().toViewport(aspect)
@@ -1343,6 +1408,7 @@ class TimelinePainter {
     internal data class CameraPreparation(
         val track: CameraTrack,
         val prepared: PreparedJourney,
+        val timing: JourneyTiming,
     )
 
     companion object {
@@ -1372,6 +1438,7 @@ class TimelinePainter {
         private const val CAMERA_PROGRESS_INTERVAL = 32
         private const val ROUTE_BOUNDS_BLOCK_SIZE = 256
         private const val CAMERA_DEAD_ZONE_HALF = 0.20
+        private const val CAMERA_INTERPOLATION_ZONE_HALF = 0.18
         private const val CAMERA_CENTER_ZONE_HALF = 0.20
         private const val FIXED_ZOOM_PERCENTILE = 0.80
         private const val TILE_ZOOM_HYSTERESIS = 0.15
