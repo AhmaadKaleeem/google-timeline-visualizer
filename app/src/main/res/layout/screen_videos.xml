@@ -35,30 +35,32 @@
             android:layout_marginTop="16dp"
             android:clickable="true"
             android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
             android:visibility="gone"
-            app:cardCornerRadius="18dp"
-            app:strokeColor="?attr/colorOutlineVariant"
-            app:strokeWidth="1dp">
+            app:cardBackgroundColor="@android:color/transparent"
+            app:cardCornerRadius="8dp"
+            app:strokeWidth="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="10dp">
 
                 <TextView
                     android:id="@+id/journalFreshnessCardTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textStyle="bold" />
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/journalFreshnessCardDetail"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:textAppearance="?attr/textAppearanceBodyMedium" />
+                    android:drawableEnd="@drawable/ic_chevron_right"
+                    android:drawablePadding="8dp"
+                    android:textAppearance="?attr/textAppearanceBodySmall" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/journalFreshnessCardAction"
@@ -68,7 +70,8 @@
                     android:layout_gravity="end"
                     android:layout_marginTop="4dp"
                     android:maxLines="1"
-                    android:text="@string/update_journal" />
+                    android:text="@string/update_journal"
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

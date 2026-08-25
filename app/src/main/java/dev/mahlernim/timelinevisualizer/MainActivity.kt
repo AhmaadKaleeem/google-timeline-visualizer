@@ -117,10 +117,8 @@ import dev.mahlernim.timelinevisualizer.journal.route.JournalRoute
 import dev.mahlernim.timelinevisualizer.journal.route.JournalRouteService
 import dev.mahlernim.timelinevisualizer.journal.route.RouteSource
 import dev.mahlernim.timelinevisualizer.journal.route.connectedTimelines
-import dev.mahlernim.timelinevisualizer.journal.route.expandedRefreshWindow
 import dev.mahlernim.timelinevisualizer.journal.route.journeyForDateRange
 import dev.mahlernim.timelinevisualizer.journal.route.journeyForRange
-import dev.mahlernim.timelinevisualizer.journal.route.replacingWindow
 import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.Timeline
@@ -317,6 +315,7 @@ class MainActivity : AppCompatActivity() {
     private var journalLoaded = false
     private var journalLoadJob: Job? = null
     private var journalRouteLoadJob: Job? = null
+    private var pendingJournalRouteAction: (() -> Unit)? = null
     private var journalImportIsInitial: Boolean? = null
     private var updatingJournalReminderSwitch = false
     private var pendingJournalReminderId: String? = null
@@ -460,8 +459,10 @@ class MainActivity : AppCompatActivity() {
             currentCreateStep = CreateStep.TRIP_SOURCE
             renderCreateStep()
         }
-        editor.recapVideoChoice.setOnClickListener { chooseRecapKind() }
-        editor.customRecapChoice.setOnClickListener { startManualProject(TripKind.CUSTOM_RECAP) }
+        editor.recapVideoChoice.setOnClickListener { afterJournalRouteReady(::chooseRecapKind) }
+        editor.customRecapChoice.setOnClickListener {
+            afterJournalRouteReady { startManualProject(TripKind.CUSTOM_RECAP) }
+        }
         editor.rawDataChoice.setOnClickListener {
             if (renderRawSignalsTimeline != null) startManualProject(TripKind.RAW_DATA)
         }
@@ -1225,7 +1226,13 @@ class MainActivity : AppCompatActivity() {
         val isStyle = currentCreateStep == CreateStep.STYLE
         val isPreview = currentCreateStep == CreateStep.PREVIEW
         val hasTimeline = timeline != null
-        editor.createTypeStepGroup.visibility = if (isType && hasTimeline) View.VISIBLE else View.GONE
+        val hasJournalMetadata = BuildConfig.IS_JOURNAL_LAB && activeJournalStatus != null
+        editor.createTypeStepGroup.visibility = if (isType && (hasTimeline || hasJournalMetadata)) View.VISIBLE else View.GONE
+        editor.journalRoutePreparingGroup.visibility = if (isType && hasJournalMetadata && !hasTimeline) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         editor.tripSourceStepGroup.visibility = if (isTripSource) View.VISIBLE else View.GONE
         editor.tripDiscoveryStepGroup.visibility = if (isDiscovery) View.VISIBLE else View.GONE
         editor.projectStepGroup.visibility = if (isProject) View.VISIBLE else View.GONE
@@ -1256,7 +1263,7 @@ class MainActivity : AppCompatActivity() {
             if (isProject && editingProjectOnly) R.string.save_trip else R.string.continue_label,
         )
         editor.wizardContinueButton.isEnabled = !(isProject && rawProjectRangeConflict)
-        if (isType && hasTimeline) updateCreateTypeAvailability()
+        if (isType && (hasTimeline || hasJournalMetadata)) updateCreateTypeAvailability()
         // The wizard's primary action saves the project. Keeping the older inline save
         // actions here creates two competing paths through the same step.
         editor.saveTripButton.visibility = View.GONE
@@ -1295,6 +1302,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateCreateTypeAvailability() {
+        if (BuildConfig.IS_JOURNAL_LAB && activeJournalStatus != null && timeline == null) {
+            listOf(editor.tripVideoChoice, editor.recapVideoChoice, editor.customRecapChoice).forEach { card ->
+                card.isEnabled = true
+                card.isClickable = true
+                card.alpha = 1f
+            }
+            editor.rawDataChoice.isEnabled = false
+            editor.rawDataChoice.isClickable = false
+            editor.rawDataChoice.alpha = 0.55f
+            editor.semanticUnavailableText.visibility = View.GONE
+            return
+        }
         val semanticAvailable = semanticDateBounds() != null
         val rawAvailable = rawDateBounds() != null
         listOf(editor.tripVideoChoice, editor.recapVideoChoice, editor.customRecapChoice).forEach { card ->
@@ -1741,8 +1760,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadJournalRouteIfNeeded() {
         if (activeJournalRoute != null || journalRouteLoadJob?.isActive == true) return
-        setTimelineLoading(true, R.string.preparing_trips)
         journalRouteLoadJob = lifecycleScope.launch {
+            renderCreateStep()
             try {
                 val journal = activeJournal ?: withContext(Dispatchers.IO) { journalRepository.primaryJournal() }
                 if (journal == null) {
@@ -1755,10 +1774,20 @@ class MainActivity : AppCompatActivity() {
                 Log.e(TAG, "Travel Journal route load failed", error)
                 Snackbar.make(binding.root, R.string.journal_route_load_failed, Snackbar.LENGTH_LONG).show()
             } finally {
-                setTimelineLoading(false)
                 journalRouteLoadJob = null
+                renderCreateStep()
             }
         }
+    }
+
+    private fun afterJournalRouteReady(action: () -> Unit) {
+        if (!BuildConfig.IS_JOURNAL_LAB || timeline != null) {
+            action()
+            return
+        }
+        pendingJournalRouteAction = action
+        loadJournalRouteIfNeeded()
+        Snackbar.make(binding.root, R.string.journal_route_action_waiting, Snackbar.LENGTH_LONG).show()
     }
 
     private suspend fun loadJournal(journalId: String, force: Boolean) {
@@ -1776,8 +1805,15 @@ class MainActivity : AppCompatActivity() {
 
     private suspend fun refreshJournalAfterImport(journalId: String, result: JournalImportResult) {
         val committed = result as? JournalImportResult.Committed ?: return
-        val existingRoute = activeJournalRoute
-        if (existingRoute == null || activeJournal?.id != journalId || committed.changeKind == JournalImportResult.ChangeKind.INITIAL) {
+        if (!committed.needsRouteRefresh) {
+            val loadedJournal = withContext(Dispatchers.IO) { journalRepository.journal(journalId) } ?: return
+            activeJournal = loadedJournal
+            activeJournalStatus = withContext(Dispatchers.IO) { journalRepository.status(journalId) }
+            journalLoaded = true
+            updateTimelineSettingsCard()
+            return
+        }
+        if (committed.changeKind == JournalImportResult.ChangeKind.INITIAL) {
             activeJournalRoute = null
             timeline = null
             renderTimeline = null
@@ -1785,41 +1821,14 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val loadedJournal = withContext(Dispatchers.IO) { journalRepository.journal(journalId) } ?: return
-        if (!committed.needsRouteRefresh) {
-            activeJournal = loadedJournal
-            activeJournalStatus = withContext(Dispatchers.IO) { journalRepository.status(journalId) }
-            journalLoaded = true
-            updateTimelineSettingsCard()
-            return
-        }
-        val changedStart = committed.changedStartEpochMillis
-        val changedEnd = committed.changedEndEpochMillis
-        if (changedStart == null || changedEnd == null) {
-            loadJournal(journalId, force = true)
-            return
-        }
-        val paddedStart = Instant.ofEpochMilli(subtractSaturated(changedStart, JOURNAL_REFRESH_PADDING_MILLIS))
-        val paddedEnd = Instant.ofEpochMilli(addSaturated(
-            if (changedEnd == Long.MAX_VALUE) changedEnd else changedEnd + 1,
-            JOURNAL_REFRESH_PADDING_MILLIS,
-        ))
-        val (refreshStart, refreshEnd) = existingRoute.expandedRefreshWindow(paddedStart, paddedEnd)
-        val replacement = withContext(Dispatchers.IO) {
+        val refreshed = withContext(Dispatchers.IO) {
             journalRouteService.route(
                 journalId = journalId,
-                start = refreshStart,
-                endExclusive = refreshEnd,
+                start = Instant.ofEpochMilli(Long.MIN_VALUE),
+                endExclusive = Instant.ofEpochMilli(Long.MAX_VALUE),
             )
         }
-        applyJournalRoute(
-            journal = loadedJournal,
-            route = existingRoute.replacingWindow(
-                start = refreshStart,
-                endExclusive = refreshEnd,
-                replacement = replacement,
-            ),
-            refreshTrips = true,
-        )
+        applyJournalRoute(loadedJournal, refreshed, refreshTrips = true)
     }
 
     private suspend fun applyJournalRoute(journal: JournalEntity, route: JournalRoute, refreshTrips: Boolean) {
@@ -1869,20 +1878,21 @@ class MainActivity : AppCompatActivity() {
             val period = TimelinePeriod.sameYear(loaded.years.first())
             configureYears(loaded, route.journeyForRange(period), ignoredCount = 0)
             applyActiveProjectDates()
-            if (refreshTrips) tripSuggestions = refreshRequestedTripSuggestions(loaded)
+            if (refreshTrips) {
+                if (importJob?.isActive == true) showJournalImportStage(R.string.finding_suggested_trips)
+                tripSuggestions = refreshRequestedTripSuggestions(loaded)
+            }
             editor.editorGroup.visibility = View.VISIBLE
             updateCameraPreparationUi()
         }
         renderTrips()
         renderCreateStep()
         updateTimelineSettingsCard()
+        pendingJournalRouteAction?.also {
+            pendingJournalRouteAction = null
+            editor.root.post { it() }
+        }
     }
-
-    private fun subtractSaturated(value: Long, amount: Long): Long =
-        if (value < Long.MIN_VALUE + amount) Long.MIN_VALUE else value - amount
-
-    private fun addSaturated(value: Long, amount: Long): Long =
-        if (value > Long.MAX_VALUE - amount) Long.MAX_VALUE else value + amount
 
     private fun showRawOnlyImportChoice(uri: Uri, points: List<RawSignalPoint>, remembered: Boolean) {
         MaterialAlertDialogBuilder(this)
@@ -2413,20 +2423,19 @@ class MainActivity : AppCompatActivity() {
             System.currentTimeMillis(),
         )
         val ageDays = freshness.ageDays
-        if (ageDays == null || freshness.state in setOf(JournalFreshnessState.NO_DETAIL, JournalFreshnessState.CURRENT)) {
+        if (
+            ageDays == null ||
+            freshness.state !in setOf(
+                JournalFreshnessState.UPDATE_DUE,
+                JournalFreshnessState.AT_RISK,
+                JournalFreshnessState.OVERDUE,
+            )
+        ) {
             home.journalFreshnessCard.visibility = View.GONE
             return
         }
-        home.journalFreshnessCardTitle.setText(
-            R.string.import_updated_timeline,
-        )
-        home.journalFreshnessCardDetail.text = when (freshness.state) {
-            JournalFreshnessState.GENTLE -> getString(R.string.journal_status_gentle, ageDays)
-            JournalFreshnessState.UPDATE_DUE -> getString(R.string.journal_home_due_detail, ageDays)
-            JournalFreshnessState.AT_RISK -> getString(R.string.journal_home_risk_detail, ageDays)
-            JournalFreshnessState.OVERDUE -> getString(R.string.journal_home_overdue_detail, ageDays)
-            else -> return
-        }
+        home.journalFreshnessCardDetail.text = getString(R.string.journal_freshness_inline, ageDays)
+        home.journalFreshnessCard.contentDescription = home.journalFreshnessCardDetail.text
         home.journalFreshnessCard.visibility = View.VISIBLE
     }
 
@@ -5588,7 +5597,6 @@ class MainActivity : AppCompatActivity() {
         private const val STATE_PENDING_JOURNAL_REMINDER_ID = "pending_journal_reminder_id_v1"
         private const val STATE_JOURNAL_ONBOARDING_PAGE = "journal_onboarding_page_v1"
         private const val STATE_JOURNAL_ONBOARDING_REPLAY = "journal_onboarding_replay_v1"
-        private const val JOURNAL_REFRESH_PADDING_MILLIS = 31L * 60L * 1000L
         private const val STATE_CUSTOMIZATION_CAMERA = "customization_camera_v3"
         private const val STATE_CUSTOMIZATION_PACING = "customization_pacing_v3"
         private const val STATE_CUSTOMIZATION_QUALITY = "customization_quality_v3"

@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       LAB_RELEASE_TAG: ${{ github.ref_name }}
-      EXPECTED_VERSION_CODE: 10
-      EXPECTED_VERSION_NAME: 3.0.0-journal-lab.10
+      EXPECTED_VERSION_CODE: 11
+      EXPECTED_VERSION_NAME: 3.0.0-journal-lab.11
     steps:
       - uses: actions/checkout@v5
         with:
@@ -65,7 +65,7 @@ jobs:
           version_name="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<< "$package_line")"
           application_label="$($build_tools_dir/aapt dump badging "$lab_apk" | sed -n "s/^application-label:'\([^']*\)'.*/\1/p" | head -n 1)"
           version_code="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" <<< "$package_line")"
-          test "$LAB_RELEASE_TAG" = "journal-lab-10"
+          test "$LAB_RELEASE_TAG" = "journal-lab-11"
           test "$package_name" = "dev.mahlernim.timelinevisualizer.journallab"
           test "$package_name" != "dev.mahlernim.timelinevisualizer"
           test "$version_code" = "$EXPECTED_VERSION_CODE"
@@ -103,6 +103,6 @@ jobs:
             "$lab_apk" \
             "$lab_apk.sha256" \
             --title "Journal Lab ${LAB_RELEASE_TAG#journal-lab-}" \
-            --notes-file docs/journal-lab-10.md \
+            --notes-file docs/journal-lab-11.md \
             --prerelease \
             --verify-tag

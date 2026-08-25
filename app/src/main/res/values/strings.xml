@@ -48,6 +48,10 @@
     <string name="opening_timeline">Opening file</string>
     <string name="opening_file">Opening file</string>
     <string name="preparing_trips">Preparing journey</string>
+    <string name="preparing_your_journeys">Preparing your journeys…</string>
+    <string name="journal_route_action_waiting">Your journeys are being prepared. This will open when they are ready.</string>
+    <string name="journal_freshness_inline">Detailed routes last updated %1$d days ago. Import an updated Timeline file.</string>
+    <string name="finding_suggested_trips">Finding suggested trips…</string>
     <string name="loading_timeline">Loading Timeline</string>
     <string name="video_saved">Video saved</string>
     <string name="video_ready">Video ready</string>
