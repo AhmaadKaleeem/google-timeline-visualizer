@@ -760,12 +760,144 @@ def extract_timeline_points(
     return sorted(unique.values(), key=lambda point: point['dt'])
 
 
+def extract_journal_route_points(
+    data: Any,
+    year: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    maximum_accuracy_meters: float = 100.0,
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """Build a Journal-style detailed-first route for the selected period.
+
+    Detailed positions use the same core filters and 30-minute coverage-island
+    boundary as Journal Lab v13. Semantic geometry is retained only outside
+    accepted detailed coverage.
+    """
+    semantic = extract_timeline_points(data, year=year, start_date=start_date, end_date=end_date)
+    raw_signals = data.get('rawSignals', []) if isinstance(data, dict) else []
+    detailed = []
+    accuracy_rejected = 0
+    for raw_signal in raw_signals:
+        position = raw_signal.get('position') if isinstance(raw_signal, dict) else None
+        if not isinstance(position, dict):
+            continue
+        coordinate = parse_coordinate(position.get('LatLng') or position.get('latLng'))
+        try:
+            timestamp = dateutil.parser.parse(position.get('timestamp'))
+            accuracy = float(position.get('accuracyMeters'))
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if coordinate is None or not math.isfinite(accuracy) or accuracy < 0:
+            continue
+        if not _date_in_range(timestamp, year=year, start_date=start_date, end_date=end_date):
+            continue
+        if accuracy > maximum_accuracy_meters:
+            accuracy_rejected += 1
+            continue
+        detailed.append({
+            'dt': timestamp,
+            'lat': coordinate[0],
+            'lon': coordinate[1],
+            'accuracy': accuracy,
+        })
+
+    detailed.sort(key=lambda point: point['dt'])
+    normalized = []
+    group_start = 0
+    while group_start < len(detailed):
+        group_end = group_start + 1
+        while group_end < len(detailed) and detailed[group_end]['dt'] == detailed[group_start]['dt']:
+            group_end += 1
+        by_coordinate = {}
+        for point in detailed[group_start:group_end]:
+            key = (point['lat'], point['lon'])
+            if key not in by_coordinate or point['accuracy'] < by_coordinate[key]['accuracy']:
+                by_coordinate[key] = point
+        if len(by_coordinate) == 1:
+            normalized.append(next(iter(by_coordinate.values())))
+        group_start = group_end
+
+    without_spikes = []
+    if len(normalized) < 3:
+        without_spikes = normalized
+    else:
+        without_spikes.append(normalized[0])
+        for index in range(1, len(normalized) - 1):
+            before = without_spikes[-1]
+            candidate = normalized[index]
+            after = normalized[index + 1]
+            window = after['dt'] - before['dt']
+            rejoin_tolerance = max(0.2, (before['accuracy'] + after['accuracy']) * 2.0 / 1000.0)
+            ingress = haversine_dist(before['lat'], before['lon'], candidate['lat'], candidate['lon'])
+            egress = haversine_dist(candidate['lat'], candidate['lon'], after['lat'], after['lon'])
+            minimum_spike = max(0.5, candidate['accuracy'] * 5.0 / 1000.0)
+            ingress_hours = (candidate['dt'] - before['dt']).total_seconds() / 3600.0
+            egress_hours = (after['dt'] - candidate['dt']).total_seconds() / 3600.0
+            is_spike = (
+                timedelta(0) <= window <= timedelta(minutes=20)
+                and haversine_dist(before['lat'], before['lon'], after['lat'], after['lon']) <= rejoin_tolerance
+                and ingress >= minimum_spike
+                and egress >= minimum_spike
+                and (ingress_hours <= 0 or ingress / ingress_hours > 250.0)
+                and (egress_hours <= 0 or egress / egress_hours > 250.0)
+            )
+            if not is_spike:
+                without_spikes.append(candidate)
+        without_spikes.append(normalized[-1])
+
+    stabilized = []
+    for candidate in without_spikes:
+        if not stabilized:
+            stabilized.append(candidate)
+            continue
+        previous = stabilized[-1]
+        elapsed = candidate['dt'] - previous['dt']
+        uncertainty_km = max(0.025, (previous['accuracy'] + candidate['accuracy']) / 1000.0)
+        overlaps = (
+            timedelta(0) <= elapsed <= timedelta(minutes=10)
+            and haversine_dist(previous['lat'], previous['lon'], candidate['lat'], candidate['lon']) <= uncertainty_km
+        )
+        if overlaps:
+            if candidate['accuracy'] < previous['accuracy']:
+                stabilized[-1] = candidate
+        else:
+            stabilized.append(candidate)
+
+    islands = []
+    for point in stabilized:
+        if not islands or point['dt'] - islands[-1][-1]['dt'] > timedelta(minutes=30):
+            islands.append([point])
+        else:
+            islands[-1].append(point)
+    coverage = [(island[0]['dt'], island[-1]['dt']) for island in islands]
+    semantic_backup = []
+    island_index = 0
+    for point in semantic:
+        while island_index < len(coverage) and coverage[island_index][1] < point['dt']:
+            island_index += 1
+        covered = (
+            island_index < len(coverage)
+            and coverage[island_index][0] <= point['dt'] <= coverage[island_index][1]
+        )
+        if not covered:
+            semantic_backup.append(point)
+
+    combined = sorted(stabilized + semantic_backup, key=lambda point: point['dt'])
+    return combined, {
+        'detailed_input': len(detailed) + accuracy_rejected,
+        'detailed_usable': len(stabilized),
+        'detailed_islands': len(islands),
+        'semantic_backup': len(semantic_backup),
+    }
+
+
 def parse_timeline(
     input_path: Path,
     year: Optional[int] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     location_filter: str = "conservative",
+    route_source: str = "semantic",
 ) -> Tuple[List[datetime], List[float], List[float], List[float], List[float], List[float]]:
     print(f"Loading {input_path}...")
     try:
@@ -774,7 +906,21 @@ def parse_timeline(
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise TimelineParseError(f"Could not read Timeline JSON: {error}") from error
 
-    raw_points = extract_timeline_points(data, year=year, start_date=start_date, end_date=end_date)
+    if route_source == 'journal':
+        raw_points, journal_stats = extract_journal_route_points(
+            data,
+            year=year,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        print(
+            "Journal route: "
+            f"{journal_stats['detailed_usable']} detailed points in "
+            f"{journal_stats['detailed_islands']} islands; "
+            f"{journal_stats['semantic_backup']} semantic backup points."
+        )
+    else:
+        raw_points = extract_timeline_points(data, year=year, start_date=start_date, end_date=end_date)
     if not raw_points:
         period_str = str(year) if year is not None else f"{start_date} to {end_date}"
         raise NoDataFoundError(f"No data points found for period {period_str}.")
@@ -1104,6 +1250,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument('--height', type=int, default=None, help="Custom video height in pixels")
     parser.add_argument('--filter-outliers', choices=['conservative', 'off'], default='conservative',
                         help="GPS outlier filter: conservative or off")
+    parser.add_argument('--route-source', choices=['semantic', 'journal'], default='semantic',
+                        help="Route source: semantic points or Journal-style detailed-first fusion")
     parser.add_argument('--preset', type=str, default=None, help="Base64 URL preset token")
     parser.add_argument('--unit', choices=['km', 'mi'], default='km', help="Distance display unit: km or mi")
     return parser
@@ -1155,6 +1303,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             start_date,
             end_date,
             args.filter_outliers,
+            args.route_source,
         )
     except TimelineCliError as error:
         print(f"Error: {error}", file=sys.stderr)
