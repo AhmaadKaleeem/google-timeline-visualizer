@@ -193,8 +193,12 @@ python visualizer.py --input Timeline.json --year 2025 --camera-movement steady 
 ## Build and test
 
 Android development requires JDK 17, Android SDK Platform 36, and Build Tools 36.0.0.
+Set `CARTO_BASEMAP_API_KEY` when building a copy that requests CARTO basemap tiles.
+Official Android and web releases inject the same project key from GitHub Actions.
+Local Python runs read the key from this environment variable as well.
 
 ```bash
+export CARTO_BASEMAP_API_KEY="your-project-key"
 ./gradlew test lint assembleGithubDebug assemblePlayDebug
 python -m pip install -r requirements-dev.txt
 python -m pytest

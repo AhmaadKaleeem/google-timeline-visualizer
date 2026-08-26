@@ -125,7 +125,6 @@
     <string name="update_page_unavailable">無法開啟更新頁面</string>
     <string name="web_page_unavailable">無法開啟網頁</string>
     <string name="render_date_pattern" tools:ignore="ExtraTranslation">yyyy年M月</string>
-    <string name="map_attribution">© OpenStreetMap © CARTO</string>
     <string name="timeline_video">時間軸影片</string>
     <string name="default_video_filename">時間軸影片.mp4</string>
     <string name="videos">影片</string>

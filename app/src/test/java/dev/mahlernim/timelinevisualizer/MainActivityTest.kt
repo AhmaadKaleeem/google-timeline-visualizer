@@ -384,6 +384,23 @@ class MainActivityTest {
     }
 
     @Test
+    fun firstTimelineDisclosureLinksToTheFullPrivacyPolicy() {
+        val activity = launchActivity()
+        activity.findViewById<View>(R.id.importButton).performClick()
+
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        val intent = shadowOf(activity).nextStartedActivity
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertEquals(
+            "https://github.com/mahlernim/google-timeline-visualizer/blob/main/docs/privacy.md",
+            intent.dataString,
+        )
+    }
+
+    @Test
     fun emptyTimelineExplainsThatTimelineMayNotHaveBeenEnabled() {
         acceptPrivacyDisclosure()
         val empty = File.createTempFile("empty-timeline", ".json", context.cacheDir)
