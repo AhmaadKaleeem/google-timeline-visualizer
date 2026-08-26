@@ -1,6 +1,6 @@
-# Journal Lab 18
+# Journal Lab 19
 
-Journal Lab 18 keeps the clean version 15 camera and improves the Create interface from community feedback.
+Journal Lab 19 keeps the clean version 15 camera and improves the Create interface from community feedback.
 
 - Back now sits beside the three-step indicator.
 - Completed steps are selectable, and the next valid step can be opened directly.
