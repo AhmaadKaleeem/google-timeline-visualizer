@@ -98,6 +98,11 @@ class TimelinePainterTest {
             val locale = Locale.forLanguageTag(tag)
             val configuration = Configuration(application.resources.configuration).apply { setLocale(locale) }
             val localized = application.createConfigurationContext(configuration)
+            assertEquals(
+                "Attribution changed in $tag",
+                "© OpenStreetMap contributors © CARTO",
+                localized.getString(R.string.map_attribution),
+            )
             val renderText = RenderText(
                 localeTag = tag,
                 fallbackTitle = localized.getString(R.string.default_title),

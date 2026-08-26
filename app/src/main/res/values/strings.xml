@@ -142,7 +142,7 @@
          date shape (ja, ko, zh) carry a hand-maintained override in their strings.xml,
          changed only through code review, with tools:ignore="ExtraTranslation". -->
     <string name="render_date_pattern" translatable="false">MMMM yyyy</string>
-    <string name="map_attribution">© OpenStreetMap  © CARTO</string>
+    <string name="map_attribution" translatable="false">© OpenStreetMap contributors © CARTO</string>
     <string name="timeline_video">Timeline video</string>
     <string name="default_video_filename">Timeline video.mp4</string>
     <string name="videos">Videos</string>

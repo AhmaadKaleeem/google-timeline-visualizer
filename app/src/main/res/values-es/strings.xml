@@ -133,7 +133,6 @@
     <string name="project_on_github">Proyecto en GitHub</string>
     <string name="update_page_unavailable">No se pudo abrir la página de actualización</string>
     <string name="web_page_unavailable">No se pudo abrir la página web</string>
-    <string name="map_attribution">© OpenStreetMap © CARTO</string>
     <string name="timeline_video">Vídeo Timeline</string>
     <string name="default_video_filename">Vídeo Timeline.mp4</string>
     <string name="videos">Vídeos</string>

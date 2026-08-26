@@ -125,7 +125,6 @@
     <string name="update_page_unavailable">업데이트 페이지를 열 수 없습니다</string>
     <string name="web_page_unavailable">웹페이지를 열 수 없습니다</string>
     <string name="render_date_pattern" tools:ignore="ExtraTranslation">yyyy년 M월</string>
-    <string name="map_attribution">© OpenStreetMap  © CARTO</string>
     <string name="timeline_video">타임라인 영상</string>
     <string name="default_video_filename">타임라인 영상.mp4</string>
     <string name="videos">영상</string>

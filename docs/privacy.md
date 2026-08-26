@@ -2,7 +2,7 @@
 
 [한국어](privacy.ko.md) · [日本語](privacy.ja.md)
 
-**Effective date:** August 21, 2026
+**Effective date:** August 26, 2026
 
 **Developer:** MahlerLab
 
@@ -35,8 +35,9 @@ excluded from Android backup and device transfer. Generated videos are written
 through Android's media storage interfaces. On Android 10 and later, completed MP4
 files are saved through MediaStore under
 `Movies/Timeline Visualizer`. Android 8 and 9 use the system Save As picker.
-Cached basemap image tiles may remain in the app's temporary cache
-and can be removed by clearing the app cache or uninstalling the app.
+Cached basemap image tiles remain in the app's temporary cache for no more than
+30 days. The app deletes older tiles automatically. They can also be removed by
+clearing the app cache or uninstalling the app.
 
 After a successful Timeline import, the app also stores the selected document URI
 so it can request access to the same document on the next launch. Replacing the
@@ -78,8 +79,11 @@ Timeline data, coordinates, dates, filenames, owner names, video titles, resolut
 or account identifiers. Opening a link shows all five values before the recipient
 chooses whether to use or save it.
 
-All network requests made by the app use encrypted HTTPS connections. CARTO may
-process network and tile-request information under its own privacy notice.
+All network requests made by the app use encrypted HTTPS connections. Under
+CARTO's current Basemap Terms, CARTO processes request information on the
+developer's behalf, truncates IP addresses when requests arrive, and stores the
+resulting request logs in the United States for 30 days. CARTO may also process
+this information under its privacy notice and data-processing agreement.
 
 ## Deleting data
 
@@ -97,4 +101,5 @@ Map tiles are provided by CARTO and use OpenStreetMap data. Their terms and
 privacy practices apply to tile requests:
 
 - [CARTO privacy notice](https://carto.com/privacy/)
+- [CARTO Basemap Terms](https://carto.com/legal/basemap-terms/)
 - [OpenStreetMap privacy policy](https://osmfoundation.org/wiki/Privacy_Policy)
