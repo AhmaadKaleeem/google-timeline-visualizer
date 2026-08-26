@@ -34,6 +34,13 @@ def test_release_workflow_can_update_an_existing_release() -> None:
     assert 'gh release upload "$RELEASE_TAG" "$apk" "$apk.sha256" --clobber' in workflow
 
 
+def test_release_workflow_requires_the_carto_project_key() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "CARTO_BASEMAP_API_KEY: ${{ secrets.CARTO_BASEMAP_API_KEY }}" in workflow
+    assert 'test -n "$CARTO_BASEMAP_API_KEY"' in workflow
+
+
 def test_repository_normalizes_text_without_touching_release_binaries() -> None:
     attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
 

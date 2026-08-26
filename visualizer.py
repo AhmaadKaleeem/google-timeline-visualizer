@@ -21,9 +21,11 @@ import bisect
 import io
 import json
 import math
+import os
 import statistics
 import sys
 import urllib.request
+import urllib.parse
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -52,7 +54,7 @@ HEAD_COLOR = '#24191d'
 CARD_BG_COLOR = '#fff8fa'
 TEXT_PRIMARY_COLOR = '#24191d'
 TEXT_SECONDARY_COLOR = '#5c4b52'
-MAP_ATTRIBUTION = '© OpenStreetMap contributors  © CARTO'
+MAP_ATTRIBUTION = '© OpenStreetMap contributors © CARTO'
 TILE_URL = "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
 
 OUTRO_SECONDS = 1.5
@@ -505,11 +507,19 @@ def tile_to_bounds_meters(xtile: int, ytile: int, zoom: int) -> Tuple[float, flo
 TILE_CACHE: Dict[Tuple[int, int, int], Image.Image] = {}
 
 
+def carto_tile_url(x: int, y: int, z: int, api_key: Optional[str] = None) -> str:
+    url = TILE_URL.format(z=z, x=x, y=y)
+    key = os.environ.get('CARTO_BASEMAP_API_KEY', '') if api_key is None else api_key
+    if not key.strip():
+        return url
+    return f"{url}?{urllib.parse.urlencode({'key': key.strip()})}"
+
+
 def fetch_tile_img(x: int, y: int, z: int) -> Image.Image:
     key = (x, y, z)
     if key in TILE_CACHE:
         return TILE_CACHE[key]
-    url = TILE_URL.format(z=z, x=x, y=y)
+    url = carto_tile_url(x, y, z)
     try:
         req = urllib.request.Request(url, headers={'User-Agent': "Mozilla/5.0"})
         with urllib.request.urlopen(req) as response:

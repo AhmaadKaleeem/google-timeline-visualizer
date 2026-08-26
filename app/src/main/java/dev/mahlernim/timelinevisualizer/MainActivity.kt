@@ -4205,6 +4205,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.map_privacy_title)
             .setMessage(R.string.map_privacy_message)
             .setNegativeButton(android.R.string.cancel, null)
+            .setNeutralButton(R.string.privacy_policy) { _, _ -> openPrivacyPolicy() }
             .setPositiveButton(R.string.continue_action) { _, _ ->
                 preferences.edit { putBoolean(MAP_PRIVACY_ACCEPTED, true) }
                 continueImport()

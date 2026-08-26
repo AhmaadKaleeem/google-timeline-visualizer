@@ -2,6 +2,11 @@ plugins {
     id("com.android.application")
 }
 
+val cartoBasemapApiKey = providers.environmentVariable("CARTO_BASEMAP_API_KEY")
+    .getOrElse("")
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+
 android {
     namespace = "dev.mahlernim.timelinevisualizer"
     compileSdk = 36
@@ -10,10 +15,11 @@ android {
         applicationId = "dev.mahlernim.timelinevisualizer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 40
-        versionName = "2.4.1"
+        versionCode = 41
+        versionName = "2.4.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "CARTO_BASEMAP_API_KEY", "\"$cartoBasemapApiKey\"")
     }
 
     buildFeatures {
