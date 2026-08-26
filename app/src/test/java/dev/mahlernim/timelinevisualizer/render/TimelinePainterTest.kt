@@ -245,7 +245,7 @@ class TimelinePainterTest {
         val track = painter.buildCameraTrackForBackground(journey, SIZE, SIZE, settings).track
 
         fun trackSpanAt(distanceKm: Double): Double {
-            val viewport = track.viewportAt((distanceKm / journey.totalDistanceKm).toFloat())
+            val viewport = track.viewportAt(track.timing.progressAtDistance(distanceKm))
             return viewport.maxY - viewport.minY
         }
 
@@ -270,6 +270,42 @@ class TimelinePainterTest {
             "Arrival span $arrivalSpan still lagged behind its local target $arrivalTarget",
             arrivalSpan <= arrivalTarget * 1.60,
         )
+    }
+
+    @Test
+    fun closeUpSharesItsArrivalBudgetAcrossMultipleLongHaulTripsWithoutPausing() {
+        val journey = multiLongHaulJourney()
+        val settings = CameraSettings(
+            cameraMovement = CameraMovement.CLOSE_UP,
+            longTripCompression = LongTripCompression.OFF,
+            tripDetection = TripDetection.SENSITIVE,
+            localFraming = LocalFraming.CLOSE,
+        )
+        val timing = TimelinePainter()
+            .buildCameraTrackForBackground(journey, SIZE, SIZE, settings)
+            .track
+            .timing
+        val localArrivals = journey.legs.mapIndexedNotNull { index, leg ->
+            leg.takeIf { !it.isTransfer && journey.legs.getOrNull(index - 1)?.isTransfer == true }
+        }
+
+        assertEquals(3, localArrivals.size)
+        val shares = localArrivals.map { leg ->
+            timing.progressAtDistance(leg.endKm) - timing.progressAtDistance(leg.startKm)
+        }
+        val meaningfulShares = listOf(shares[0], shares[2])
+
+        meaningfulShares.forEach { share -> assertTrue("Meaningful arrival share was $share", share >= 0.029f) }
+        assertTrue("Brief stop unexpectedly received the arrival budget: $shares", shares[1] < 0.02f)
+        assertTrue("Arrival budget exceeded its global bound: $shares", meaningfulShares.sum() <= 0.061f)
+
+        listOf(localArrivals[0], localArrivals[2]).forEach { leg ->
+            val start = timing.progressAtDistance(leg.startKm)
+            val end = timing.progressAtDistance(leg.endKm)
+            val middle = timing.distanceAt((start + end) / 2f)
+            assertTrue("Close-up must keep moving after arrival", middle > leg.startKm)
+            assertTrue("Close-up must not jump to the end of the visit", middle < leg.endKm)
+        }
     }
 
     @Test
@@ -633,17 +669,37 @@ class TimelinePainterTest {
 
     private fun roundTripJourney(): Journey = Journey.from(
         listOf(
-            point(37.55, 126.95),
-            point(37.57, 126.98),
-            point(37.56, 127.02),
-            point(35.67, 139.65),
-            point(35.69, 139.70),
-            point(35.66, 139.75),
-            point(35.71, 139.80),
-            point(37.56, 127.02),
-            point(37.58, 126.99),
+            timedPoint(0, 37.55, 126.95),
+            timedPoint(1, 37.57, 126.98),
+            timedPoint(2, 37.56, 127.02),
+            timedPoint(14, 35.67, 139.65),
+            timedPoint(20, 35.69, 139.70),
+            timedPoint(30, 35.66, 139.75),
+            timedPoint(36, 35.71, 139.80),
+            timedPoint(48, 37.56, 127.02),
+            timedPoint(52, 37.58, 126.99),
         ),
         2025,
+    )
+
+    private fun multiLongHaulJourney(): Journey = Journey.from(
+        listOf(
+            timedPoint(0, 0.0, 0.000),
+            timedPoint(1, 0.0, 0.002),
+            timedPoint(2, 0.0, 1.000),
+            timedPoint(7, 0.0, 1.001),
+            timedPoint(10, 0.0, 2.000),
+            GeoPoint(Instant.parse("2025-06-01T10:10:00Z"), 0.0, 2.001),
+            timedPoint(15, 0.0, 3.000),
+            timedPoint(20, 0.0, 3.002),
+        ),
+        2025,
+    )
+
+    private fun timedPoint(hour: Int, latitude: Double, longitude: Double) = GeoPoint(
+        Instant.parse("2025-06-01T00:00:00Z").plusSeconds(hour * 3_600L),
+        latitude,
+        longitude,
     )
 
     private fun tileViewport(width: Int, height: Int): Viewport {

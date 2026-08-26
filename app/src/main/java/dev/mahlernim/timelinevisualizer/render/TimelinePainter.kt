@@ -14,6 +14,7 @@ import dev.mahlernim.timelinevisualizer.model.JourneyPosition
 import dev.mahlernim.timelinevisualizer.model.MutableRenderSampleLocation
 import dev.mahlernim.timelinevisualizer.model.WebMercator
 import dev.mahlernim.timelinevisualizer.model.WorldPoint
+import java.time.Duration
 import java.time.ZoneId
 import java.util.Locale
 import kotlin.math.floor
@@ -206,10 +207,13 @@ class TimelinePainter {
         val leg = journey.legAt(current.distanceKm, episodeLegs).takeIf { movement.legAware }
         val legIndex = leg?.let(episodeLegs::indexOf) ?: -1
         val nextLocalLeg = episodeLegs.getOrNull(legIndex + 1)?.takeIf { !it.isTransfer }
+        val closeUpArrivalAllowed = movement != CameraMovement.CLOSE_UP ||
+            nextLocalLeg?.let { isMeaningfulCloseUpArrival(journey, it) } == true
         val transferArrivalBlend = if (
             cameraSettings.episodeFramingEnabled &&
             leg?.isTransfer == true &&
             nextLocalLeg != null &&
+            closeUpArrivalAllowed &&
             leg.lengthKm > 0.0
         ) {
             smoothstep(
@@ -438,31 +442,45 @@ class TimelinePainter {
         val aspect = width.toDouble() / height.coerceAtLeast(1)
         val movement = cameraSettings.cameraMovement
         val episodeLegs = cameraEpisodeLegs(journey, cameraSettings)
-        val distanceFraming = (0..CAMERA_TRACK_SAMPLES).map { sample ->
-            val distanceFraction = sample.toDouble() / CAMERA_TRACK_SAMPLES
+        val arrivalEpisodes = closeUpArrivalEpisodes(journey, cameraSettings, episodeLegs)
+        val distanceSamples = cameraDistanceSamples(journey, cameraSettings, arrivalEpisodes)
+        val progressTotal = distanceSamples.size + CAMERA_TRACK_SAMPLES + 1
+        val distanceFraming = distanceSamples.mapIndexed { index, distanceKm ->
             val viewport = rawViewport(
                 journey,
-                distanceFraction.toFloat(),
+                if (journey.totalDistanceKm <= 0.0) 0f else (distanceKm / journey.totalDistanceKm).toFloat(),
                 width,
                 height,
                 cameraSettings,
                 episodeLegsOverride = episodeLegs,
-                distanceOverrideKm = journey.totalDistanceKm * distanceFraction,
+                distanceOverrideKm = distanceKm,
             )
-            reportCameraProgress(sample + 1, onProgress)
+            reportCameraProgress(index + 1, progressTotal, onProgress)
             viewport
         }
         cachedTimingJourney = journey
         cachedCompression = cameraSettings.longTripCompression
         cachedTripDetection = cameraSettings.tripDetection
-        cachedTiming = JourneyTiming.createViewportRelative(journey, distanceFraming, aspect)
+        cachedTiming = JourneyTiming.createViewportRelative(
+            journey,
+            distanceFraming,
+            aspect,
+            distancesKm = distanceSamples,
+            minimumShares = arrivalEpisodes.map {
+                TimingMinimumShare(it.localLeg.startKm, it.localLeg.endKm, it.minimumProgressFraction)
+            },
+        )
+        val arrivalPlans = closeUpArrivalPlans(arrivalEpisodes, episodeLegs, checkNotNull(cachedTiming))
         val rawSamples = (0..CAMERA_TRACK_SAMPLES).map { sample ->
             val progress = sample.toFloat() / CAMERA_TRACK_SAMPLES
             val current = playbackPosition(journey, progress, cameraSettings)
-            val distanceFraction = if (journey.totalDistanceKm <= 0.0) 0.0 else {
-                current.distanceKm / journey.totalDistanceKm
-            }
-            val raw = viewportAtDistanceFraction(distanceFraming, distanceFraction, width, height)
+            val raw = viewportAtDistance(
+                distanceFraming,
+                distanceSamples,
+                current.distanceKm,
+                width,
+                height,
+            )
             val result = RawCameraSample(
                 viewport = raw,
                 marker = WebMercator.project(current.point),
@@ -471,9 +489,10 @@ class TimelinePainter {
                     progress,
                     cameraSettings,
                     episodeLegs,
+                    arrivalPlans,
                 ),
             )
-            reportCameraProgress(CAMERA_TRACK_SAMPLES + 1 + sample + 1, onProgress)
+            reportCameraProgress(distanceSamples.size + sample + 1, progressTotal, onProgress)
             result
         }
         val fixedSpanY = if (movement.fixedZoom) {
@@ -553,6 +572,7 @@ class TimelinePainter {
             height,
             aspect,
             episodeLegs,
+            arrivalPlans,
         )
         return CameraTrack(frames, aspect, checkNotNull(cachedTiming))
     }
@@ -568,23 +588,29 @@ class TimelinePainter {
         cachedTiming = timing
     }
 
-    private fun viewportAtDistanceFraction(
+    private fun viewportAtDistance(
         viewports: List<Viewport>,
-        distanceFraction: Double,
+        distancesKm: DoubleArray,
+        distanceKm: Double,
         width: Int,
         height: Int,
     ): Viewport {
-        val position = distanceFraction.coerceIn(0.0, 1.0) * viewports.lastIndex
-        val from = floor(position).toInt().coerceIn(0, viewports.lastIndex)
-        val to = (from + 1).coerceAtMost(viewports.lastIndex)
-        return blendViewport(viewports[from], viewports[to], (position - from).toFloat(), width, height)
+        if (viewports.size == 1 || distancesKm.size < 2) return viewports.first()
+        val target = distanceKm.coerceIn(distancesKm.first(), distancesKm.last())
+        val exact = distancesKm.binarySearch(target)
+        if (exact >= 0) return viewports[exact]
+        val to = (-exact - 1).coerceIn(1, distancesKm.lastIndex)
+        val from = to - 1
+        val widthKm = distancesKm[to] - distancesKm[from]
+        val fraction = if (widthKm <= 0.0) 0f else ((target - distancesKm[from]) / widthKm).toFloat()
+        return blendViewport(viewports[from], viewports[to], fraction, width, height)
     }
 
     private fun reportCameraProgress(
         completed: Int,
+        total: Int,
         onProgress: (completed: Int, total: Int) -> Unit,
     ) {
-        val total = (CAMERA_TRACK_SAMPLES + 1) * 2
         if (completed == 1 || completed % CAMERA_PROGRESS_INTERVAL == 0 || completed == total) {
             onProgress(completed, total)
         }
@@ -595,10 +621,22 @@ class TimelinePainter {
         progress: Float,
         cameraSettings: CameraSettings,
         episodeLegsOverride: List<JourneyLeg>? = null,
+        closeUpPlans: List<CloseUpArrivalPlan> = emptyList(),
     ): Double {
         if (!cameraSettings.episodeFramingEnabled || !cameraSettings.cameraMovement.legAware) return 0.0
         val currentDistanceKm = playbackPosition(journey, progress, cameraSettings).distanceKm
         val legs = episodeLegsOverride ?: cameraEpisodeLegs(journey, cameraSettings)
+        if (cameraSettings.cameraMovement == CameraMovement.CLOSE_UP) {
+            val plan = closeUpPlans.firstOrNull {
+                currentDistanceKm >= it.transferLeg.startKm && currentDistanceKm <= it.localLeg.endKm
+            } ?: return 0.0
+            if (currentDistanceKm < plan.localLeg.startKm) {
+                val width = plan.arrivalProgress - plan.approachStartProgress
+                if (width <= 0f) return 0.0
+                return smoothstep(((progress - plan.approachStartProgress) / width).toDouble())
+            }
+            return localArrivalSettleIntensity(journey, currentDistanceKm, plan.localLeg)
+        }
         val leg = journey.legAt(currentDistanceKm, legs)
         val legIndex = legs.indexOf(leg)
         if (leg.isTransfer) {
@@ -610,6 +648,14 @@ class TimelinePainter {
             )
         }
         if (legs.getOrNull(legIndex - 1)?.isTransfer != true || leg.lengthKm <= 0.0) return 0.0
+        return localArrivalSettleIntensity(journey, currentDistanceKm, leg)
+    }
+
+    private fun localArrivalSettleIntensity(
+        journey: Journey,
+        currentDistanceKm: Double,
+        leg: JourneyLeg,
+    ): Double {
         val sampleDistanceKm = journey.totalDistanceKm / CAMERA_TRACK_SAMPLES
         val holdDistanceKm = min(
             leg.lengthKm,
@@ -639,6 +685,7 @@ class TimelinePainter {
         height: Int,
         aspect: Double,
         episodeLegs: List<JourneyLeg>,
+        closeUpPlans: List<CloseUpArrivalPlan>,
     ): List<CameraFrame> {
         val frames = ArrayList<CameraFrame>(baseFrames.size)
         var previous: CameraFrame? = null
@@ -653,6 +700,7 @@ class TimelinePainter {
                 height,
                 aspect,
                 episodeLegs,
+                closeUpPlans,
             )
             val projectedMarker = WebMercator.project(
                 playbackPosition(journey, actualProgress, cameraSettings).point,
@@ -698,14 +746,19 @@ class TimelinePainter {
         height: Int,
         aspect: Double,
         episodeLegs: List<JourneyLeg>,
+        closeUpPlans: List<CloseUpArrivalPlan>,
     ): CameraFrame {
         if (!cameraSettings.episodeFramingEnabled || !cameraSettings.cameraMovement.legAware) return base
         val distanceKm = playbackPosition(journey, actualProgress, cameraSettings).distanceKm
         val leg = journey.legAt(distanceKm, episodeLegs)
         val alignment = if (leg.isTransfer) {
-            episodeArrivalZoomIntensity(journey, actualProgress, cameraSettings, episodeLegs)
+            episodeArrivalZoomIntensity(journey, actualProgress, cameraSettings, episodeLegs, closeUpPlans)
         } else {
-            1.0
+            if (cameraSettings.cameraMovement == CameraMovement.CLOSE_UP) {
+                episodeArrivalZoomIntensity(journey, actualProgress, cameraSettings, episodeLegs, closeUpPlans)
+            } else {
+                1.0
+            }
         }
         if (alignment <= 0.0) return base
         val alignedViewport = rawViewport(
@@ -737,6 +790,88 @@ class TimelinePainter {
         )
     } else {
         journey.legs
+    }
+
+    private fun closeUpArrivalEpisodes(
+        journey: Journey,
+        cameraSettings: CameraSettings,
+        episodeLegs: List<JourneyLeg>,
+    ): List<CloseUpArrivalEpisode> {
+        if (
+            cameraSettings.cameraMovement != CameraMovement.CLOSE_UP ||
+            !cameraSettings.episodeFramingEnabled
+        ) {
+            return emptyList()
+        }
+        val localLegs = episodeLegs.mapIndexedNotNull { index, leg ->
+            leg.takeIf {
+                !it.isTransfer &&
+                    episodeLegs.getOrNull(index - 1)?.isTransfer == true &&
+                    isMeaningfulCloseUpArrival(journey, it)
+            }
+        }
+        if (localLegs.isEmpty()) return emptyList()
+        val perArrivalFraction = min(
+            CLOSE_UP_MAX_PROGRESS_PER_ARRIVAL,
+            CLOSE_UP_TOTAL_PROGRESS_BUDGET / localLegs.size,
+        )
+        return localLegs.map { CloseUpArrivalEpisode(it, perArrivalFraction) }
+    }
+
+    private fun isMeaningfulCloseUpArrival(journey: Journey, localLeg: JourneyLeg): Boolean {
+        if (localLeg.isTransfer || localLeg.lengthKm <= 0.0) return false
+        val start = journey.positionAtDistance(localLeg.startKm).point.instant
+        val end = journey.positionAtDistance(localLeg.endKm).point.instant
+        return Duration.between(start, end).toMillis() >= CLOSE_UP_MIN_LOCAL_DURATION_MILLIS
+    }
+
+    private fun cameraDistanceSamples(
+        journey: Journey,
+        cameraSettings: CameraSettings,
+        arrivalEpisodes: List<CloseUpArrivalEpisode>,
+    ): DoubleArray {
+        val distances = MutableList(CAMERA_TRACK_SAMPLES + 1) { sample ->
+            journey.totalDistanceKm * sample / CAMERA_TRACK_SAMPLES
+        }
+        if (cameraSettings.cameraMovement == CameraMovement.CLOSE_UP) {
+            arrivalEpisodes.forEach { episode ->
+                val leg = episode.localLeg
+                val inset = min(CLOSE_UP_ANCHOR_INSET_MAX_KM, leg.lengthKm * CLOSE_UP_ANCHOR_INSET_FRACTION)
+                distances += leg.startKm
+                distances += leg.startKm + inset
+                distances += leg.endKm - inset
+                distances += leg.endKm
+            }
+        }
+        return distances.asSequence()
+            .map { it.coerceIn(0.0, journey.totalDistanceKm) }
+            .distinct()
+            .sorted()
+            .toList()
+            .toDoubleArray()
+    }
+
+    private fun closeUpArrivalPlans(
+        episodes: List<CloseUpArrivalEpisode>,
+        episodeLegs: List<JourneyLeg>,
+        timing: JourneyTiming,
+    ): List<CloseUpArrivalPlan> = episodes.mapNotNull { episode ->
+        val localIndex = episodeLegs.indexOf(episode.localLeg)
+        val transfer = episodeLegs.getOrNull(localIndex - 1)?.takeIf { it.isTransfer }
+            ?: return@mapNotNull null
+        val transferStartProgress = timing.progressAtDistance(transfer.startKm)
+        val arrivalProgress = timing.progressAtDistance(episode.localLeg.startKm)
+        val transferProgress = (arrivalProgress - transferStartProgress).coerceAtLeast(0f)
+        val approachProgress = min(
+            episode.minimumProgressFraction.toFloat(),
+            transferProgress * CLOSE_UP_MAX_APPROACH_TRANSFER_FRACTION,
+        )
+        CloseUpArrivalPlan(
+            transferLeg = transfer,
+            localLeg = episode.localLeg,
+            approachStartProgress = (arrivalProgress - approachProgress).coerceAtLeast(transferStartProgress),
+            arrivalProgress = arrivalProgress,
+        )
     }
 
     private fun tileZoom(width: Int, aspect: Double, spanY: Double): Int =
@@ -1333,6 +1468,18 @@ class TimelinePainter {
         val arrivalZoomIntensity: Double,
     )
 
+    private data class CloseUpArrivalEpisode(
+        val localLeg: JourneyLeg,
+        val minimumProgressFraction: Double,
+    )
+
+    private data class CloseUpArrivalPlan(
+        val transferLeg: JourneyLeg,
+        val localLeg: JourneyLeg,
+        val approachStartProgress: Float,
+        val arrivalProgress: Float,
+    )
+
     internal data class RouteBounds(
         val minX: Double,
         val maxX: Double,
@@ -1419,6 +1566,12 @@ class TimelinePainter {
         private const val EPISODE_ARRIVAL_ZOOM_ALPHA = 1.00
         private const val EPISODE_ARRIVAL_HOLD_SAMPLES = 2.0
         private const val EPISODE_ARRIVAL_SETTLE_MAX_KM = 25.0
+        private const val CLOSE_UP_MIN_LOCAL_DURATION_MILLIS = 60L * 60L * 1_000L
+        private const val CLOSE_UP_TOTAL_PROGRESS_BUDGET = 0.08
+        private const val CLOSE_UP_MAX_PROGRESS_PER_ARRIVAL = 0.03
+        private const val CLOSE_UP_MAX_APPROACH_TRANSFER_FRACTION = 0.35f
+        private const val CLOSE_UP_ANCHOR_INSET_FRACTION = 0.10
+        private const val CLOSE_UP_ANCHOR_INSET_MAX_KM = 0.25
         private const val MIN_CONTEXT_KM = 0.001
         private const val DEFAULT_JOURNEY_DURATION_SECONDS = 30
         private const val TRAIL_VISIBLE_SECONDS = 2.5

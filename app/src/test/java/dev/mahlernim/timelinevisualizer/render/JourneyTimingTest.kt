@@ -102,6 +102,32 @@ class JourneyTimingTest {
         assertEquals(steadyMiddle, spikeMiddle, 0.03f)
     }
 
+    @Test
+    fun minimumEpisodeShareReallocatesTimeWithoutHoldingDistance() {
+        val journey = Journey.from(listOf(point(0.0), point(1.0), point(2.0)), 2026)
+        val total = journey.totalDistanceKm
+        val episodeStart = total * 0.50
+        val episodeEnd = total * 0.501
+        val distances = doubleArrayOf(0.0, episodeStart, episodeEnd, total)
+        val timing = JourneyTiming.createViewportRelative(
+            journey = journey,
+            viewports = List(distances.size) { viewport(0.08) },
+            aspect = 1.0,
+            distancesKm = distances,
+            minimumShares = listOf(TimingMinimumShare(episodeStart, episodeEnd, 0.03)),
+        )
+
+        val startProgress = timing.progressAtDistance(episodeStart)
+        val endProgress = timing.progressAtDistance(episodeEnd)
+        val middleDistance = timing.distanceAt((startProgress + endProgress) / 2f)
+
+        assertTrue(endProgress - startProgress >= 0.029f)
+        assertTrue("Episode timing must keep moving", middleDistance > episodeStart)
+        assertTrue("Episode timing must not finish early", middleDistance < episodeEnd)
+        assertEquals(0.0, timing.distanceAt(0f), 0.0)
+        assertEquals(total, timing.distanceAt(1f), 1e-6)
+    }
+
     private fun progressAtDistance(timing: JourneyTiming, distanceKm: Double): Float {
         var low = 0f
         var high = 1f

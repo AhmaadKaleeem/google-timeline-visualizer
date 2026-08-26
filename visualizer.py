@@ -89,7 +89,7 @@ CAMERA_MOVEMENTS = {
     'dynamic': dict(context_fraction=0.10, minimum_context_km=100.0, maximum_context_km=350.0,
                     padding=2.2, minimum_span=0.00045, zoom_out_alpha=0.24,
                     zoom_in_alpha=0.06, leg_aware=True, fixed_zoom=False),
-    'close_up': dict(context_fraction=0.035, minimum_context_km=15.0, maximum_context_km=120.0,
+    'close_up': dict(context_fraction=0.035, minimum_context_km=6.0, maximum_context_km=120.0,
                      padding=1.7, minimum_span=0.00030, zoom_out_alpha=0.30,
                      zoom_in_alpha=0.075, leg_aware=True, fixed_zoom=False),
 }

@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       LAB_RELEASE_TAG: ${{ github.ref_name }}
-      EXPECTED_VERSION_CODE: 19
-      EXPECTED_VERSION_NAME: 3.0.0-journal-lab.19
+      EXPECTED_VERSION_CODE: 20
+      EXPECTED_VERSION_NAME: 3.0.0-journal-lab.20
     steps:
       - uses: actions/checkout@v5
         with:
@@ -36,7 +36,9 @@ jobs:
           ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
           ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
           ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+          CARTO_BASEMAP_API_KEY: ${{ secrets.CARTO_BASEMAP_API_KEY }}
         run: |
+          test -n "$CARTO_BASEMAP_API_KEY"
           ./gradlew testGithubDebugUnitTest lintJournalLabRelease assembleGithubRelease assembleJournalLabRelease --stacktrace
           ./gradlew testJournalLabDebugUnitTest \
             --tests dev.mahlernim.timelinevisualizer.JournalLabUiTest \
@@ -67,7 +69,7 @@ jobs:
           version_name="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<< "$package_line")"
           application_label="$($build_tools_dir/aapt dump badging "$lab_apk" | sed -n "s/^application-label:'\([^']*\)'.*/\1/p" | head -n 1)"
           version_code="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" <<< "$package_line")"
-          test "$LAB_RELEASE_TAG" = "journal-lab-19"
+          test "$LAB_RELEASE_TAG" = "journal-lab-20"
           test "$package_name" = "dev.mahlernim.timelinevisualizer.journallab"
           test "$package_name" != "dev.mahlernim.timelinevisualizer"
           test "$version_code" = "$EXPECTED_VERSION_CODE"
@@ -88,7 +90,7 @@ jobs:
           disable-animations: true
           script: |
             adb install app/build/outputs/apk/github/release/app-github-release.apk
-            git worktree add --detach "$RUNNER_TEMP/previous-lab" 0a4d27c54ddab477b3d9e28b5529c6bb994d8348
+            git worktree add --detach "$RUNNER_TEMP/previous-lab" c3b58c198459bfd1c09a9406e4b1892de19083fa
             (cd "$RUNNER_TEMP/previous-lab" && ./gradlew :app:assembleJournalLabRelease --stacktrace)
             adb install "$RUNNER_TEMP/previous-lab/app/build/outputs/apk/journalLab/release/app-journalLab-release.apk"
             adb install -r app/build/outputs/apk/journalLab/release/app-journalLab-release.apk
@@ -109,6 +111,6 @@ jobs:
             "$lab_apk" \
             "$lab_apk.sha256" \
             --title "Journal Lab ${LAB_RELEASE_TAG#journal-lab-}" \
-            --notes-file docs/journal-lab-19.md \
+            --notes-file docs/journal-lab-20.md \
             --prerelease \
             --verify-tag
