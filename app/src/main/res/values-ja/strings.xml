@@ -138,6 +138,7 @@
     <string name="selected_period">選択期間</string>
     <string name="video_details">動画の設定</string>
     <string name="journey">移動経路</string>
+    <string name="journey_preview">移動経路のプレビュー</string>
     <string name="journey_overview">移動経路の全体図</string>
     <string name="save_image">画像を保存</string>
     <string name="share_image">画像を共有</string>
@@ -266,7 +267,7 @@
     <string name="video_playback_failed">Timeline Visualizer内でこの動画を再生できませんでした。</string>
     <string name="open_in_another_app">別のアプリで開く</string>
     <string name="preset">プリセット</string>
-    <string name="preset_custom">カスタム</string>
+    <string name="preset_custom">カスタム設定</string>
     <string name="preset_custom_summary">この動画で手動選択した設定</string>
     <string name="preset_applied_summary">この動画に適用済み · 解像度は変更なし</string>
     <string name="save_preset">保存</string>

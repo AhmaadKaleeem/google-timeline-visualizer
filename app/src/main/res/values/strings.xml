@@ -155,6 +155,7 @@
     <string name="selected_period">Selected period</string>
     <string name="video_details">Video details</string>
     <string name="journey">Journey</string>
+    <string name="journey_preview">Journey preview</string>
     <string name="journey_overview">Journey overview</string>
     <string name="save_image">Save image</string>
     <string name="share_image">Share image</string>
@@ -321,7 +322,7 @@
     <string name="video_playback_failed">This video could not be played inside Timeline Visualizer.</string>
     <string name="open_in_another_app">Open in another app</string>
     <string name="preset">Preset</string>
-    <string name="preset_custom">Custom</string>
+    <string name="preset_custom">Custom settings</string>
     <string name="preset_custom_summary">Manual choices for this video</string>
     <string name="preset_applied_summary">Applied to this video · Resolution unchanged</string>
     <string name="save_preset">Save</string>

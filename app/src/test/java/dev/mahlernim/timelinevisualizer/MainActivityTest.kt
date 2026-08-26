@@ -211,6 +211,47 @@ class MainActivityTest {
     }
 
     @Test
+    fun createStepperProvidesBottomContinueAndInlinePreviewControls() {
+        acceptPrivacyDisclosure()
+        val source = Uri.fromFile(repoRoot().resolve("test-fixtures/seoul-bohol-sample.json"))
+        val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
+        waitUntil { timelineSourceStore.importInProgress() == null }
+
+        activity.findViewById<View>(R.id.navigationVideos).performClick()
+        activity.findViewById<View>(R.id.createTripButton).performClick()
+        activity.findViewById<TextView>(R.id.projectTitleInput).text = "Bohol"
+        activity.findViewById<View>(R.id.wizardContinueButton).performClick()
+
+        val stepper = activity.findViewById<ViewGroup>(R.id.createStepperGroup)
+        val back = activity.findViewById<View>(R.id.wizardBackButton)
+        assertEquals(stepper, back.parent)
+
+        val navigation = activity.findViewById<View>(R.id.wizardNavigationGroup)
+        val editor = activity.findViewById<View>(R.id.editorGroup)
+        val screen = navigation.parent as ViewGroup
+        assertTrue(screen.indexOfChild(navigation) > screen.indexOfChild(editor))
+
+        activity.findViewById<View>(R.id.createStepDetails).performClick()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.projectStepGroup).visibility)
+        activity.findViewById<View>(R.id.createStepStyle).performClick()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.styleStepGroup).visibility)
+        activity.findViewById<View>(R.id.createStepCreate).performClick()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.previewStepGroup).visibility)
+
+        val play = activity.findViewById<MaterialButton>(R.id.playButton)
+        assertEquals("", play.text.toString())
+        assertEquals(activity.getString(R.string.preview), play.contentDescription.toString())
+        assertNotNull(play.icon)
+        assertTrue(activity.findViewById<TimelineView>(R.id.timelineView).hasOnClickListeners())
+        assertEquals(
+            activity.getString(R.string.journey_preview),
+            activity.findViewById<TextView>(R.id.journeyPreviewTitle).text.toString(),
+        )
+        play.performClick()
+        assertEquals(activity.getString(R.string.pause_preview), play.contentDescription.toString())
+    }
+
+    @Test
     fun editedBuiltInIsMarkedModifiedAndCanReturnToExactMatch() {
         val activity = launchActivity()
         val preset = activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown)

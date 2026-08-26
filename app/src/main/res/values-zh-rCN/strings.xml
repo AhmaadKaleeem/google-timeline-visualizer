@@ -139,6 +139,7 @@
     <string name="selected_period">所选期间</string>
     <string name="video_details">视频详情</string>
     <string name="journey">旅行</string>
+    <string name="journey_preview">旅程预览</string>
     <string name="journey_overview">旅程概览</string>
     <string name="save_image">保存图像</string>
     <string name="share_image">分享图片</string>
@@ -259,7 +260,7 @@
     <string name="video_playback_failed">该视频无法在Timeline Visualizer内播放。</string>
     <string name="open_in_another_app">在其他应用中打开</string>
     <string name="preset">预设</string>
-    <string name="preset_custom">自定义</string>
+    <string name="preset_custom">自定义设置</string>
     <string name="preset_custom_summary">为此视频手动选择的设置</string>
     <string name="preset_applied_summary">已应用到此视频 · 分辨率未更改</string>
     <string name="save_preset">保存</string>

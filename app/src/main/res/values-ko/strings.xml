@@ -138,6 +138,7 @@
     <string name="selected_period">선택 기간</string>
     <string name="video_details">영상 설정</string>
     <string name="journey">이동 경로</string>
+    <string name="journey_preview">이동 경로 미리보기</string>
     <string name="journey_overview">전체 이동 경로</string>
     <string name="save_image">이미지 저장</string>
     <string name="share_image">이미지 공유</string>

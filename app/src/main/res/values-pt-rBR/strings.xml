@@ -146,6 +146,7 @@
     <string name="selected_period">Período selecionado</string>
     <string name="video_details">Detalhes do vídeo</string>
     <string name="journey">Jornada</string>
+    <string name="journey_preview">Visualização da jornada</string>
     <string name="journey_overview">Visão geral da jornada</string>
     <string name="save_image">Salvar imagem</string>
     <string name="share_image">Compartilhar imagem</string>
@@ -268,7 +269,7 @@
     <string name="video_playback_failed">Este vídeo não pôde ser reproduzido dentro do Timeline Visualizer.</string>
     <string name="open_in_another_app">Abrir em outro aplicativo</string>
     <string name="preset">Predefinição</string>
-    <string name="preset_custom">Personalizado</string>
+    <string name="preset_custom">Configurações personalizadas</string>
     <string name="preset_custom_summary">Escolhas manuais para este vídeo</string>
     <string name="preset_applied_summary">Aplicado a este vídeo · Resolução inalterada</string>
     <string name="save_preset">Salvar</string>

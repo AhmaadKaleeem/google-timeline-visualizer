@@ -142,6 +142,7 @@
     <string name="selected_period">Ausgewählter Zeitraum</string>
     <string name="video_details">Videodetails</string>
     <string name="journey">Reise</string>
+    <string name="journey_preview">Reisevorschau</string>
     <string name="journey_overview">Reiseübersicht</string>
     <string name="save_image">Bild speichern</string>
     <string name="share_image">Bild teilen</string>
@@ -263,7 +264,7 @@
     <string name="video_playback_failed">Dieses Video konnte in Timeline Visualizer nicht abgespielt werden.</string>
     <string name="open_in_another_app">In einer anderen App öffnen</string>
     <string name="preset">Voreinstellung</string>
-    <string name="preset_custom">Benutzerdefiniert</string>
+    <string name="preset_custom">Benutzerdefinierte Einstellungen</string>
     <string name="preset_custom_summary">Manuelle Auswahl für dieses Video</string>
     <string name="preset_applied_summary">Auf dieses Video angewendet · Auflösung unverändert</string>
     <string name="save_preset">Speichern</string>

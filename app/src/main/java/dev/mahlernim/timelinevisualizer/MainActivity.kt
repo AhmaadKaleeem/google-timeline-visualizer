@@ -449,6 +449,7 @@ class MainActivity : AppCompatActivity() {
         editor.exportHelpButton.setOnClickListener { showExportHelp() }
         editor.restoreTimelineHelpLink.setOnClickListener { openRestoreGuide() }
         editor.playButton.setOnClickListener { togglePreview() }
+        editor.timelineView.setOnClickListener { togglePreview() }
         editor.exportButton.setOnClickListener { chooseExportDestination() }
         editor.shareButton.setOnClickListener { lastVideoUri?.let(::shareVideo) }
         editor.saveOverviewButton.setOnClickListener { lastVideoUri?.let(::chooseOverviewDestination) }
@@ -465,6 +466,9 @@ class MainActivity : AppCompatActivity() {
         editor.saveAsNewTripButton.setOnClickListener { saveActiveProject(asNew = true) }
         editor.wizardBackButton.setOnClickListener { moveCreateStep(-1) }
         editor.wizardContinueButton.setOnClickListener { moveCreateStep(1) }
+        editor.createStepDetails.setOnClickListener { navigateToCreateStage(0) }
+        editor.createStepStyle.setOnClickListener { navigateToCreateStage(1) }
+        editor.createStepCreate.setOnClickListener { navigateToCreateStage(2) }
         editor.customizeSettingsButton.setOnClickListener { showAdvancedVideoSettingsSheet() }
         editor.useAvailableRawRangeButton.setOnClickListener { useAvailableRawRange() }
         editor.tripVideoChoice.setOnClickListener {
@@ -1280,7 +1284,8 @@ class MainActivity : AppCompatActivity() {
             },
         )
         renderCreateStepper()
-        editor.wizardNavigationGroup.visibility = if (isType) View.GONE else View.VISIBLE
+        editor.wizardNavigationGroup.visibility = if (isProject || isStyle) View.VISIBLE else View.GONE
+        editor.wizardBackButton.visibility = if (isType) View.GONE else View.VISIBLE
         editor.wizardBackButton.isEnabled = true
         editor.wizardContinueButton.visibility = if (isProject || isStyle) View.VISIBLE else View.GONE
         editor.wizardContinueButton.setText(
@@ -1325,11 +1330,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderCreateStepper() {
-        val stage = when (currentCreateStep) {
-            CreateStep.TYPE, CreateStep.TRIP_SOURCE, CreateStep.DISCOVERY, CreateStep.PROJECT -> 0
-            CreateStep.STYLE -> 1
-            CreateStep.PREVIEW -> 2
-        }
+        val stage = currentCreateStage()
+        val canAdvanceOneStage = currentCreateStep == CreateStep.PROJECT || currentCreateStep == CreateStep.STYLE
         val labels = listOf(
             getString(R.string.create_step_details_label),
             getString(R.string.create_step_style_label),
@@ -1347,6 +1349,32 @@ class MainActivity : AppCompatActivity() {
             view.setTypeface(null, if (index == stage) Typeface.BOLD else Typeface.NORMAL)
             view.setTextColor(ContextCompat.getColor(this, if (index <= stage) R.color.interactive else R.color.on_surface_variant))
             view.contentDescription = getString(R.string.step_accessibility, index + 1, views.size, labels[index], getString(status))
+            view.isEnabled = index <= stage || (canAdvanceOneStage && index == stage + 1)
+        }
+    }
+
+    private fun currentCreateStage(): Int = when (currentCreateStep) {
+        CreateStep.TYPE, CreateStep.TRIP_SOURCE, CreateStep.DISCOVERY, CreateStep.PROJECT -> 0
+        CreateStep.STYLE -> 1
+        CreateStep.PREVIEW -> 2
+    }
+
+    private fun navigateToCreateStage(targetStage: Int) {
+        val currentStage = currentCreateStage()
+        when {
+            targetStage == currentStage -> Unit
+            targetStage == 0 && currentStage > 0 -> {
+                currentCreateStep = CreateStep.PROJECT
+                renderCreateStep()
+            }
+            targetStage == 1 && currentStage == 2 -> {
+                currentCreateStep = CreateStep.STYLE
+                renderCreateStep()
+            }
+            targetStage == currentStage + 1 &&
+                (currentCreateStep == CreateStep.PROJECT || currentCreateStep == CreateStep.STYLE) -> {
+                moveCreateStep(1)
+            }
         }
     }
 
@@ -3107,12 +3135,12 @@ class MainActivity : AppCompatActivity() {
         journey ?: return
         if (animation?.isPaused == true) {
             animation?.resume()
-            editor.playButton.text = getString(R.string.pause_preview)
+            updatePreviewControl(playing = true)
             return
         }
         if (animation?.isRunning == true) {
             animation?.pause()
-            editor.playButton.text = getString(R.string.preview)
+            updatePreviewControl(playing = false)
             return
         }
         val start = if (editor.timelineSeek.progress >= 1000) {
@@ -3131,19 +3159,24 @@ class MainActivity : AppCompatActivity() {
             }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationStart(animation: android.animation.Animator) {
-                    editor.playButton.text = getString(R.string.pause_preview)
+                    updatePreviewControl(playing = true)
                 }
 
                 override fun onAnimationEnd(animation: android.animation.Animator) {
-                    editor.playButton.text = getString(R.string.preview)
+                    updatePreviewControl(playing = false)
                 }
 
                 override fun onAnimationCancel(animation: android.animation.Animator) {
-                    editor.playButton.text = getString(R.string.preview)
+                    updatePreviewControl(playing = false)
                 }
             })
             start()
         }
+    }
+
+    private fun updatePreviewControl(playing: Boolean) {
+        editor.playButton.setIconResource(if (playing) R.drawable.ic_pause_24 else R.drawable.ic_play_arrow_24)
+        editor.playButton.contentDescription = getString(if (playing) R.string.pause_preview else R.string.preview)
     }
 
     private fun showProgress(progress: Float) {
