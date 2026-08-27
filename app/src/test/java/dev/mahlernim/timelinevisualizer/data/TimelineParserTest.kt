@@ -13,7 +13,9 @@ class TimelineParserTest {
 
     @Test
     fun matchesSharedPlatformParityFixture() {
-        val root = File("test-fixtures")
+        val root = listOf(File("test-fixtures"), File("../test-fixtures"))
+            .firstOrNull(File::isDirectory)
+            ?: error("Shared platform parity fixtures are missing")
         val expected = File(root, "platform-parity-expected.json").readText()
         val timeline = parse(File(root, "platform-parity-sample.json").readText())
         val expectedCount = Regex("\\\"pointCount\\\"\\s*:\\s*(\\d+)")
