@@ -88,12 +88,12 @@ class LargeTimelineImportDeviceTest {
                     if (loading) assertEquals(false, activity.findViewById<View>(R.id.importButton).isEnabled)
                     imported = !loading &&
                         activity.journalMetadataReady() &&
-                        activity.findViewById<View>(R.id.editorGroup).visibility == View.VISIBLE
+                        activity.findViewById<View>(R.id.createTypeStepGroup).visibility == View.VISIBLE
                 }
                 if (!imported) Thread.sleep(100)
             }
             scenario.onActivity { activity ->
-                assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.editorGroup).visibility)
+                assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.createTypeStepGroup).visibility)
                 assertEquals(View.GONE, activity.findViewById<View>(R.id.loadingGroup).visibility)
                 assertEquals(true, activity.findViewById<View>(R.id.importButton).isEnabled)
                 assertEquals(true, activity.journalMetadataReady())

@@ -31,10 +31,8 @@ class DeviceSmokeTest {
                 assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
                 assertEquals(View.GONE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
                 activity.findViewById<View>(R.id.navigationCreate).performClick()
-                assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
-                val preset = activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown)
-                assertEquals(activity.getString(R.string.preset_custom), preset.text.toString())
-                assertEquals(3, preset.adapter.count)
+                assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsScreen).visibility)
+                assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.journalSetupIntro).visibility)
 
                 activity.onBackPressedDispatcher.onBackPressed()
                 assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
