@@ -7,6 +7,9 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Looper
@@ -96,9 +99,10 @@ class PlayStoreScreenshotTest {
             shadowOf(Looper.getMainLooper()).idle()
 
             val completedUri = Uri.parse("content://synthetic/completed-video")
-            val cityOverview = BitmapFactory.decodeFile(
+            val sourceOverview = BitmapFactory.decodeFile(
                 repoRoot().resolve("play-store/assets/source/video-example.jpg").absolutePath,
             ) ?: error("Store video example could not be decoded")
+            val cityOverview = portraitOverview(sourceOverview)
             VideoMedia(context).saveGeneratedOverview(completedUri, cityOverview)
             VideoExportCoordinator.publish(
                 context,
@@ -113,7 +117,7 @@ class PlayStoreScreenshotTest {
                 journey = null
                 background = BitmapDrawable(activity.resources, cityOverview)
             }
-            findNestedScrollView(activity.findViewById(R.id.newVideoScreen))?.scrollTo(0, 800)
+            findNestedScrollView(activity.findViewById(R.id.newVideoScreen))?.scrollTo(0, 650)
             render(activity.window.decorView, output.resolve("04-video-saved.png"))
 
             activity.findViewById<View>(R.id.doneButton).performClick()
@@ -122,6 +126,7 @@ class PlayStoreScreenshotTest {
             findNestedScrollView(activity.findViewById(R.id.settingsScreen))?.scrollTo(0, 1_400)
             render(activity.window.decorView, output.resolve("05-settings.png"))
             cityOverview.recycle()
+            sourceOverview.recycle()
         }
 
         assertEquals(
@@ -165,6 +170,42 @@ class PlayStoreScreenshotTest {
         canvas.drawLine(410f, 230f, 560f, 80f, route)
         canvas.drawCircle(560f, 80f, 22f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(36, 25, 29) })
         return bitmap
+    }
+
+    private fun portraitOverview(source: Bitmap): Bitmap {
+        val output = Bitmap.createBitmap(720, 1280, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        canvas.drawColor(Color.rgb(250, 244, 246))
+        canvas.drawBitmap(
+            source,
+            Rect(280, 200, 1_000, 1_280),
+            Rect(0, 200, 720, 1_280),
+            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG),
+        )
+
+        val header = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(252, 247, 248) }
+        canvas.drawRoundRect(RectF(30f, 30f, 690f, 185f), 32f, 32f, header)
+        val title = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(36, 25, 29)
+            textAlign = Paint.Align.CENTER
+            textSize = 40f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        val subtitle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(84, 74, 80)
+            textAlign = Paint.Align.CENTER
+            textSize = 25f
+        }
+        canvas.drawText("2025 mahler83's Timeline", 360f, 95f, title)
+        canvas.drawText("December 2025  ·  33,342 km", 360f, 148f, subtitle)
+        canvas.drawRect(430f, 1_235f, 720f, 1_280f, header)
+        val attribution = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(55, 50, 53)
+            textAlign = Paint.Align.RIGHT
+            textSize = 18f
+        }
+        canvas.drawText("© OpenStreetMap  © CARTO", 708f, 1_265f, attribution)
+        return output
     }
 
     private fun acceptPrivacy(context: Context) {
