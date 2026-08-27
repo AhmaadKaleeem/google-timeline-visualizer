@@ -574,4 +574,6 @@
     <string name="settings_why_import_detail">최근에 내보낸 Timeline에는 나중에 내보낸 파일에는 없을 수 있는 상세 경로가 담겨 있습니다. 몇 주에 한 번씩 최신 파일을 가져오면 새로 생긴 상세 구간을 이 기기의 여행 기록에 계속 보관할 수 있습니다.</string>
     <string name="simplify_route_detail">경로 세부 정보 단순화</string>
     <string name="simplify_route_detail_summary">긴 기간의 동영상에서 요약된 Timeline 활동을 사용해 경로를 더 간결하게 표시합니다. 끄면 사용 가능한 가장 자세한 경로를 사용합니다.</string>
+    <string name="keep_past_routes_visible">지난 경로 계속 표시</string>
+    <string name="keep_past_routes_visible_summary">지나온 경로를 흐린 배경 선으로 표시합니다. 끄면 오래된 이동 경로가 사라집니다.</string>
 </resources>

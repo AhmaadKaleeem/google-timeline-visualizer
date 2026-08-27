@@ -3634,6 +3634,14 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        val keepVisible = settingsViewModel.state.value.keepPastRoutesVisible
+        settingsScreen.keepPastRoutesVisibleSwitch.isChecked = keepVisible
+        applyAdvancedSettings(cameraSettings.copy(keepPastRoutesVisible = keepVisible))
+        settingsScreen.keepPastRoutesVisibleSwitch.setOnCheckedChangeListener { _, checked ->
+            settingsViewModel.updateKeepPastRoutesVisible(checked)
+            applyAdvancedSettings(cameraSettings.copy(keepPastRoutesVisible = checked))
+            editor.timelineView.invalidate()
+        }
     }
 
     private fun configureDistanceUnitSelection() {
@@ -4383,6 +4391,7 @@ class MainActivity : AppCompatActivity() {
         settingsScreen.frameRateDropdown.isEnabled = !exporting
         settingsScreen.resetAdvancedSettingsButton.isEnabled = !exporting
         settingsScreen.simplifyRouteDetailSwitch.isEnabled = !exporting
+        settingsScreen.keepPastRoutesVisibleSwitch.isEnabled = !exporting
         renderPresetSelection()
         if (exporting) editor.videoReadyGroup.visibility = View.GONE
         if (!exporting) updateCameraPreparationUi()

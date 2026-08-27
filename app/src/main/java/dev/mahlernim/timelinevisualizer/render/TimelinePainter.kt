@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -48,6 +49,8 @@ class TimelinePainter {
     private var cachedTiming: JourneyTiming? = null
     internal val cameraRoutePointEvaluations: Long
         get() = cachedPrepared?.pointEvaluations ?: 0L
+    internal val pastRouteCachedSampleCount: Int
+        get() = pastRouteCache.sampleCount
     private val oldTrailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(233, 0, 100)
         style = Paint.Style.STROKE
@@ -63,6 +66,10 @@ class TimelinePainter {
     private val recentTrailPaint = Paint(oldTrailPaint).apply {
         strokeWidth = 8f
         alpha = 255
+    }
+    private val pastRoutePaint = Paint(oldTrailPaint).apply {
+        strokeWidth = 4f
+        alpha = 34
     }
     private val overviewRoutePaint = Paint(oldTrailPaint).apply {
         strokeWidth = 3.5f
@@ -96,6 +103,81 @@ class TimelinePainter {
     private val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(220, 255, 248, 250)
     }
+
+    private class PastRouteChunk {
+        val path = Path()
+        var originX = 0.0
+        var originY = 0.0
+        var pointCount = 0
+
+        fun moveTo(point: WorldPoint) {
+            if (pointCount == 0) {
+                originX = point.x
+                originY = point.y
+            }
+            path.moveTo((point.x - originX).toFloat(), (point.y - originY).toFloat())
+            pointCount += 1
+        }
+
+        fun lineTo(point: WorldPoint) {
+            path.lineTo((point.x - originX).toFloat(), (point.y - originY).toFloat())
+            pointCount += 1
+        }
+    }
+
+    private inner class PastRouteCache {
+        private val chunks = mutableListOf<PastRouteChunk>()
+        private val matrix = Matrix()
+        private val screenPath = Path()
+        private var journey: Journey? = null
+        private var lastIndex = -1
+        val sampleCount: Int get() = lastIndex + 1
+
+        fun update(activeJourney: Journey, prepared: PreparedJourney, distanceKm: Double) {
+            val target = prepared.upperBound(distanceKm).coerceAtLeast(0)
+            if (journey !== activeJourney || target < lastIndex) reset(activeJourney)
+            if (target <= lastIndex) return
+            for (index in (lastIndex + 1).coerceAtLeast(0)..target) append(activeJourney, prepared, index)
+            lastIndex = target
+        }
+
+        private fun reset(activeJourney: Journey) {
+            chunks.clear()
+            journey = activeJourney
+            lastIndex = -1
+        }
+
+        private fun append(activeJourney: Journey, prepared: PreparedJourney, index: Int) {
+            val point = prepared.worldPointAt(index)
+            val connected = index > 0 && activeJourney.isRenderConnectionFromPrevious(index)
+            var chunk = chunks.lastOrNull()
+            if (chunk == null || (connected && chunk.pointCount >= PAST_ROUTE_CHUNK_POINTS)) {
+                chunk = PastRouteChunk().also(chunks::add)
+                if (connected) chunk.moveTo(prepared.worldPointAt(index - 1))
+            }
+            if (!connected || chunk.pointCount == 0) chunk.moveTo(point) else chunk.lineTo(point)
+        }
+
+        fun draw(canvas: Canvas, viewport: Viewport, width: Int, height: Int, alphaScale: Int) {
+            if (chunks.isEmpty() || alphaScale <= 0) return
+            val previousAlpha = pastRoutePaint.alpha
+            pastRoutePaint.alpha = (previousAlpha * alphaScale / 255f).toInt().coerceIn(0, 255)
+            val scaleX = width / (viewport.maxX - viewport.minX).toFloat()
+            val scaleY = height / (viewport.maxY - viewport.minY).toFloat()
+            chunks.forEach { chunk ->
+                val origin = worldToScreen(WorldPoint(chunk.originX, chunk.originY), viewport, width, height)
+                matrix.reset()
+                matrix.postScale(scaleX, scaleY)
+                matrix.postTranslate(origin.first, origin.second)
+                screenPath.reset()
+                chunk.path.transform(matrix, screenPath)
+                canvas.drawPath(screenPath, pastRoutePaint)
+            }
+            pastRoutePaint.alpha = previousAlpha
+        }
+    }
+
+    private val pastRouteCache = PastRouteCache()
 
     private fun overlayScale(width: Int, height: Int): Float = min(width, height) / 720f
 
@@ -1074,6 +1156,10 @@ class TimelinePainter {
         val middleEnd = trailStart + visibleTrail * 0.75
         val activeAlpha = (255 * (1f - easeOutCubic(frame.outroProgress))).toInt().coerceIn(0, 255)
         if (prepared != null) {
+            if (cameraSettings.keepPastRoutesVisible) {
+                pastRouteCache.update(journey, prepared, current.distanceKm)
+                pastRouteCache.draw(canvas, viewport, width, height, activeAlpha)
+            }
             drawRouteRange(
                 canvas, journey, prepared, viewport, width, height,
                 trailStart, min(oldEnd, current.distanceKm), oldTrailPaint, activeAlpha,
@@ -1559,6 +1645,7 @@ class TimelinePainter {
     )
 
     companion object {
+        private const val PAST_ROUTE_CHUNK_POINTS = 256
         private const val TRANSFER_PADDING = 2.8
         private const val EPISODE_DEPARTURE_LEAD_FRACTION = 0.15
         private const val EPISODE_DEPARTURE_LEAD_MAX_KM = 50.0
