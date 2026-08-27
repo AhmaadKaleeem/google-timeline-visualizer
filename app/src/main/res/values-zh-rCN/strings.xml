@@ -551,4 +551,6 @@
     <string name="onboarding_v11_start_body">先从 Google 地图导出最新的 Timeline.json 文件，然后在这里选择它。历史记录较多时，首次处理可能稍慢。以后每次导入都会为同一份旅行记录添加新的细节。</string>
     <string name="settings_why_import_title">为什么要导入更新的文件？</string>
     <string name="settings_why_import_detail">较新的时间轴导出文件可能包含之后的导出文件中不再出现的详细路线。每隔几周导入一次更新的文件，就能把每段新的详细路线保留在本机的旅行记录中。</string>
+    <string name="simplify_route_detail">简化路线细节</string>
+    <string name="simplify_route_detail_summary">在长时间跨度的视频中使用摘要后的 Timeline 活动来生成更清晰的路线。关闭时使用可用的最详细路线。</string>
 </resources>

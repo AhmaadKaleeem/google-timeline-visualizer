@@ -561,4 +561,6 @@
     <string name="onboarding_v11_start_body">Exportez un fichier Timeline.json à jour depuis Google Maps, puis choisissez-le ici. Avec un historique volumineux, la première fois peut prendre un peu plus de temps. Les imports suivants ajoutent de nouveaux détails au même carnet.</string>
     <string name="settings_why_import_title">Pourquoi importer un fichier à jour ?</string>
     <string name="settings_why_import_detail">Les exports Timeline récents peuvent contenir des itinéraires détaillés absents d\'un export ultérieur. En important un fichier à jour toutes les quelques semaines, votre carnet de voyage conserve sur cet appareil chaque nouvelle portion détaillée.</string>
+    <string name="simplify_route_detail">Simplifier le détail du trajet</string>
+    <string name="simplify_route_detail_summary">Utilise l’activité Timeline résumée pour créer un trajet plus clair dans les vidéos couvrant une longue période. Si cette option est désactivée, le trajet le plus détaillé disponible est utilisé.</string>
 </resources>

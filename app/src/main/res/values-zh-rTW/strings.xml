@@ -551,4 +551,6 @@
     <string name="onboarding_v11_start_body">先從 Google 地圖匯出最新的 Timeline.json 檔案，然後在這裡選擇。記錄較多時，首次處理可能稍久。日後每次匯入都會為同一份旅行記錄加入新的細節。</string>
     <string name="settings_why_import_title">為什麼要匯入更新的檔案？</string>
     <string name="settings_why_import_detail">較新的時間軸匯出檔案可能包含之後的匯出檔案中不再出現的詳細路線。每隔幾週匯入一次更新的檔案，就能把每段新的詳細路線保留在這部裝置的旅行記錄中。</string>
+    <string name="simplify_route_detail">簡化路線細節</string>
+    <string name="simplify_route_detail_summary">在長時間範圍的影片中使用摘要後的 Timeline 活動來產生更清晰的路線。關閉時使用可用的最詳細路線。</string>
 </resources>

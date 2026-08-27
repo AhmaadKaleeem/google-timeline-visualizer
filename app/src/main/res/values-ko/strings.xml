@@ -572,4 +572,6 @@
     <string name="onboarding_v11_start_body">Google 지도에서 최신 Timeline.json 파일을 내보낸 뒤 여기에서 선택하세요. 기록이 많으면 처음에는 시간이 조금 더 걸릴 수 있습니다. 이후 가져오기는 같은 여행 기록에 새로운 정보를 더합니다.</string>
     <string name="settings_why_import_title">왜 최신 파일을 가져와야 하나요?</string>
     <string name="settings_why_import_detail">최근에 내보낸 Timeline에는 나중에 내보낸 파일에는 없을 수 있는 상세 경로가 담겨 있습니다. 몇 주에 한 번씩 최신 파일을 가져오면 새로 생긴 상세 구간을 이 기기의 여행 기록에 계속 보관할 수 있습니다.</string>
+    <string name="simplify_route_detail">경로 세부 정보 단순화</string>
+    <string name="simplify_route_detail_summary">긴 기간의 동영상에서 요약된 Timeline 활동을 사용해 경로를 더 간결하게 표시합니다. 끄면 사용 가능한 가장 자세한 경로를 사용합니다.</string>
 </resources>

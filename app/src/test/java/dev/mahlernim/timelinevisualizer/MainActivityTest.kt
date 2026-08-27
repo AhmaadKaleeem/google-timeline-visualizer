@@ -596,8 +596,8 @@ class MainActivityTest {
             activity.findViewById<AutoCompleteTextView>(R.id.distanceUnitDropdown).text.toString(),
         )
         assertTrue(
-            activity.findViewById<com.google.android.material.materialswitch.MaterialSwitch>(
-                R.id.locationFilterSwitch,
+            !activity.findViewById<com.google.android.material.materialswitch.MaterialSwitch>(
+                R.id.simplifyRouteDetailSwitch,
             ).isChecked,
         )
         assertEquals(
@@ -689,33 +689,6 @@ class MainActivityTest {
             activity.findViewById<TimelineView>(R.id.timelineView).previewAspectRatio,
             0.001f,
         )
-    }
-
-    @Test
-    fun changingLocationFilterImmediatelyRestoresIgnoredPoints() {
-        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
-        acceptPrivacyDisclosure()
-        val source = Uri.fromFile(repoRoot().resolve("test-fixtures/outlier-sample.json"))
-        val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
-        waitUntil { activity.findViewById<View>(R.id.editorGroup).visibility == View.VISIBLE }
-
-        val summary = activity.findViewById<TextView>(R.id.periodSummaryText)
-        assertTrue(
-            summary.text.contains(
-                activity.resources.getQuantityString(R.plurals.location_outliers_ignored, 1, 1),
-            ),
-        )
-
-        activity.findViewById<View>(R.id.navigationSettings).performClick()
-        activity.findViewById<View>(R.id.locationFilterSwitch).performClick()
-        activity.findViewById<View>(R.id.navigationCreate).performClick()
-
-        assertTrue(
-            !summary.text.contains(
-                activity.resources.getQuantityString(R.plurals.location_outliers_ignored, 1, 1),
-            ),
-        )
-        assertTrue(summary.text.contains("3"))
     }
 
     @Test

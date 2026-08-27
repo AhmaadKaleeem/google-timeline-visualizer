@@ -622,4 +622,6 @@
     <string name="get_updated_timeline_file">Get updated Timeline file</string>
     <string name="journal_route_load_failed">Your Journal is safe, but its routes could not be prepared. Please try again.</string>
     <string name="save_as_preset">Save as preset</string>
+    <string name="simplify_route_detail">Simplify route detail</string>
+    <string name="simplify_route_detail_summary">Use summarized Timeline activity for a cleaner route in long-history videos. When off, the most detailed available route is used.</string>
 </resources>

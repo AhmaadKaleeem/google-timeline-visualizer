@@ -561,4 +561,6 @@
     <string name="onboarding_v11_start_body">Exporte um arquivo Timeline.json atualizado do Google Maps e escolha-o aqui. Com históricos grandes, a primeira vez pode demorar um pouco mais. As próximas importações adicionam novos detalhes ao mesmo diário.</string>
     <string name="settings_why_import_title">Por que importar um arquivo atualizado?</string>
     <string name="settings_why_import_detail">Exportações recentes da Timeline podem conter rotas detalhadas que talvez não apareçam em uma exportação posterior. Importar um arquivo atualizado a cada poucas semanas permite que seu diário de viagem preserve neste aparelho cada novo trecho detalhado.</string>
+    <string name="simplify_route_detail">Simplificar detalhes da rota</string>
+    <string name="simplify_route_detail_summary">Usa a atividade resumida da Timeline para criar uma rota mais clara em vídeos de períodos longos. Quando desativado, usa a rota mais detalhada disponível.</string>
 </resources>
