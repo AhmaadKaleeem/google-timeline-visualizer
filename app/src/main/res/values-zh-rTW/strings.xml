@@ -277,13 +277,6 @@
     <string name="preset_renamed">已重新命名預設組合</string>
     <string name="preset_default_set">已更新預設的預設組合</string>
     <string name="preset_deleted">已刪除預設組合</string>
-    <string name="share_preset">分享預設組合</string>
-    <string name="shared_preset">共享預設組合</string>
-    <string name="shared_preset_privacy">連結只包含顯示的五項設定，不包含 Timeline、位置、標題、擁有者、日期或解析度資料。</string>
-    <string name="use_preset">使用預設組合</string>
-    <string name="save_and_use_preset">儲存並使用</string>
-    <string name="preset_link_unsupported_title">不支援的預設組合連結</string>
-    <string name="preset_link_unsupported_message">連結無效、不完整或使用此應用程式不支援的設定。未變更任何設定。</string>
     <string name="preset_limit_reached">請先刪除一個預設組合再儲存新的。</string>
     <string name="preset_value_format">%1$s · %2$s</string>
     <string name="recommend_trips">偵測旅行</string>

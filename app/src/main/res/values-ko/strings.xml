@@ -294,13 +294,6 @@
     <string name="preset_renamed">프리셋 이름을 변경했습니다</string>
     <string name="preset_default_set">기본 프리셋을 변경했습니다</string>
     <string name="preset_deleted">프리셋을 삭제했습니다</string>
-    <string name="share_preset">프리셋 공유</string>
-    <string name="shared_preset">공유 프리셋</string>
-    <string name="shared_preset_privacy">링크에는 표시된 다섯 가지 설정만 포함됩니다. Timeline, 위치, 제목, 소유자, 날짜, 해상도 데이터는 포함되지 않습니다.</string>
-    <string name="use_preset">프리셋 사용</string>
-    <string name="save_and_use_preset">저장하고 사용</string>
-    <string name="preset_link_unsupported_title">지원하지 않는 프리셋 링크</string>
-    <string name="preset_link_unsupported_message">링크가 잘못되었거나 불완전하거나 지원하지 않는 설정을 사용합니다. 아무 설정도 변경하지 않았습니다.</string>
     <string name="preset_limit_reached">다른 프리셋을 저장하려면 기존 프리셋을 삭제하세요.</string>
     <string name="preset_value_format">%1$s · %2$s</string>
     <string name="custom_recap">맞춤 요약</string>

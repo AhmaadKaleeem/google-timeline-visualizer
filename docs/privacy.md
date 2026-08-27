@@ -80,12 +80,8 @@ videos to CARTO or to the developer.
 The application has no analytics, advertising, crash-reporting, login, or
 developer-operated server.
 
-Video presets are stored only in private app storage. A shared preset link uses a
-short validated code containing only aspect ratio, zoom style, long-trip detection,
-local trip framing, and long-trip pacing. It does not contain the local preset name,
-Timeline data, coordinates, dates, filenames, owner names, video titles, resolution,
-or account identifiers. Opening a link shows all five values before the recipient
-chooses whether to use or save it.
+Video presets are stored only in private app storage. They are never shared off the
+device and are excluded from Android backup and device transfer.
 
 All network requests made by the app use encrypted HTTPS connections. Under
 CARTO's current Basemap Terms, CARTO processes request information on the

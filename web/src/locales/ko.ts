@@ -22,9 +22,6 @@ export const ko: Strings = {
   appDescription: 'Google 지도 타임라인 내보내기 파일로 움직이는 여행 영상을 기기에서만 만드세요.',
   previewBanner: 'iPhone 미리보기 빌드 · 민감하지 않은 샘플 데이터로 먼저 테스트하세요',
   headerTitle: '영상 만들기',
-  presetLinkTitle: '공유된 Android 프리셋',
-  presetLinkBody: '이 개인정보 보호 링크에는 카메라와 화면 비율 설정 다섯 가지만 포함됩니다. Android 앱에서 열어 모든 값을 확인한 뒤 사용하거나 저장하세요.',
-  presetLinkOpen: 'Android 앱에서 열기',
 
   fileCardTitle: '타임라인 파일',
   fileCardIntro: '내보낸 Timeline.json 파일을 선택하세요. 파일은 이 기기에 남으며, 지도 제공업체에는 지도 이미지만 요청합니다.',

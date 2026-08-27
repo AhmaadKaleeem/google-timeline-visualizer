@@ -284,13 +284,6 @@
     <string name="preset_renamed">プリセット名を変更しました</string>
     <string name="preset_default_set">デフォルトのプリセットを更新しました</string>
     <string name="preset_deleted">プリセットを削除しました</string>
-    <string name="share_preset">プリセットを共有</string>
-    <string name="shared_preset">共有プリセット</string>
-    <string name="shared_preset_privacy">リンクに含まれるのは表示された5つの設定だけです。Timeline、位置、タイトル、所有者、日付、解像度のデータは含まれません。</string>
-    <string name="use_preset">プリセットを使用</string>
-    <string name="save_and_use_preset">保存して使用</string>
-    <string name="preset_link_unsupported_title">未対応のプリセットリンク</string>
-    <string name="preset_link_unsupported_message">リンクが無効、不完全、または未対応の設定を使用しています。設定は変更されていません。</string>
     <string name="preset_limit_reached">別のプリセットを保存する前に既存のプリセットを削除してください。</string>
     <string name="preset_value_format">%1$s · %2$s</string>
     <string name="recommend_trips">旅行を検出</string>

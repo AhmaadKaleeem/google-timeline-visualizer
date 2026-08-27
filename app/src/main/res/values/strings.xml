@@ -340,13 +340,6 @@
     <string name="preset_renamed">Preset renamed</string>
     <string name="preset_default_set">Default preset updated</string>
     <string name="preset_deleted">Preset deleted</string>
-    <string name="share_preset">Share preset</string>
-    <string name="shared_preset">Shared preset</string>
-    <string name="shared_preset_privacy">The link contains only the six settings shown. It contains no Timeline, location, title, owner, date, or resolution data.</string>
-    <string name="use_preset">Use preset</string>
-    <string name="save_and_use_preset">Save and use</string>
-    <string name="preset_link_unsupported_title">Preset link not supported</string>
-    <string name="preset_link_unsupported_message">This link is invalid, incomplete, or uses settings this app does not support. Nothing was changed.</string>
     <string name="preset_limit_reached">Delete a preset before saving another.</string>
     <string name="preset_value_format">%1$s · %2$s</string>
     <plurals name="journal_import_added">

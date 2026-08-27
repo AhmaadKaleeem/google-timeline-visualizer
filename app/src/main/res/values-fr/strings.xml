@@ -286,13 +286,6 @@
     <string name="preset_renamed">Préréglage renommé</string>
     <string name="preset_default_set">Préréglage par défaut mis à jour</string>
     <string name="preset_deleted">Préréglage supprimé</string>
-    <string name="share_preset">Partager le préréglage</string>
-    <string name="shared_preset">Préréglage partagé</string>
-    <string name="shared_preset_privacy">Le lien contient uniquement les cinq réglages affichés. Il ne contient aucune donnée de Timeline, de lieu, de titre, de propriétaire, de date ou de résolution.</string>
-    <string name="use_preset">Utiliser</string>
-    <string name="save_and_use_preset">Enregistrer et utiliser</string>
-    <string name="preset_link_unsupported_title">Lien de préréglage non compatible</string>
-    <string name="preset_link_unsupported_message">Ce lien est non valide, incomplet ou utilise des réglages non compatibles. Rien n’a été modifié.</string>
     <string name="preset_limit_reached">Supprimez un préréglage avant d’en enregistrer un autre.</string>
     <string name="preset_value_format">%1$s · %2$s</string>
     <string name="recommend_trips">Détecter les voyages</string>

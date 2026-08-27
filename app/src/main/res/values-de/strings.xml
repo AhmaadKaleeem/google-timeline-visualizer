@@ -281,13 +281,6 @@
     <string name="preset_renamed">Voreinstellung umbenannt</string>
     <string name="preset_default_set">Standardvoreinstellung aktualisiert</string>
     <string name="preset_deleted">Voreinstellung gelöscht</string>
-    <string name="share_preset">Voreinstellung teilen</string>
-    <string name="shared_preset">Geteilte Voreinstellung</string>
-    <string name="shared_preset_privacy">Der Link enthält nur die fünf angezeigten Einstellungen. Er enthält keine Timeline-, Standort-, Titel-, Besitzer-, Datums- oder Auflösungsdaten.</string>
-    <string name="use_preset">Voreinstellung verwenden</string>
-    <string name="save_and_use_preset">Speichern und verwenden</string>
-    <string name="preset_link_unsupported_title">Voreinstellungslink nicht unterstützt</string>
-    <string name="preset_link_unsupported_message">Der Link ist ungültig, unvollständig oder verwendet nicht unterstützte Einstellungen. Es wurde nichts geändert.</string>
     <string name="preset_limit_reached">Lösche eine Voreinstellung, bevor du eine weitere speicherst.</string>
     <string name="preset_value_format">%1$s · %2$s</string>
     <string name="recommend_trips">Reisen erkennen</string>

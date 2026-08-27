@@ -286,13 +286,6 @@
     <string name="preset_renamed">Nombre del ajuste cambiado</string>
     <string name="preset_default_set">Ajuste predeterminado actualizado</string>
     <string name="preset_deleted">Ajuste eliminado</string>
-    <string name="share_preset">Compartir ajuste</string>
-    <string name="shared_preset">Ajuste compartido</string>
-    <string name="shared_preset_privacy">El enlace solo contiene los cinco ajustes mostrados. No contiene datos de Timeline, ubicaciones, títulos, propietarios, fechas ni resolución.</string>
-    <string name="use_preset">Usar ajuste</string>
-    <string name="save_and_use_preset">Guardar y usar</string>
-    <string name="preset_link_unsupported_title">Enlace de ajuste no compatible</string>
-    <string name="preset_link_unsupported_message">El enlace no es válido, está incompleto o usa ajustes no compatibles. No se cambió nada.</string>
     <string name="preset_limit_reached">Elimina un ajuste antes de guardar otro.</string>
     <string name="preset_value_format">%1$s · %2$s</string>
     <string name="recommend_trips">Detectar viajes</string>

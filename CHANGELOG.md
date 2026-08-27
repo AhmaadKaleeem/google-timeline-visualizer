@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Embed the resolved video title in exported MP4 metadata for media players and galleries.
+- Complete the localization of the 3.0.0 Travel Journal release across de, es, fr, ja, ko, pt-BR, zh-CN, and zh-TW: translate sixteen onboarding and disclosure strings that shipped marked untranslatable, retranslate twelve strings the Travel Journal rename left describing the old behavior, and correct machine-translation defects including "Library" as a book library, "Dismiss" as firing an employee, and counts whose placeholder bound to the wrong noun.
+- Follow the zh-TW terminology review from #108 for strings added after it, and align the Korean bottom navigation on 라이브러리 · 만들기 · 설정.
+- Remove preset sharing. The share button, the `https://ahn-lab.org/google-timeline-visualizer/?preset=` and `timelinevisualizer://preset` link handlers, the preset token codec, and the web app's link-forwarding card are gone from the Android app, the web app, and the `--preset` option of the desktop CLI. Saved presets, including built-in ones, are unaffected. Preset links shared from an earlier version no longer open.
 
 ## 2.2.13
 
