@@ -426,6 +426,7 @@ def tile_to_bounds_meters(xtile: int, ytile: int, zoom: int) -> Tuple[float, flo
 
 
 TILE_CACHE: Dict[Tuple[int, int, int], Image.Image] = {}
+_tile_fetch_failures = 0
 
 
 def carto_tile_url(x: int, y: int, z: int, api_key: Optional[str] = None) -> str:
@@ -437,6 +438,7 @@ def carto_tile_url(x: int, y: int, z: int, api_key: Optional[str] = None) -> str
 
 
 def fetch_tile_img(x: int, y: int, z: int) -> Image.Image:
+    global _tile_fetch_failures
     key = (x, y, z)
     if key in TILE_CACHE:
         return TILE_CACHE[key]
@@ -447,7 +449,10 @@ def fetch_tile_img(x: int, y: int, z: int) -> Image.Image:
             img = Image.open(io.BytesIO(response.read())).convert('RGB')
             TILE_CACHE[key] = img
             return img
-    except Exception:
+    except Exception as exc:
+        _tile_fetch_failures += 1
+        if _tile_fetch_failures <= 5:
+            print(f"Warning: Could not fetch tile {url}: {exc}", file=sys.stderr)
         fallback = Image.new('RGB', (256, 256), (240, 240, 240))
         return fallback
 
@@ -1124,7 +1129,7 @@ def calculate_overview_viewport(
 def resolve_title_template(
     template: str, year_label: str = "", name: str = "", fallback: str = "My Trips"
 ) -> str:
-    resolved = template.replace("{year}", year_label).replace("{name}", name.strip()).trim() if hasattr(template, "trim") else template.replace("{year}", year_label).replace("{name}", name.strip()).strip()
+    resolved = template.replace("{year}", year_label).replace("{name}", name.strip()).strip()
     return resolved if resolved else fallback
 
 
@@ -1202,6 +1207,14 @@ def parse_date_argument(value: Optional[str]) -> Optional[date]:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    try:
+        return _main_inner(argv)
+    except KeyboardInterrupt:
+        print("\nInterrupted.", file=sys.stderr)
+        return 130
+
+
+def _main_inner(argv: Optional[List[str]] = None) -> int:
     parser = build_argument_parser()
     args = parser.parse_args(argv)
 
@@ -1425,6 +1438,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     print(f"Saving to {args.output}...")
     ani.save(args.output, writer='ffmpeg', fps=fps, dpi=100)
+    if _tile_fetch_failures > 5:
+        print(f"Warning: {_tile_fetch_failures} tile fetches failed (first 5 shown above). Map may have blank areas.", file=sys.stderr)
     print("Done!")
     return 0
 
