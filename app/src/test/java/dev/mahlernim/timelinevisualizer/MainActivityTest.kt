@@ -1285,6 +1285,20 @@ class MainActivityTest {
     }
 
     @Test
+    fun datePickerConstraintsUseInclusiveBounds() {
+        val activity = launchActivity()
+        val first = LocalDate.parse("2026-02-01")
+        val last = LocalDate.parse("2026-02-05")
+        val constraints = activity.datePickerConstraints(first to last, LocalDate.parse("2026-01-01"))
+        val millis = { date: LocalDate -> date.toEpochDay() * 24L * 60L * 60L * 1_000L }
+
+        assertTrue(!constraints.dateValidator.isValid(millis(first.minusDays(1))))
+        assertTrue(constraints.dateValidator.isValid(millis(first)))
+        assertTrue(constraints.dateValidator.isValid(millis(last)))
+        assertTrue(!constraints.dateValidator.isValid(millis(last.plusDays(1))))
+    }
+
+    @Test
     fun tripVideoChoiceOffersSavedDiscoveryAndManualSources() {
         val activity = launchActivity()
         activity.findViewById<View>(R.id.navigationCreate).performClick()

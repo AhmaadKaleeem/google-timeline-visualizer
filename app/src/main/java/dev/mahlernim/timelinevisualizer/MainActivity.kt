@@ -2989,19 +2989,7 @@ class MainActivity : AppCompatActivity() {
         val bounds = activeDateBounds()
         val initialStart = start.coerceIn(bounds.first, bounds.second)
         val initialEnd = end.coerceIn(initialStart, bounds.second)
-        val constraints = CalendarConstraints.Builder()
-            .setStart(datePickerMillis(bounds.first))
-            .setEnd(datePickerMillis(bounds.second))
-            .setOpenAt(datePickerMillis(initialStart))
-            .setValidator(
-                CompositeDateValidator.allOf(
-                    listOf(
-                        DateValidatorPointForward.from(datePickerMillis(bounds.first)),
-                        DateValidatorPointBackward.before(datePickerMillis(bounds.second) + DAY_MILLIS),
-                    ),
-                ),
-            )
-            .build()
+        val constraints = datePickerConstraints(bounds, initialStart)
         val picker = MaterialDatePicker.Builder.dateRangePicker()
             .setTitleText(R.string.choose_exact_dates)
             .setCalendarConstraints(constraints)
@@ -3081,6 +3069,23 @@ class MainActivity : AppCompatActivity() {
         .atStartOfDay(ZoneOffset.UTC)
         .toInstant()
         .toEpochMilli()
+
+    internal fun datePickerConstraints(
+        bounds: Pair<LocalDate, LocalDate>,
+        openAt: LocalDate,
+    ): CalendarConstraints = CalendarConstraints.Builder()
+        .setStart(datePickerMillis(bounds.first))
+        .setEnd(datePickerMillis(bounds.second))
+        .setOpenAt(datePickerMillis(openAt.coerceIn(bounds.first, bounds.second)))
+        .setValidator(
+            CompositeDateValidator.allOf(
+                listOf(
+                    DateValidatorPointForward.from(datePickerMillis(bounds.first)),
+                    DateValidatorPointBackward.before(datePickerMillis(bounds.second)),
+                ),
+            ),
+        )
+        .build()
 
     private fun normalizeRange(changedStart: Boolean) {
         val startYear = selectedStartYear ?: return
@@ -4495,9 +4500,13 @@ class MainActivity : AppCompatActivity() {
         val bounds = semanticDateBounds() ?: return
         val start = detectionStartDate ?: bounds.first
         val end = detectionEndDate ?: bounds.second
+        val initialStart = start.coerceIn(bounds.first, bounds.second)
+        val initialEnd = end.coerceIn(initialStart, bounds.second)
+        val constraints = datePickerConstraints(bounds, initialStart)
         val picker = MaterialDatePicker.Builder.dateRangePicker()
             .setTitleText(R.string.detection_range)
-            .setSelection(AndroidPair(datePickerMillis(start), datePickerMillis(end)))
+            .setCalendarConstraints(constraints)
+            .setSelection(AndroidPair(datePickerMillis(initialStart), datePickerMillis(initialEnd)))
             .build()
         picker.addOnPositiveButtonClickListener { range ->
             detectionStartDate = Instant.ofEpochMilli(range.first).atZone(ZoneOffset.UTC).toLocalDate()
@@ -6031,7 +6040,6 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "TimelineVisualizer"
         private const val JOURNAL_PROGRESS_MAX = 1_000
         private const val JOURNAL_ROUTE_PROGRESS_DELAY_MILLIS = 2_000L
-        private const val DAY_MILLIS = 24L * 60L * 60L * 1_000L
 
         internal fun playbackIntent(context: Context, uri: Uri): Intent =
             Intent(context, MainActivity::class.java).apply {
