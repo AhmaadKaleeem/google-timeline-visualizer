@@ -9,6 +9,13 @@
 - Add distance-unit selection to the web app.
 - Document the web app's distance units and close-up mode.
 
+## 3.0.5
+
+- Constrain the Detect trips date picker to the available Timeline range.
+- Keep the first and final available dates selectable while disabling adjacent unavailable dates.
+- Clamp outdated initial date selections before opening constrained date pickers.
+- Set Android version code 47 and version name 3.0.5.
+
 ## 3.0.2
 
 - Remove clusters of consecutive impossible raw-signal readings, which previously survived because the spike filter only ever inspected a single point between its neighbours.
