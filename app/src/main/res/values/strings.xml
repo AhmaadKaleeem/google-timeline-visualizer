@@ -55,7 +55,7 @@
     <string name="saving_for_faster_starts">Saving for faster starts</string>
     <string name="journal_route_action_waiting">Your journeys are being prepared. This will open when they are ready.</string>
     <string name="journal_freshness_inline">Detailed routes last updated %1$d days ago. Import an updated Timeline file.</string>
-    <string name="finding_suggested_trips" translatable="false">Finding suggested trips…</string>
+    <string name="finding_suggested_trips">Finding suggested trips…</string>
     <string name="loading_timeline">Loading Timeline</string>
     <string name="video_saved">Video saved</string>
     <string name="video_ready">Video ready</string>
@@ -340,13 +340,6 @@
     <string name="preset_renamed">Preset renamed</string>
     <string name="preset_default_set">Default preset updated</string>
     <string name="preset_deleted">Preset deleted</string>
-    <string name="share_preset">Share preset</string>
-    <string name="shared_preset">Shared preset</string>
-    <string name="shared_preset_privacy">The link contains only the six settings shown. It contains no Timeline, location, title, owner, date, or resolution data.</string>
-    <string name="use_preset">Use preset</string>
-    <string name="save_and_use_preset">Save and use</string>
-    <string name="preset_link_unsupported_title">Preset link not supported</string>
-    <string name="preset_link_unsupported_message">This link is invalid, incomplete, or uses settings this app does not support. Nothing was changed.</string>
     <string name="preset_limit_reached">Delete a preset before saving another.</string>
     <string name="preset_value_format">%1$s · %2$s</string>
     <plurals name="journal_import_added">
@@ -605,21 +598,21 @@
     <string name="onboarding_setup_maps">Set up Google Maps Timeline</string>
     <string name="onboarding_page_position">%1$d of %2$d</string>
     <string name="onboarding_page_announcement">Page %1$d of %2$d. %3$s</string>
-    <string name="onboarding_skip" translatable="false">Not now</string>
-    <string name="onboarding_v11_journal_title" translatable="false">Turn your journeys into a Travel Journal</string>
-    <string name="onboarding_v11_journal_body" translatable="false">Google Maps Timeline quietly remembers where you have been.\n\nTimeline Visualizer turns an exported copy of that history into a private Travel Journal and animated travel videos.</string>
-    <string name="onboarding_v11_private_title" translatable="false">Your journeys, your device</string>
-    <string name="onboarding_v11_private_body" translatable="false">Timeline Visualizer does not track your location. It reads only the Timeline export you choose. Your Timeline file and Travel Journal stay on this device.</string>
-    <string name="onboarding_v11_private_note" translatable="false">If Google Maps Timeline is not enabled, start it now to begin recording future journeys.</string>
-    <string name="onboarding_v11_start_title" translatable="false">Start your Travel Journal</string>
-    <string name="onboarding_v11_start_body" translatable="false">Export an updated Timeline.json file from Google Maps, then choose it here. Large histories may take a little longer the first time. Future imports add new detail to the same Journal.</string>
-    <string name="onboarding_file_name_hint" translatable="false">Usually named Timeline.json or location-history.json.</string>
-    <string name="onboarding_file_disclosure_title" translatable="false">What happens to my file?</string>
-    <string name="onboarding_file_disclosure_detail" translatable="false">The selected export is read locally. Its useful journey information is added to your on-device Travel Journal, and future updated exports can extend it.</string>
-    <string name="settings_why_import_title" translatable="false">Why import an updated file?</string>
-    <string name="settings_why_import_detail" translatable="false">Recent Timeline exports can contain detailed routes that may not appear in a later export. Importing an updated file every few weeks lets your Travel Journal preserve each new detailed stretch on this device.</string>
-    <string name="disclosure_expanded" translatable="false">Expanded</string>
-    <string name="disclosure_collapsed" translatable="false">Collapsed</string>
+    <string name="onboarding_skip">Not now</string>
+    <string name="onboarding_v11_journal_title">Turn your journeys into a Travel Journal</string>
+    <string name="onboarding_v11_journal_body">Google Maps Timeline quietly remembers where you have been.\n\nTimeline Visualizer turns an exported copy of that history into a private Travel Journal and animated travel videos.</string>
+    <string name="onboarding_v11_private_title">Your journeys, your device</string>
+    <string name="onboarding_v11_private_body">Timeline Visualizer does not track your location. It reads only the Timeline export you choose. Your Timeline file and Travel Journal stay on this device.</string>
+    <string name="onboarding_v11_private_note">If Google Maps Timeline is not enabled, start it now to begin recording future journeys.</string>
+    <string name="onboarding_v11_start_title">Start your Travel Journal</string>
+    <string name="onboarding_v11_start_body">Export an updated Timeline.json file from Google Maps, then choose it here. Large histories may take a little longer the first time. Future imports add new detail to the same Journal.</string>
+    <string name="onboarding_file_name_hint">Usually named Timeline.json or location-history.json.</string>
+    <string name="onboarding_file_disclosure_title">What happens to my file?</string>
+    <string name="onboarding_file_disclosure_detail">The selected export is read locally. Its useful journey information is added to your on-device Travel Journal, and future updated exports can extend it.</string>
+    <string name="settings_why_import_title">Why import an updated file?</string>
+    <string name="settings_why_import_detail">Recent Timeline exports can contain detailed routes that may not appear in a later export. Importing an updated file every few weeks lets your Travel Journal preserve each new detailed stretch on this device.</string>
+    <string name="disclosure_expanded">Expanded</string>
+    <string name="disclosure_collapsed">Collapsed</string>
     <string name="journal_how_it_works">How the Travel Journal works</string>
     <string name="journal_setup_card_title">Start your Travel Journal</string>
     <string name="journal_setup_card_detail">Import a Google Maps Timeline export to preserve your journey history and begin building detailed routes.</string>

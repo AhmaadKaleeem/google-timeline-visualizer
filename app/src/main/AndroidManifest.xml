@@ -32,21 +32,6 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:mimeType="application/json" />
             </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="https"
-                    android:host="ahn-lab.org"
-                    android:path="/google-timeline-visualizer/" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="timelinevisualizer" android:host="preset" />
-            </intent-filter>
         </activity>
         <service
             android:name=".export.VideoExportService"

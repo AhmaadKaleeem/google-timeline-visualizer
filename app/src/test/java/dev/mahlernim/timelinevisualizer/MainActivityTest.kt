@@ -48,7 +48,6 @@ import dev.mahlernim.timelinevisualizer.render.LocalFraming
 import dev.mahlernim.timelinevisualizer.render.LongTripCompression
 import dev.mahlernim.timelinevisualizer.render.TripDetection
 import dev.mahlernim.timelinevisualizer.render.VideoAspectRatio
-import dev.mahlernim.timelinevisualizer.presets.PresetLink
 import dev.mahlernim.timelinevisualizer.presets.PresetRepository
 import dev.mahlernim.timelinevisualizer.presets.PresetValues
 import dev.mahlernim.timelinevisualizer.render.DistanceUnit
@@ -274,54 +273,6 @@ class MainActivityTest {
 
         duration.onItemClickListener?.onItemClick(null, null, VideoDuration.presets.indexOf(20), 20L)
         assertEquals("Trip defaults", preset.text.toString())
-    }
-
-    @Test
-    fun sharedPresetRequiresConfirmationBeforeChangingDraft() {
-        val values = PresetValues(
-            VideoAspectRatio.PORTRAIT,
-            CameraMovement.CLOSE_UP,
-            TripDetection.SENSITIVE,
-            LocalFraming.CLOSE,
-            LongTripCompression.STRONG,
-        )
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(PresetLink.create(values)))
-        val activity = launchActivity(intent)
-
-        assertEquals(
-            activity.getString(R.string.map_view_wide),
-            activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
-        )
-        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-        assertTrue(dialog.isShowing)
-        assertTrue(dialog.findViewById<TextView>(android.R.id.message)!!.text.contains(activity.getString(R.string.aspect_portrait)))
-
-        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).performClick()
-        shadowOf(Looper.getMainLooper()).idle()
-
-        assertEquals(
-            activity.getString(R.string.map_view_close_up),
-            activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
-        )
-        assertEquals(activity.getString(R.string.preset_custom), activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown).text.toString())
-        assertEquals(CameraSettings.DEFAULT, CameraSettingsPreferences(context).load())
-    }
-
-    @Test
-    fun invalidSharedPresetShowsErrorWithoutChangingSettings() {
-        val intent = Intent(
-            Intent.ACTION_VIEW,
-            Uri.parse("${PresetLink.HTTPS_BASE}?preset=${"a".repeat(100)}"),
-        )
-        val activity = launchActivity(intent)
-
-        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-        assertTrue(
-            dialog.findViewById<TextView>(android.R.id.message)!!.text.contains(
-                activity.getString(R.string.preset_link_unsupported_message),
-            ),
-        )
-        assertEquals(CameraSettings.DEFAULT, CameraSettingsPreferences(context).load())
     }
 
     @After

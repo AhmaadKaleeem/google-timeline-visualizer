@@ -127,8 +127,6 @@ import dev.mahlernim.timelinevisualizer.model.Timeline
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
 import dev.mahlernim.timelinevisualizer.model.TitleTemplate
 import dev.mahlernim.timelinevisualizer.model.VideoDuration
-import dev.mahlernim.timelinevisualizer.presets.PresetDecodeResult
-import dev.mahlernim.timelinevisualizer.presets.PresetLink
 import dev.mahlernim.timelinevisualizer.presets.PresetNameResult
 import dev.mahlernim.timelinevisualizer.presets.PresetRepository
 import dev.mahlernim.timelinevisualizer.presets.PresetValues
@@ -685,9 +683,6 @@ class MainActivity : AppCompatActivity() {
             showVideos()
             if (savedInstanceState == null) shareVideo(incoming)
             VideoExportService.clearNotification(applicationContext)
-        } else if (incoming != null && PresetLink.isPresetLink(incoming.toString())) {
-            showNewVideo(loadRemembered = true)
-            if (savedInstanceState == null) showIncomingPreset(incoming)
         } else if (incoming != null) {
             showNewVideo(loadRemembered = false)
             requestTimelineImport(incoming)
@@ -799,10 +794,7 @@ class MainActivity : AppCompatActivity() {
                     shareVideo(uri)
                     VideoExportService.clearNotification(applicationContext)
                 }
-                else -> if (PresetLink.isPresetLink(uri.toString())) {
-                    showNewVideo(loadRemembered = true)
-                    showIncomingPreset(uri)
-                } else {
+                else -> {
                     showNewVideo(loadRemembered = false)
                     requestTimelineImport(uri)
                     intent.data = null
@@ -3310,7 +3302,6 @@ class MainActivity : AppCompatActivity() {
         }
         makeDropdownOpenReliably(editor.presetDropdown)
         editor.presetSaveButton.setOnClickListener { saveCurrentPreset() }
-        editor.presetShareButton.setOnClickListener { selectedPreset()?.let(::sharePreset) }
         editor.presetMoreButton.setOnClickListener { selectedPreset()?.let(::showPresetActions) }
         renderPresetSelection()
     }
@@ -3371,15 +3362,6 @@ class MainActivity : AppCompatActivity() {
         renderPresetSelection()
     }
 
-    private fun applySharedPreset(values: PresetValues, savedId: String? = null) {
-        modifiedBuiltInId = null
-        activePresetId = savedId
-        presetOriginId = savedId
-        applyAdvancedSettings(values.applyTo(cameraSettings))
-        applyDuration(values.durationSeconds)
-        renderPresetSelection()
-    }
-
     private fun markPresetCustom(clearDefault: Boolean = false, preserveBuiltIn: Boolean = true) {
         if (preserveBuiltIn) {
             selectedPreset()?.takeIf(VideoPreset::builtIn)?.let { modifiedBuiltInId = it.id }
@@ -3405,7 +3387,6 @@ class MainActivity : AppCompatActivity() {
             false,
         )
         editor.presetSummaryText.text = draftStyleSummary(selected, modifiedBuiltIn ?: modifiedOrigin)
-        editor.presetShareButton.isEnabled = selected != null && !exportingVideo
         editor.presetMoreButton.isEnabled = selected != null && !selected.builtIn && !exportingVideo
         editor.presetSaveButton.isEnabled = selected == null && !exportingVideo
         editor.presetDropdown.isEnabled = !exportingVideo
@@ -3578,59 +3559,6 @@ class MainActivity : AppCompatActivity() {
                     onValid(result.name)
                     dialog.dismiss()
                 }
-            }
-        }
-    }
-
-    private fun sharePreset(preset: VideoPreset) {
-        val link = PresetLink.create(preset.values)
-        val share = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, link)
-        }
-        runCatching { startActivity(Intent.createChooser(share, getString(R.string.share_preset))) }
-            .onFailure {
-                Snackbar.make(binding.root, R.string.web_page_unavailable, Snackbar.LENGTH_LONG).show()
-            }
-    }
-
-    private fun showIncomingPreset(uri: Uri) {
-        when (val decoded = PresetLink.parse(uri.toString())) {
-            is PresetDecodeResult.Success -> {
-                val message = presetValueSummary(decoded.values) + "\n\n" +
-                    getString(R.string.shared_preset_privacy)
-                MaterialAlertDialogBuilder(this)
-                    .setTitle(R.string.shared_preset)
-                    .setMessage(message)
-                    .setNegativeButton(R.string.cancel, null)
-                    .setNeutralButton(R.string.save_and_use_preset) { _, _ ->
-                        val existing = presetRepository.exactMatch(decoded.values)
-                        if (existing != null) {
-                            applyPreset(existing)
-                            Snackbar.make(
-                                binding.root,
-                                getString(R.string.preset_already_exists, existing.name),
-                                Snackbar.LENGTH_LONG,
-                            ).show()
-                        } else if (presetRepository.presets().count { !it.builtIn } >= PresetRepository.MAX_PRESETS) {
-                            Snackbar.make(binding.root, R.string.preset_limit_reached, Snackbar.LENGTH_LONG).show()
-                        } else {
-                            showPresetNameDialog { name ->
-                                val preset = presetRepository.add(name, decoded.values)
-                                applySharedPreset(decoded.values, preset.id)
-                                Snackbar.make(binding.root, R.string.preset_saved, Snackbar.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                    .setPositiveButton(R.string.use_preset) { _, _ -> applySharedPreset(decoded.values) }
-                    .show()
-            }
-            PresetDecodeResult.Invalid, PresetDecodeResult.Unsupported -> {
-                MaterialAlertDialogBuilder(this)
-                    .setTitle(R.string.preset_link_unsupported_title)
-                    .setMessage(R.string.preset_link_unsupported_message)
-                    .setPositiveButton(R.string.done, null)
-                    .show()
             }
         }
     }
