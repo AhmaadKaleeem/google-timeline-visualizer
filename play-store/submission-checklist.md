@@ -32,7 +32,7 @@
 - Upload the 512×512 app icon and 1024×500 feature graphic
 - Paste and proofread the listing text for English, Korean, Japanese, Simplified
   Chinese, Traditional Chinese, Spanish, French, German, and Brazilian Portuguese
-- Upload the four current screenshots and localized feature graphic for English,
+- Upload the five current screenshots and localized feature graphic for English,
   Korean, and Japanese. Use the English graphics as the fallback for the other
   six locales
 - Complete Data safety, content rating, target audience, ads, and app-access forms

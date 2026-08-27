@@ -3,22 +3,27 @@ package dev.mahlernim.timelinevisualizer
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.core.widget.NestedScrollView
 import androidx.test.core.app.ApplicationProvider
 import dev.mahlernim.timelinevisualizer.data.TimelineSourceStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportCoordinator
 import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
 import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
+import dev.mahlernim.timelinevisualizer.journal.JournalOnboardingStore
 import dev.mahlernim.timelinevisualizer.videos.VideoRecord
 import dev.mahlernim.timelinevisualizer.videos.VideoMedia
 import dev.mahlernim.timelinevisualizer.videos.VideoStore
+import dev.mahlernim.timelinevisualizer.ui.TimelineView
 import java.io.File
 import java.io.FileOutputStream
 import org.junit.Assert.assertEquals
@@ -72,16 +77,29 @@ class PlayStoreScreenshotTest {
         reset(context)
         acceptPrivacy(context)
         val fixture = repoRoot().resolve("test-fixtures/seoul-bohol-sample.json")
-        val intent = Intent(Intent.ACTION_VIEW, Uri.fromFile(fixture))
-        Robolectric.buildActivity(MainActivity::class.java, intent).setup().use { controller ->
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
             val activity = controller.get()
-            waitForEditor(activity)
+            activity.importTimeline(Uri.fromFile(fixture))
+            waitForTimelineImport(activity)
+            ShadowDialog.getLatestDialog()?.dismiss()
+            waitForJournalRoutes(activity)
+            activity.findViewById<View>(R.id.navigationVideos).performClick()
+            activity.findViewById<View>(R.id.createTripButton).performClick()
+            activity.findViewById<TextView>(R.id.projectTitleInput).text = "Seoul to Bohol 2025"
+            waitForEnabled(activity.findViewById(R.id.wizardContinueButton))
+            activity.findViewById<View>(R.id.wizardContinueButton).performClick()
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1))
             findNestedScrollView(activity.findViewById(R.id.newVideoScreen))?.scrollTo(0, 0)
             render(activity.window.decorView, output.resolve("03-selected-period.png"))
 
+            activity.findViewById<View>(R.id.createStepCreate).performClick()
+            shadowOf(Looper.getMainLooper()).idle()
+
             val completedUri = Uri.parse("content://synthetic/completed-video")
-            VideoMedia(context).saveGeneratedOverview(completedUri, syntheticOverview(3))
+            val cityOverview = BitmapFactory.decodeFile(
+                repoRoot().resolve("play-store/assets/source/video-example.jpg").absolutePath,
+            ) ?: error("Store video example could not be decoded")
+            VideoMedia(context).saveGeneratedOverview(completedUri, cityOverview)
             VideoExportCoordinator.publish(
                 context,
                 VideoExportSnapshot(
@@ -91,12 +109,29 @@ class PlayStoreScreenshotTest {
                 ),
             )
             shadowOf(Looper.getMainLooper()).idle()
-            findNestedScrollView(activity.findViewById(R.id.newVideoScreen))?.scrollTo(0, 2_350)
+            activity.findViewById<TimelineView>(R.id.timelineView).apply {
+                journey = null
+                background = BitmapDrawable(activity.resources, cityOverview)
+            }
+            findNestedScrollView(activity.findViewById(R.id.newVideoScreen))?.scrollTo(0, 800)
             render(activity.window.decorView, output.resolve("04-video-saved.png"))
+
+            activity.findViewById<View>(R.id.doneButton).performClick()
+            activity.findViewById<View>(R.id.navigationSettings).performClick()
+            shadowOf(Looper.getMainLooper()).idle()
+            findNestedScrollView(activity.findViewById(R.id.settingsScreen))?.scrollTo(0, 1_400)
+            render(activity.window.decorView, output.resolve("05-settings.png"))
+            cityOverview.recycle()
         }
 
         assertEquals(
-            listOf("01-videos.png", "02-timeline-file.png", "03-selected-period.png", "04-video-saved.png"),
+            listOf(
+                "01-videos.png",
+                "02-timeline-file.png",
+                "03-selected-period.png",
+                "04-video-saved.png",
+                "05-settings.png",
+            ),
             output.listFiles()!!.map(File::getName).sorted(),
         )
         reset(context)
@@ -140,19 +175,40 @@ class PlayStoreScreenshotTest {
 
     private fun reset(context: Context) {
         context.getSharedPreferences("display", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("camera-settings", Context.MODE_PRIVATE).edit().clear().commit()
+        JournalOnboardingStore(context).complete()
+        context.deleteDatabase("travel-journal.db")
         VideoStore(context).clear()
         TimelineSourceStore(context).clearForTest()
         VideoExportCoordinator.clear(context)
         VideoExportCoordinator.resetForTest()
     }
 
-    private fun waitForEditor(activity: MainActivity) {
+    private fun waitForTimelineImport(activity: MainActivity) {
         repeat(200) {
             shadowOf(Looper.getMainLooper()).idle()
-            if (activity.findViewById<View>(R.id.editorGroup).visibility == View.VISIBLE) return
+            if (ShadowDialog.getLatestDialog()?.findViewById<TextView>(R.id.journalGrowthHeadline) != null) return
             Thread.sleep(25)
         }
         error("Timeline fixture did not finish loading")
+    }
+
+    private fun waitForJournalRoutes(activity: MainActivity) {
+        repeat(300) {
+            shadowOf(Looper.getMainLooper()).idle()
+            if (activity.journalMetadataReady() && activity.findViewById<View>(R.id.loadingGroup).visibility == View.GONE) return
+            Thread.sleep(25)
+        }
+        error("Travel Journal routes did not finish loading")
+    }
+
+    private fun waitForEnabled(view: View) {
+        repeat(300) {
+            shadowOf(Looper.getMainLooper()).idle()
+            if (view.isEnabled) return
+            Thread.sleep(25)
+        }
+        error("Create workflow did not become ready")
     }
 
     private fun render(root: View, output: File, overlay: View? = null) {
