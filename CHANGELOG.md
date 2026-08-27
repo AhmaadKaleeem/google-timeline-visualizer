@@ -13,6 +13,24 @@
 - Remove preset sharing. The share button, the `https://ahn-lab.org/google-timeline-visualizer/?preset=` and `timelinevisualizer://preset` link handlers, the preset token codec, and the web app's link-forwarding card are gone from the Android app, the web app, and the `--preset` option of the desktop CLI. Saved presets, including built-in ones, are unaffected. Preset links shared from an earlier version no longer open.
 - Set Android version code 43 and version name 3.0.1.
 
+## 3.0.0
+
+- Make Travel Journal the main Android experience, building a private on-device Journal from an imported `Timeline.json` that grows with later exports.
+- Use detailed route observations where available and fill remaining periods with the best available Timeline history.
+- Find trips, save projects, create monthly or yearly recaps, and reuse preserved route detail.
+- Add optional quiet reminders that help preserve recent detail before it disappears from later exports.
+- Show the current phase during long route preparation after a short wait.
+- Give meaningful local arrivals more room in close-up camera timing while keeping the total adjustment bounded.
+- Exclude the Travel Journal from Android backup and device transfer.
+- Set Android version code 42 and version name 3.0.0.
+
+## 2.4.2
+
+- Restore map backgrounds after CARTO began requiring authenticated basemap requests.
+- Use the project's CARTO key for official Android and web releases.
+- Remove cached map tiles automatically after 30 days on Android.
+- Set Android version code 41 and version name 2.4.2.
+
 ## 2.4.1
 
 - Show clearer Raw Data availability text for a project covering a single date or a single location.

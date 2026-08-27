@@ -5,7 +5,6 @@ A patch release that finishes translating 3.0.0 and removes preset sharing.
 - **Preset sharing has been removed.** The share button, the shared preset links, and the `--preset` option of the desktop tool are gone. Your saved presets are not affected and still work exactly as before. A preset link someone shared from an earlier version will no longer open.
 - Every language now has the full 3.0.0 Travel Journal release translated. The onboarding pages, the file disclosure, and the settings explanations had remained in English.
 - Corrected translations throughout the new Travel Journal screens, including the bottom navigation, where "Library" had been translated as a building full of books in several languages.
-- Video titles are embedded in exported MP4 metadata, so media players and galleries can show them.
 
 Nothing about your Travel Journal, your Timeline file, or your saved videos changes in this release.
 
@@ -16,7 +15,6 @@ Nothing about your Travel Journal, your Timeline file, or your saved videos chan
 - **프리셋 공유가 제거되었습니다.** 공유 버튼과 공유 프리셋 링크, 데스크톱 도구의 `--preset` 옵션이 사라졌습니다. 저장된 프리셋은 영향을 받지 않으며 이전과 똑같이 사용할 수 있습니다. 이전 버전에서 공유된 프리셋 링크는 더 이상 열리지 않습니다.
 - 3.0.0 여행 기록 릴리스의 번역이 모든 언어에서 완성되었습니다. 온보딩 화면과 파일 안내, 설정 설명이 영어로 남아 있었습니다.
 - 새 여행 기록 화면 전반의 번역을 바로잡았습니다. 하단 탭은 이제 라이브러리 · 만들기 · 설정입니다.
-- 내보낸 MP4 메타데이터에 영상 제목을 넣어 미디어 플레이어와 갤러리에서 제목이 보입니다.
 
 이번 릴리스에서 여행 기록과 Timeline 파일, 저장된 영상은 달라지지 않습니다.
 
@@ -27,7 +25,6 @@ Nothing about your Travel Journal, your Timeline file, or your saved videos chan
 - **プリセット共有を削除しました。** 共有ボタン、共有プリセットリンク、デスクトップツールの`--preset`オプションがなくなりました。保存済みのプリセットには影響がなく、これまでどおり使えます。以前のバージョンで共有されたプリセットリンクは開かなくなります。
 - 3.0.0の旅の記録リリースの翻訳が、すべての言語で完成しました。オンボーディング画面、ファイルの説明、設定の説明が英語のままになっていました。
 - 新しい旅の記録の画面全体で翻訳を修正しました。下部のタブはライブラリ・作成・設定になりました。
-- 書き出したMP4のメタデータに動画タイトルを埋め込み、メディアプレーヤーやギャラリーで表示できるようにしました。
 
 このリリースで、旅の記録、Timelineファイル、保存済みの動画が変わることはありません。
 
@@ -38,7 +35,6 @@ Nothing about your Travel Journal, your Timeline file, or your saved videos chan
 - **已移除预设分享。** 分享按钮、共享预设链接以及桌面工具的 `--preset` 选项均已移除。已保存的预设不受影响，可继续照常使用。他人在旧版本中分享的预设链接将无法再打开。
 - 3.0.0 旅行记录版本的翻译现已在所有语言中完成。此前引导页面、文件说明和设置说明仍为英文。
 - 修正了新旅行记录界面的多处翻译。底部标签现为媒体库·创建·设置。
-- 导出的 MP4 元数据中会写入视频标题，便于媒体播放器和相册显示。
 
 本次更新不会改变你的旅行记录、Timeline 文件或已保存的视频。
 
@@ -49,7 +45,6 @@ Nothing about your Travel Journal, your Timeline file, or your saved videos chan
 - **已移除預設組合分享。** 分享按鈕、共享預設組合連結，以及桌面工具的 `--preset` 選項都已移除。已儲存的預設組合不受影響，可繼續照常使用。他人在舊版本中分享的預設組合連結將無法再開啟。
 - 3.0.0 旅行記錄版本的翻譯現已在所有語言中完成。先前的導覽頁面、檔案說明和設定說明仍為英文。
 - 修正了新旅行記錄畫面中的多處翻譯。底部分頁現為媒體庫·建立·設定。
-- 匯出的 MP4 中繼資料會寫入影片標題，方便媒體播放器和相簿顯示。
 
 這次更新不會變更你的旅行記錄、Timeline 檔案或已儲存的影片。
 
@@ -60,7 +55,6 @@ Una versión de mantenimiento que termina de traducir 3.0.0 y elimina la funció
 - **Se ha eliminado la opción de compartir ajustes.** El botón de compartir, los enlaces de ajustes compartidos y la opción `--preset` de la herramienta de escritorio ya no existen. Tus ajustes guardados no se ven afectados y siguen funcionando igual. Un enlace que alguien compartiera desde una versión anterior ya no se abrirá.
 - Todos los idiomas tienen ya traducida por completo la versión 3.0.0 del diario de viaje. Las pantallas de introducción, el aviso sobre el archivo y las explicaciones de los ajustes seguían en inglés.
 - Se corrigieron traducciones en las nuevas pantallas del diario de viaje, incluida la navegación inferior.
-- Los títulos de los vídeos se incluyen en los metadatos del MP4 exportado, para que los reproductores y galerías puedan mostrarlos.
 
 Esta versión no cambia nada de tu diario de viaje, tu archivo de Timeline ni tus vídeos guardados.
 
@@ -71,7 +65,6 @@ Une version corrective qui termine la traduction de 3.0.0 et supprime le partage
 - **Le partage de préréglages a été supprimé.** Le bouton de partage, les liens de préréglage partagés et l’option `--preset` de l’outil de bureau ont disparu. Vos préréglages enregistrés ne sont pas affectés et fonctionnent comme avant. Un lien partagé depuis une version antérieure ne s’ouvrira plus.
 - Toutes les langues disposent désormais de la traduction complète de la version 3.0.0 du carnet de voyage. Les pages d’introduction, l’information sur le fichier et les explications des réglages étaient restées en anglais.
 - Traductions corrigées dans les nouveaux écrans du carnet de voyage, y compris la navigation inférieure.
-- Les titres des vidéos sont intégrés aux métadonnées du MP4 exporté, afin que les lecteurs et galeries puissent les afficher.
 
 Cette version ne modifie rien de votre carnet de voyage, de votre fichier Timeline ni de vos vidéos enregistrées.
 
@@ -82,7 +75,6 @@ Eine Fehlerbehebungsversion, die die Übersetzung von 3.0.0 abschließt und das 
 - **Das Teilen von Voreinstellungen wurde entfernt.** Die Teilen-Schaltfläche, die geteilten Voreinstellungslinks und die Option `--preset` des Desktop-Werkzeugs gibt es nicht mehr. Deine gespeicherten Voreinstellungen sind nicht betroffen und funktionieren unverändert. Ein Link, den jemand aus einer früheren Version geteilt hat, lässt sich nicht mehr öffnen.
 - Alle Sprachen enthalten jetzt die vollständige Übersetzung der Version 3.0.0 des Reisetagebuchs. Die Einführungsseiten, der Hinweis zur Datei und die Erklärungen in den Einstellungen waren auf Englisch geblieben.
 - Korrigierte Übersetzungen in den neuen Reisetagebuch-Ansichten, einschließlich der unteren Navigation.
-- Videotitel werden in die Metadaten der exportierten MP4-Datei geschrieben, damit Player und Galerien sie anzeigen können.
 
 An deinem Reisetagebuch, deiner Timeline-Datei und deinen gespeicherten Videos ändert diese Version nichts.
 
@@ -93,6 +85,5 @@ Uma versão de correção que conclui a tradução da 3.0.0 e remove o compartil
 - **O compartilhamento de predefinições foi removido.** O botão de compartilhar, os links de predefinição compartilhada e a opção `--preset` da ferramenta de desktop não existem mais. Suas predefinições salvas não são afetadas e continuam funcionando como antes. Um link compartilhado a partir de uma versão anterior não abrirá mais.
 - Todos os idiomas agora têm a tradução completa da versão 3.0.0 do diário de viagem. As telas de introdução, o aviso sobre o arquivo e as explicações das configurações continuavam em inglês.
 - Traduções corrigidas nas novas telas do diário de viagem, incluindo a navegação inferior.
-- Os títulos dos vídeos são gravados nos metadados do MP4 exportado, para que players e galerias possam exibi-los.
 
 Esta versão não altera nada do seu diário de viagem, do seu arquivo do Timeline nem dos seus vídeos salvos.
