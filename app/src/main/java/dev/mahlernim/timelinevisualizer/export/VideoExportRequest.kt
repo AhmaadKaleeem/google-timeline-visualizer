@@ -65,6 +65,7 @@ class VideoExportRequestStore(context: Context) {
                 output.writeBoolean(exportFormat.customResolution)
                 output.writeBoolean(exportFormat.customFrameRate)
             }
+            output.writeBoolean(request.cameraSettings.keepPastRoutesVisible)
             output.writeBoolean(request.projectId != null)
             request.projectId?.let(output::writeUTF)
             output.writeBoolean(request.presetName != null)
@@ -157,6 +158,7 @@ class VideoExportRequestStore(context: Context) {
                         } else {
                             ExportFormatSettings.fromLegacy(quality)
                         }
+                        val keepPastRoutesVisible = if (version >= 14) input.readBoolean() else false
                         CameraSettings(
                             cameraMovement = movement,
                             longTripCompression = compression,
@@ -168,6 +170,7 @@ class VideoExportRequestStore(context: Context) {
                             } else {
                                 LocalFraming.OFF
                             },
+                            keepPastRoutesVisible = keepPastRoutesVisible,
                         )
                     } else if (version == 3) {
                         repeat(4) { input.readUTF() }
@@ -242,7 +245,7 @@ class VideoExportRequestStore(context: Context) {
     }
 
     companion object {
-        private const val CURRENT_FILE_VERSION = 13
+        private const val CURRENT_FILE_VERSION = 14
         private const val MAX_POINT_COUNT = 2_000_000
         private const val REQUEST_FILE = "pending-video-export.bin"
         private const val TEMPORARY_FILE = "pending-video-export.tmp"

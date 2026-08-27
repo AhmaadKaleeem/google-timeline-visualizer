@@ -27,6 +27,25 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TimelinePainterTest {
     @Test
+    fun pastRouteCacheGrowsIncrementallyAndRebuildsAfterBackwardSeek() {
+        val journey = Journey.from(
+            listOf(point(0.0, 0.0), point(0.0, 1.0), point(0.0, 2.0)),
+            2025,
+        )
+        val painter = TimelinePainter()
+        val settings = CameraSettings.DEFAULT.copy(keepPastRoutesVisible = true)
+        val bitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
+
+        painter.draw(Canvas(bitmap), SIZE, SIZE, journey, 0.8f, "Timeline", settings) { null }
+        val forwardCount = painter.pastRouteCachedSampleCount
+        painter.draw(Canvas(bitmap), SIZE, SIZE, journey, 0.2f, "Timeline", settings) { null }
+
+        assertTrue(forwardCount > painter.pastRouteCachedSampleCount)
+        assertTrue(painter.pastRouteCachedSampleCount > 0)
+        bitmap.recycle()
+    }
+
+    @Test
     fun overviewStrokeDoesNotBridgeAJournalRouteBreak() {
         val journey = Journey.fromSections(
             listOf(

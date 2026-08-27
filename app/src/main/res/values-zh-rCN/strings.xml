@@ -553,4 +553,6 @@
     <string name="settings_why_import_detail">较新的时间轴导出文件可能包含之后的导出文件中不再出现的详细路线。每隔几周导入一次更新的文件，就能把每段新的详细路线保留在本机的旅行记录中。</string>
     <string name="simplify_route_detail">简化路线细节</string>
     <string name="simplify_route_detail_summary">在长时间跨度的视频中使用摘要后的 Timeline 活动来生成更清晰的路线。关闭时使用可用的最详细路线。</string>
+    <string name="keep_past_routes_visible">保留过去的路线</string>
+    <string name="keep_past_routes_visible_summary">将已完成的路线显示为淡色背景轨迹。关闭时，较早的移动会逐渐消失。</string>
 </resources>

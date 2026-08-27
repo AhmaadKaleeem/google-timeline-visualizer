@@ -563,4 +563,6 @@
     <string name="settings_why_import_detail">Las exportaciones recientes de Timeline pueden incluir rutas detalladas que quizá no aparezcan en una exportación posterior. Importar un archivo actualizado cada pocas semanas permite que tu diario de viaje conserve en este dispositivo cada nuevo tramo detallado.</string>
     <string name="simplify_route_detail">Simplificar el detalle de la ruta</string>
     <string name="simplify_route_detail_summary">Usa la actividad resumida de Timeline para crear una ruta más clara en vídeos de periodos largos. Si está desactivado, se usa la ruta más detallada disponible.</string>
+    <string name="keep_past_routes_visible">Mantener visibles las rutas anteriores</string>
+    <string name="keep_past_routes_visible_summary">Muestra las rutas completadas como un rastro tenue de fondo. Si está desactivado, los movimientos anteriores se desvanecen.</string>
 </resources>

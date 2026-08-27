@@ -13,6 +13,7 @@ data class SettingsState(
     val distanceUnit: DistanceUnitPreference,
     val locationFilter: LocationFilterMode,
     val simplifyRouteDetail: Boolean,
+    val keepPastRoutesVisible: Boolean,
 )
 
 class SettingsViewModel(
@@ -27,6 +28,7 @@ class SettingsViewModel(
             distanceUnit = distanceUnitPreferences.load(),
             locationFilter = locationFilterPreferences.load(),
             simplifyRouteDetail = timelineDisplayPreferences.simplifyRouteDetail(),
+            keepPastRoutesVisible = timelineDisplayPreferences.keepPastRoutesVisible(),
         ),
     )
     val state: StateFlow<SettingsState> = mutableState.asStateFlow()
@@ -55,5 +57,10 @@ class SettingsViewModel(
     fun updateSimplifyRouteDetail(enabled: Boolean) {
         timelineDisplayPreferences.setSimplifyRouteDetail(enabled)
         mutableState.value = mutableState.value.copy(simplifyRouteDetail = enabled)
+    }
+
+    fun updateKeepPastRoutesVisible(enabled: Boolean) {
+        timelineDisplayPreferences.setKeepPastRoutesVisible(enabled)
+        mutableState.value = mutableState.value.copy(keepPastRoutesVisible = enabled)
     }
 }

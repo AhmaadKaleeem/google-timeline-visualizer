@@ -63,6 +63,7 @@ class VideoExportRequestStoreTest {
                 videoQuality = VideoQuality.ULTRA,
                 tripDetection = TripDetection.SENSITIVE,
                 localFraming = LocalFraming.CLOSE,
+                keepPastRoutesVisible = true,
             ),
             projectId = "trip-123",
             presetName = "Cinematic",

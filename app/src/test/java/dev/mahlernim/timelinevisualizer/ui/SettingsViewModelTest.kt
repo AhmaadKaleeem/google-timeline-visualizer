@@ -50,12 +50,14 @@ class SettingsViewModelTest {
         viewModel.updateDistanceUnit(DistanceUnitPreference.MILES)
         viewModel.updateLocationFilter(LocationFilterMode.OFF)
         viewModel.updateSimplifyRouteDetail(true)
+        viewModel.updateKeepPastRoutesVisible(true)
 
-        assertEquals(SettingsState(camera, DistanceUnitPreference.MILES, LocationFilterMode.OFF, true), viewModel.state.value)
+        assertEquals(SettingsState(camera, DistanceUnitPreference.MILES, LocationFilterMode.OFF, true, true), viewModel.state.value)
         assertEquals(camera, cameraPreferences.load())
         assertEquals(DistanceUnitPreference.MILES, distancePreferences.load())
         assertEquals(LocationFilterMode.OFF, filterPreferences.load())
         assertEquals(true, timelineDisplayPreferences.simplifyRouteDetail())
+        assertEquals(true, timelineDisplayPreferences.keepPastRoutesVisible())
     }
 
     @Test

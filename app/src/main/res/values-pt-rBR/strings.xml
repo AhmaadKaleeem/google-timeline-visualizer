@@ -563,4 +563,6 @@
     <string name="settings_why_import_detail">Exportações recentes da Timeline podem conter rotas detalhadas que talvez não apareçam em uma exportação posterior. Importar um arquivo atualizado a cada poucas semanas permite que seu diário de viagem preserve neste aparelho cada novo trecho detalhado.</string>
     <string name="simplify_route_detail">Simplificar detalhes da rota</string>
     <string name="simplify_route_detail_summary">Usa a atividade resumida da Timeline para criar uma rota mais clara em vídeos de períodos longos. Quando desativado, usa a rota mais detalhada disponível.</string>
+    <string name="keep_past_routes_visible">Manter rotas anteriores visíveis</string>
+    <string name="keep_past_routes_visible_summary">Mostra as rotas concluídas como um rastro discreto ao fundo. Quando desativado, os movimentos anteriores desaparecem.</string>
 </resources>
