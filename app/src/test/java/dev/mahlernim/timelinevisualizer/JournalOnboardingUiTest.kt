@@ -60,6 +60,11 @@ class JournalOnboardingUiTest {
         assertEquals(0.24f, activity.findViewById<View>(R.id.onboardingDotThree).alpha)
         assertEquals(View.INVISIBLE, activity.findViewById<View>(R.id.onboardingBackButton).visibility)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.onboardingNextButton).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.onboardingLanguageButton).visibility)
+        assertEquals(
+            activity.getString(R.string.language_system_default),
+            activity.findViewById<TextView>(R.id.onboardingLanguageButton).text,
+        )
         assertTrue(activity.findViewById<TextView>(R.id.onboardingPageTitle).isAccessibilityHeading)
     }
 
@@ -76,6 +81,7 @@ class JournalOnboardingUiTest {
 
         assertEquals(View.VISIBLE, recreated.findViewById<View>(R.id.journalOnboardingScreen).visibility)
         assertEquals(View.VISIBLE, recreated.findViewById<View>(R.id.onboardingBackButton).visibility)
+        assertEquals(View.GONE, recreated.findViewById<View>(R.id.onboardingLanguageButton).visibility)
     }
 
     @Test

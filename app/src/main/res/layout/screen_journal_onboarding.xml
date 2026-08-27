@@ -34,6 +34,16 @@
             android:text="@string/onboarding_skip" />
     </LinearLayout>
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/onboardingLanguageButton"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_marginEnd="20dp"
+        android:minHeight="48dp"
+        android:text="@string/language" />
+
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/onboardingPager"
         android:layout_width="match_parent"

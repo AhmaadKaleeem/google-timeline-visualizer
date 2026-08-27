@@ -1017,6 +1017,7 @@ class MainActivity : AppCompatActivity() {
         onboarding.onboardingSkipButton.setOnClickListener {
             onboarding.onboardingPager.currentItem = pages.lastIndex
         }
+        onboarding.onboardingLanguageButton.setOnClickListener { showOnboardingLanguagePicker() }
         onboarding.onboardingChooseFileButton.setOnClickListener {
             journalOnboardingStore.complete()
             showJournalSetup(returnToCreate = false)
@@ -1068,6 +1069,8 @@ class MainActivity : AppCompatActivity() {
         onboarding.onboardingBackButton.visibility =
             if (onboardingPage > 0 || onboardingReplay) View.VISIBLE else View.INVISIBLE
         onboarding.onboardingSkipButton.visibility = if (isFinal) View.INVISIBLE else View.VISIBLE
+        onboarding.onboardingLanguageButton.visibility = if (onboardingPage == 0) View.VISIBLE else View.GONE
+        updateOnboardingLanguageLabel()
         onboarding.onboardingNavigationActions.visibility = if (isFinal) View.GONE else View.VISIBLE
         onboarding.onboardingFinalActions.visibility = if (isFinal) View.VISIBLE else View.GONE
         val announcement = getString(
@@ -3697,7 +3700,16 @@ class MainActivity : AppCompatActivity() {
         Resources.getSystem().configuration.locales[0] ?: Locale.getDefault(Locale.Category.FORMAT)
 
     private fun configureLanguageSelection() {
-        val labels = listOf(
+        val labels = languageLabels()
+        val dropdown = settingsScreen.languageDropdown
+        dropdown.setAdapter(SelectionArrayAdapter(this, labels))
+        makeDropdownOpenReliably(dropdown)
+        updateLanguageSelectionLabel()
+        dropdown.post(::updateLanguageSelectionLabel)
+        dropdown.setOnItemClickListener { _, _, position, _ -> applyLanguageSelection(position) }
+    }
+
+    private fun languageLabels(): List<String> = listOf(
             getString(R.string.language_system_default),
             getString(R.string.language_name_en),
             getString(R.string.language_name_ko),
@@ -3709,17 +3721,30 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.language_name_de),
             getString(R.string.language_name_pt_br),
         )
-        val dropdown = settingsScreen.languageDropdown
-        dropdown.setAdapter(SelectionArrayAdapter(this, labels))
-        makeDropdownOpenReliably(dropdown)
-        updateLanguageSelectionLabel()
-        dropdown.post(::updateLanguageSelectionLabel)
-        dropdown.setOnItemClickListener { _, _, position, _ ->
-            val locales = AppLanguage.localesForSelection(position)
-            if (AppCompatDelegate.getApplicationLocales() != locales) {
-                AppCompatDelegate.setApplicationLocales(locales)
-            }
+
+    private fun applyLanguageSelection(position: Int) {
+        val locales = AppLanguage.localesForSelection(position)
+        if (AppCompatDelegate.getApplicationLocales() != locales) {
+            AppCompatDelegate.setApplicationLocales(locales)
         }
+    }
+
+    private fun showOnboardingLanguagePicker() {
+        val labels = languageLabels().toTypedArray()
+        val selected = AppLanguage.selectionIndex(currentApplicationLanguageTags())
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.language)
+            .setSingleChoiceItems(labels, selected) { dialog, position ->
+                dialog.dismiss()
+                applyLanguageSelection(position)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun updateOnboardingLanguageLabel() {
+        val selected = AppLanguage.selectionIndex(currentApplicationLanguageTags())
+        onboarding.onboardingLanguageButton.text = languageLabels()[selected]
     }
 
     private fun updateLanguageSelectionLabel() {
