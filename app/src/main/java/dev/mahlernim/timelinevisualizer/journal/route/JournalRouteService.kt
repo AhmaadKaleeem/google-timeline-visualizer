@@ -24,6 +24,11 @@ data class JournalRoute(
     val semanticUsableCount: Int,
 )
 
+enum class RouteDetail {
+    DETAILED,
+    SIMPLIFIED,
+}
+
 /** The Journal changed while a derived route was being persisted, so this result is stale. */
 class StaleJournalRouteBuildException : CancellationException(
     "The Journal changed while its route was being prepared",
@@ -46,11 +51,12 @@ class JournalRouteService(
         endExclusive: Instant,
         maximumAccuracyMeters: Double? = RawSignalProcessor.DEFAULT_MAXIMUM_ACCURACY_METERS,
         discontinuity: Duration = JournalRouteFusion.DEFAULT_DISCONTINUITY,
+        routeDetail: RouteDetail = RouteDetail.DETAILED,
         onPreparationStage: suspend (JournalRoutePreparationStage) -> Unit = {},
     ): JournalRoute {
         require(endExclusive > start) { "The route range must not be empty" }
         val usesCanonicalSettings = maximumAccuracyMeters == RawSignalProcessor.DEFAULT_MAXIMUM_ACCURACY_METERS &&
-            discontinuity == JournalRouteFusion.DEFAULT_DISCONTINUITY
+            discontinuity == JournalRouteFusion.DEFAULT_DISCONTINUITY && routeDetail == RouteDetail.DETAILED
         if (!usesCanonicalSettings) {
             return reconstructWithContext(
                 journalId,
@@ -58,6 +64,7 @@ class JournalRouteService(
                 endExclusive,
                 maximumAccuracyMeters,
                 discontinuity,
+                routeDetail,
                 onPreparationStage,
             )
         }
@@ -137,6 +144,7 @@ class JournalRouteService(
                 boundedRefreshEnd,
                 maximumAccuracyMeters,
                 discontinuity,
+                routeDetail,
                 onPreparationStage,
             )
             previous.replacingWindow(boundedRefreshStart, boundedRefreshEnd, replacement)
@@ -161,6 +169,7 @@ class JournalRouteService(
                 rebuildEnd,
                 maximumAccuracyMeters,
                 discontinuity,
+                routeDetail,
                 onPreparationStage,
             )
         }
@@ -193,6 +202,7 @@ class JournalRouteService(
         endExclusive: Instant,
         maximumAccuracyMeters: Double?,
         discontinuity: Duration,
+        routeDetail: RouteDetail,
         onPreparationStage: suspend (JournalRoutePreparationStage) -> Unit,
     ): JournalRoute {
         val contextMillis = discontinuity.toMillis()
@@ -204,6 +214,7 @@ class JournalRouteService(
             queryEnd,
             maximumAccuracyMeters,
             discontinuity,
+            routeDetail,
             onPreparationStage,
         ).clippedTo(start, endExclusive)
     }
@@ -214,6 +225,7 @@ class JournalRouteService(
         endExclusive: Instant,
         maximumAccuracyMeters: Double?,
         discontinuity: Duration,
+        routeDetail: RouteDetail,
         onPreparationStage: suspend (JournalRoutePreparationStage) -> Unit,
     ): JournalRoute {
         val startMillis = start.toEpochMilli()
@@ -240,7 +252,7 @@ class JournalRouteService(
         )
         val spans = JournalRouteFusion.fuseSemanticPaths(
             semanticPaths = semanticPaths,
-            detailedPoints = detailed,
+            detailedPoints = if (routeDetail == RouteDetail.DETAILED || semanticPaths.isEmpty()) detailed else emptyList(),
             discontinuity = discontinuity,
         )
         val flattened = spans.asSequence()

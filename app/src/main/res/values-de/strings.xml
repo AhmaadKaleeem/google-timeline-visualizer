@@ -559,4 +559,6 @@
     <string name="onboarding_v11_start_body">Exportieren Sie eine aktuelle Timeline.json-Datei aus Google Maps und wählen Sie sie hier aus. Bei umfangreichem Verlauf kann das erste Mal etwas länger dauern. Spätere Importe ergänzen dasselbe Reisetagebuch um neue Details.</string>
     <string name="settings_why_import_title">Warum eine aktualisierte Datei importieren?</string>
     <string name="settings_why_import_detail">Aktuelle Timeline-Exporte können detaillierte Routen enthalten, die in einem späteren Export fehlen. Wenn Sie alle paar Wochen eine aktualisierte Datei importieren, bewahrt Ihr Reisetagebuch jeden neuen detaillierten Abschnitt auf diesem Gerät.</string>
+    <string name="simplify_route_detail">Routendetails vereinfachen</string>
+    <string name="simplify_route_detail_summary">Verwendet zusammengefasste Timeline-Aktivitäten für eine übersichtlichere Route in Videos über lange Zeiträume. Wenn die Option deaktiviert ist, wird die detaillierteste verfügbare Route verwendet.</string>
 </resources>

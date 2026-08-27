@@ -118,6 +118,7 @@ import dev.mahlernim.timelinevisualizer.journal.route.JournalRoute
 import dev.mahlernim.timelinevisualizer.journal.route.JournalRouteService
 import dev.mahlernim.timelinevisualizer.journal.route.JournalRoutePreparationStage
 import dev.mahlernim.timelinevisualizer.journal.route.RouteSource
+import dev.mahlernim.timelinevisualizer.journal.route.RouteDetail
 import dev.mahlernim.timelinevisualizer.journal.route.connectedTimelines
 import dev.mahlernim.timelinevisualizer.journal.route.journeyForDateRange
 import dev.mahlernim.timelinevisualizer.journal.route.journeyForRange
@@ -152,6 +153,7 @@ import dev.mahlernim.timelinevisualizer.ui.AppLanguage
 import dev.mahlernim.timelinevisualizer.ui.LocationFilterPreferences
 import dev.mahlernim.timelinevisualizer.ui.SelectionArrayAdapter
 import dev.mahlernim.timelinevisualizer.ui.SettingsViewModel
+import dev.mahlernim.timelinevisualizer.ui.TimelineDisplayPreferences
 import dev.mahlernim.timelinevisualizer.videos.GeneratedMediaRepository
 import dev.mahlernim.timelinevisualizer.videos.VideoMedia
 import dev.mahlernim.timelinevisualizer.videos.VideoRecord
@@ -247,6 +249,7 @@ class MainActivity : AppCompatActivity() {
                     CameraSettingsPreferences(applicationContext),
                     DistanceUnitPreferences(applicationContext),
                     LocationFilterPreferences(applicationContext),
+                    TimelineDisplayPreferences(applicationContext),
                 )
             }
         }
@@ -262,6 +265,7 @@ class MainActivity : AppCompatActivity() {
     private var distanceUnitPreference = DistanceUnitPreference.AUTOMATIC
     private var videoFormatSupported = true
     private var locationFilterMode = LocationFilterMode.CONSERVATIVE
+    private var simplifyRouteDetail = false
     private var routeDurationSeconds = VideoDuration.DEFAULT_SECONDS
     private val applyTitleChanges = Runnable { commitTitlePreferences() }
     private var videoRenderJob: Job? = null
@@ -627,6 +631,7 @@ class MainActivity : AppCompatActivity() {
         configurePresets()
         restoreDraftSettings(savedInstanceState)
         configureLocationFiltering()
+        configureTimelineDisplay()
         configureLanguageSelection()
         configureCameraPreparation()
         configureMonthDropdowns()
@@ -1980,6 +1985,7 @@ class MainActivity : AppCompatActivity() {
                 journalId = journalId,
                 start = start,
                 endExclusive = endExclusive,
+                routeDetail = if (simplifyRouteDetail) RouteDetail.SIMPLIFIED else RouteDetail.DETAILED,
                 onPreparationStage = { stage ->
                     withContext(Dispatchers.Main.immediate) {
                         if (requestId == journalRouteRequestId && activeJournalRouteRequest?.id == requestId) {
@@ -3607,12 +3613,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun configureLocationFiltering() {
-        locationFilterMode = settingsViewModel.state.value.locationFilter
-        settingsScreen.locationFilterSwitch.isChecked = locationFilterMode == LocationFilterMode.CONSERVATIVE
-        settingsScreen.locationFilterSwitch.setOnCheckedChangeListener { _, checked ->
-            locationFilterMode = if (checked) LocationFilterMode.CONSERVATIVE else LocationFilterMode.OFF
-            settingsViewModel.updateLocationFilter(locationFilterMode)
-            rebuildRenderTimeline(reselect = true)
+        locationFilterMode = LocationFilterMode.CONSERVATIVE
+    }
+
+    private fun configureTimelineDisplay() {
+        simplifyRouteDetail = settingsViewModel.state.value.simplifyRouteDetail
+        settingsScreen.simplifyRouteDetailSwitch.isChecked = simplifyRouteDetail
+        settingsScreen.simplifyRouteDetailSwitch.setOnCheckedChangeListener { _, checked ->
+            if (simplifyRouteDetail == checked) return@setOnCheckedChangeListener
+            simplifyRouteDetail = checked
+            settingsViewModel.updateSimplifyRouteDetail(checked)
+            if (!BuildConfig.IS_JOURNAL_LAB) return@setOnCheckedChangeListener
+            invalidateJournalRouteRequest()
+            activeJournalRoute = null
+            activeJournalRouteStart = null
+            activeJournalRouteEndExclusive = null
+            currentProjectDates()?.let { (start, end) ->
+                loadJournalRouteForRange(start, end) { outcome ->
+                    if (outcome == JournalRouteLoadOutcome.READY) selectRange()
+                }
+            }
         }
     }
 
@@ -4362,7 +4382,7 @@ class MainActivity : AppCompatActivity() {
         settingsScreen.videoQualityDropdown.isEnabled = !exporting
         settingsScreen.frameRateDropdown.isEnabled = !exporting
         settingsScreen.resetAdvancedSettingsButton.isEnabled = !exporting
-        settingsScreen.locationFilterSwitch.isEnabled = !exporting
+        settingsScreen.simplifyRouteDetailSwitch.isEnabled = !exporting
         renderPresetSelection()
         if (exporting) editor.videoReadyGroup.visibility = View.GONE
         if (!exporting) updateCameraPreparationUi()

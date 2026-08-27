@@ -76,6 +76,51 @@ class JournalRouteServiceTest {
     }
 
     @Test
+    fun simplifiedRouteUsesSemanticHistoryInsteadOfOverlappingDetailedPoints() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "simplified",
+                importedAt = minute(100),
+                observations = listOf(observation(0, 1.0), observation(10, 1.1)),
+                semantic = listOf(semantic(0, 60, listOf(point(0, 9.0), point(30, 9.3), point(60, 9.6)))),
+            ),
+        )
+
+        val route = service.route(
+            JOURNAL_ID,
+            BASE,
+            BASE.plus(Duration.ofMinutes(61)),
+            routeDetail = RouteDetail.SIMPLIFIED,
+        )
+
+        assertEquals(listOf(RouteSource.SEMANTIC_PATH), route.spans.map(RouteSpan::source))
+        assertEquals(listOf(9.0, 9.3, 9.6), route.timeline.points.map(GeoPoint::latitude))
+    }
+
+    @Test
+    fun simplifiedRouteFallsBackToDetailedHistoryWhenSemanticHistoryIsMissing() = runBlocking {
+        repository.import(
+            JOURNAL_ID,
+            importInput(
+                hash = "detailed-fallback",
+                importedAt = minute(100),
+                observations = listOf(observation(0, 1.0), observation(10, 1.1)),
+            ),
+        )
+
+        val route = service.route(
+            JOURNAL_ID,
+            BASE,
+            BASE.plus(Duration.ofMinutes(11)),
+            routeDetail = RouteDetail.SIMPLIFIED,
+        )
+
+        assertEquals(listOf(RouteSource.DETAILED), route.spans.map(RouteSpan::source))
+        assertEquals(listOf(1.0, 1.1), route.timeline.points.map(GeoPoint::latitude))
+    }
+
+    @Test
     fun detailedDiscontinuityWithoutSemanticCoverageBecomesAnInferredTransfer() = runBlocking {
         repository.import(
             JOURNAL_ID,

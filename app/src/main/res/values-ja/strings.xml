@@ -558,4 +558,6 @@
     <string name="onboarding_v11_start_body">Google マップから最新の Timeline.json をエクスポートし、ここで選択してください。履歴が大きい場合、初回は少し時間がかかることがあります。次回以降の読み込みでは、同じ記録に新しい詳細が追加されます。</string>
     <string name="settings_why_import_title">なぜ新しいファイルを読み込むのですか</string>
     <string name="settings_why_import_detail">最近の Timeline のエクスポートには、後のエクスポートには現れない詳細なルートが含まれていることがあります。数週間ごとに新しいファイルを読み込むと、新たな詳細区間をこの端末の旅の記録に残せます。</string>
+    <string name="simplify_route_detail">ルートの詳細を簡略化</string>
+    <string name="simplify_route_detail_summary">長期間の動画では、要約された Timeline アクティビティを使って見やすいルートを作成します。オフの場合は、利用可能な最も詳細なルートを使います。</string>
 </resources>
