@@ -11,6 +11,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
+import androidx.test.core.app.ApplicationProvider
+import dev.mahlernim.timelinevisualizer.journal.JournalOnboardingStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,6 +24,7 @@ import java.util.concurrent.TimeUnit
 class DeviceSmokeTest {
     @Test
     fun emptyLibraryLaunchAndBackNavigationWorkOnDevice() {
+        completeJournalOnboarding()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
@@ -64,6 +67,7 @@ class DeviceSmokeTest {
 
     @Test
     fun settingsDropdownsKeepEveryChoiceAfterSelectionAndNavigation() {
+        completeJournalOnboarding()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { it.findViewById<View>(R.id.navigationSettings).performClick() }
             val choices = buildList {
@@ -89,6 +93,7 @@ class DeviceSmokeTest {
 
     @Test
     fun appLanguageSelectionSurvivesRecreationAndReturnsToSystemDefault() {
+        completeJournalOnboarding()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync {
             AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
@@ -139,5 +144,9 @@ class DeviceSmokeTest {
         scenario.onActivity { activity ->
             assertEquals(expectedCount, activity.findViewById<AutoCompleteTextView>(dropdownId).adapter.count)
         }
+    }
+
+    private fun completeJournalOnboarding() {
+        JournalOnboardingStore(ApplicationProvider.getApplicationContext()).complete()
     }
 }
