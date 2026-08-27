@@ -6,6 +6,14 @@
 - Add distance-unit selection to the web app.
 - Document the web app's distance units and close-up mode.
 
+## 3.0.2
+
+- Remove clusters of consecutive impossible raw-signal readings, which previously survived because the spike filter only ever inspected a single point between its neighbours.
+- Harmonize the Korean word for video on 동영상 across the app, the web app, and the store listing; the app had been using two words for the same English string on adjacent buttons.
+- Improve desktop CLI error handling and remove dead code, contributed by @smshozab.
+- Rewrite the Play Store listing in all nine locales to describe the Travel Journal release. Store metadata only; not part of the app.
+- Set Android version code 44 and version name 3.0.2.
+
 ## 3.0.1
 
 - Complete the localization of the 3.0.0 Travel Journal release across de, es, fr, ja, ko, pt-BR, zh-CN, and zh-TW: translate sixteen onboarding and disclosure strings that shipped marked untranslatable, retranslate twelve strings the Travel Journal rename left describing the old behavior, and correct machine-translation defects including "Library" as a book library, "Dismiss" as firing an employee, and counts whose placeholder bound to the wrong noun.
