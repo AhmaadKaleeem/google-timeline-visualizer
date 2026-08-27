@@ -54,8 +54,8 @@ jobs:
           package_name="$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" <<< "$package_line")"
           version_code="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" <<< "$package_line")"
           version_name="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<< "$package_line")"
-          expected_version_code="$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*$/\1/p' app/build.gradle.kts)"
-          expected_version_name="$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*$/\1/p' app/build.gradle.kts)"
+          expected_version_code="$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*$/\1/p' app/build.gradle.kts | head -n 1)"
+          expected_version_name="$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*$/\1/p' app/build.gradle.kts | head -n 1)"
 
           test "$package_name" = "dev.mahlernim.timelinevisualizer"
           test "$version_code" = "$expected_version_code"
