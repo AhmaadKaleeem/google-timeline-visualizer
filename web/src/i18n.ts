@@ -150,6 +150,11 @@ export interface Strings {
   cameraSteady: string;
   cameraDynamic: string;
   cameraCloseUp: string;
+  aspectRatioLabel: string;
+  aspectSquare: string;
+  aspectPortrait: string;
+  aspectLandscape: string;
+  resolutionLabel: string;
   videoFormatLabel: string;
   formatSquare480: string;
   formatSquare720: string;

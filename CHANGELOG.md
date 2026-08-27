@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep the Python CLI's selected duration inclusive of the 1.5-second final overview, write the resolved title to MP4 metadata, use Android-aligned visual pacing by default, and support 15 through 120 fps plus 1440p and 2160p output.
+- Expand the web app to 10 through 300 seconds, square, portrait, and landscape output with a 480 through 2160 pixel short edge, and 15 through 120 fps with exact WebCodecs capability checks.
+- Add shared Kotlin, Python, and TypeScript parity fixtures and document portable and Android-only capabilities.
 - Add a close-up camera mode to the web app.
 - Add distance-unit selection to the web app.
 - Document the web app's distance units and close-up mode.

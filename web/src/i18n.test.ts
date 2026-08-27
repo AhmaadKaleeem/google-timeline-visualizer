@@ -505,6 +505,12 @@ describe('index.html i18n keys', () => {
     expect(options[0][2]).toContain('selected');
   });
 
+  it('uses Android export bounds for duration, resolution, and frame rate', () => {
+    expect(html).toContain('id="duration" type="number" min="10" max="300"');
+    expect(html).toContain('id="resolution" type="number" min="480" max="2160"');
+    expect(html).toContain('id="frame-rate" type="number" min="15" max="120"');
+  });
+
   it('renders exactly the text the markup already carries', () => {
     // The HTML text is the English source and the catalog is what replaces it, so the two
     // drifting apart would change what an English user sees between first paint and

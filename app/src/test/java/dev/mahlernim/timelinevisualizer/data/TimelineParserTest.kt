@@ -12,6 +12,26 @@ class TimelineParserTest {
     private val parser = TimelineParser()
 
     @Test
+    fun matchesSharedPlatformParityFixture() {
+        val root = File("test-fixtures")
+        val expected = File(root, "platform-parity-expected.json").readText()
+        val timeline = parse(File(root, "platform-parity-sample.json").readText())
+        val expectedCount = Regex("\\\"pointCount\\\"\\s*:\\s*(\\d+)")
+            .find(expected)?.groupValues?.get(1)?.toInt()
+        val expectedLatitudes = Regex("\\\"latitudes\\\"\\s*:\\s*\\[([^]]+)]")
+            .find(expected)?.groupValues?.get(1)?.split(',')?.map { it.trim().toDouble() }
+        val expectedFirst = Regex("\\\"firstInstant\\\"\\s*:\\s*\\\"([^\\\"]+)")
+            .find(expected)?.groupValues?.get(1)
+        val expectedLast = Regex("\\\"lastInstant\\\"\\s*:\\s*\\\"([^\\\"]+)")
+            .find(expected)?.groupValues?.get(1)
+
+        assertEquals(expectedCount, timeline.points.size)
+        assertEquals(expectedLatitudes, timeline.points.map { it.latitude })
+        assertEquals(expectedFirst, timeline.points.first().instant.toString())
+        assertEquals(expectedLast, timeline.points.last().instant.toString())
+    }
+
+    @Test
     fun parsesObjectRootWithTimelinePathAndVisit() {
         val timeline = parse(
             """

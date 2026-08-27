@@ -14,12 +14,16 @@ export interface ExportOptions {
   signal?: AbortSignal;
 }
 
-export type VideoFormatKey = 'standard' | 'high' | 'ultra' | 'portrait' | 'landscape';
-export const VIDEO_FRAME_RATES = [24, 30, 60] as const;
+export type VideoAspectRatio = 'square' | 'portrait' | 'landscape';
+export type VideoFormatKey = `${VideoAspectRatio}-${number}`;
+export const VIDEO_SHORT_EDGES = [480, 720, 1080, 1440, 2160] as const;
+export const VIDEO_FRAME_RATES = [15, 24, 30, 60, 120] as const;
 export type VideoFrameRate = (typeof VIDEO_FRAME_RATES)[number];
 
 export interface VideoFormat {
   key: VideoFormatKey;
+  aspectRatio: VideoAspectRatio;
+  shortEdge: number;
   width: number;
   height: number;
   frameRate: number;
@@ -32,7 +36,7 @@ export interface ResolvedVideoFormat extends VideoFormat {
   codec: string;
 }
 
-export const DEFAULT_VIDEO_FORMAT_KEY: VideoFormatKey = 'standard';
+export const DEFAULT_VIDEO_FORMAT_KEY: VideoFormatKey = 'square-480';
 
 // H.264 macroblocks are 16 by 16, so PicSizeInMbs = ceil(width / 16) * ceil(height / 16).
 // A codec string avc1.PPCCLL pins profile_idc, constraint flags and level_idc, and mediabunny
@@ -47,48 +51,49 @@ export const DEFAULT_VIDEO_FORMAT_KEY: VideoFormatKey = 'standard';
 // Level 4.1 shares MaxFS and MaxMBPS with 4.0, so the extra headroom candidate is 4.2 (2a).
 // Baseline (42) comes first because it is the string already shipping and is implemented by
 // every VideoToolbox encoder; High (64) is what mediabunny itself would generate.
-export const VIDEO_FORMATS: readonly VideoFormat[] = [
-  {
-    key: 'standard',
-    width: 480,
-    height: 480,
-    frameRate: 24,
-    bitrate: 2_500_000,
-    codecCandidates: ['avc1.42001f', 'avc1.64001f'],
-  },
-  {
-    key: 'high',
-    width: 720,
-    height: 720,
-    frameRate: 24,
-    bitrate: 5_000_000,
-    codecCandidates: ['avc1.42001f', 'avc1.64001f'],
-  },
-  {
-    key: 'ultra',
-    width: 1080,
-    height: 1080,
-    frameRate: 24,
-    bitrate: 8_000_000,
-    codecCandidates: ['avc1.420020', 'avc1.640020', 'avc1.420028'],
-  },
-  {
-    key: 'portrait',
-    width: 1080,
-    height: 1920,
-    frameRate: 30,
-    bitrate: 12_000_000,
-    codecCandidates: ['avc1.420028', 'avc1.640028', 'avc1.42002a'],
-  },
-  {
-    key: 'landscape',
-    width: 1920,
-    height: 1080,
-    frameRate: 30,
-    bitrate: 12_000_000,
-    codecCandidates: ['avc1.420028', 'avc1.640028', 'avc1.42002a'],
-  },
-];
+function even(value: number): number {
+  return Math.floor(value / 2) * 2;
+}
+
+function androidBitrate(width: number, height: number, frameRate: number, aspectRatio: VideoAspectRatio): number {
+  const shortEdge = Math.min(width, height);
+  const legacy = shortEdge === 480 ? (aspectRatio === 'square' ? 2_500_000 : 3_500_000)
+    : shortEdge === 720 ? (aspectRatio === 'square' ? 5_000_000 : 7_000_000)
+      : shortEdge === 1080 ? (aspectRatio === 'square' ? 8_000_000 : 12_000_000)
+        : null;
+  const legacyRate = aspectRatio === 'square' ? 24 : 30;
+  const calculated = legacy === null
+    ? Math.floor(width * height * frameRate * 19 / 100)
+    : Math.floor(legacy * frameRate / legacyRate);
+  return Math.max(1_500_000, Math.min(40_000_000, calculated));
+}
+
+export function buildVideoFormat(
+  aspectRatio: VideoAspectRatio,
+  shortEdge: number,
+  frameRate = aspectRatio === 'square' ? 24 : 30,
+): VideoFormat {
+  if (!Number.isInteger(shortEdge) || shortEdge < 480 || shortEdge > 2160) {
+    throw new RangeError('Video short edge must be a whole number from 480 through 2160.');
+  }
+  if (!Number.isInteger(frameRate) || frameRate < 15 || frameRate > 120) {
+    throw new RangeError('Frame rate must be a whole number from 15 through 120.');
+  }
+  const longEdge = even(shortEdge * 16 / 9);
+  const [width, height] = aspectRatio === 'square' ? [shortEdge, shortEdge]
+    : aspectRatio === 'portrait' ? [shortEdge, longEdge] : [longEdge, shortEdge];
+  const bitrate = androidBitrate(width, height, frameRate, aspectRatio);
+  return {
+    key: `${aspectRatio}-${shortEdge}`,
+    aspectRatio,
+    shortEdge,
+    width,
+    height,
+    frameRate,
+    bitrate,
+    codecCandidates: codecCandidates(width, height, frameRate, bitrate),
+  };
+}
 
 /** Maps every size and frame-rate combination to the codec string that works, or null. */
 export type VideoFormatSupport = ReadonlyMap<string, string | null>;
@@ -101,16 +106,14 @@ export function videoFormatByKey(key: string): VideoFormat | null {
   return VIDEO_FORMATS.find((format) => format.key === key) ?? null;
 }
 
-function bitrateAtFrameRate(format: VideoFormat, frameRate: VideoFrameRate): number {
-  return Math.max(1_500_000, Math.min(40_000_000,
-    Math.floor(format.bitrate * frameRate / format.frameRate)));
-}
-
 const AVC_LEVELS = [
   { code: '1f', maxFs: 3_600, maxMbps: 108_000, maxBitrate: 14_000_000 },
   { code: '20', maxFs: 5_120, maxMbps: 216_000, maxBitrate: 20_000_000 },
   { code: '28', maxFs: 8_192, maxMbps: 245_760, maxBitrate: 20_000_000 },
   { code: '2a', maxFs: 8_704, maxMbps: 522_240, maxBitrate: 50_000_000 },
+  { code: '32', maxFs: 22_080, maxMbps: 589_824, maxBitrate: 50_000_000 },
+  { code: '33', maxFs: 36_864, maxMbps: 983_040, maxBitrate: 50_000_000 },
+  { code: '34', maxFs: 36_864, maxMbps: 2_073_600, maxBitrate: 50_000_000 },
 ] as const;
 
 function codecCandidates(width: number, height: number, frameRate: number, bitrate: number): string[] {
@@ -123,19 +126,16 @@ function codecCandidates(width: number, height: number, frameRate: number, bitra
   return levels.flatMap((level) => [`avc1.4200${level.code}`, `avc1.6400${level.code}`]);
 }
 
+export const VIDEO_FORMATS: readonly VideoFormat[] = (['square', 'portrait', 'landscape'] as const)
+  .flatMap((aspectRatio) => VIDEO_SHORT_EDGES.map((shortEdge) => buildVideoFormat(aspectRatio, shortEdge)));
+
 /** Builds a concrete format while preserving the proven legacy configuration exactly. */
 export function videoFormatAtFrameRate(
   format: VideoFormat,
-  frameRate: VideoFrameRate,
+  frameRate: number,
 ): VideoFormat {
   if (frameRate === format.frameRate) return format;
-  const bitrate = bitrateAtFrameRate(format, frameRate);
-  return {
-    ...format,
-    frameRate,
-    bitrate,
-    codecCandidates: codecCandidates(format.width, format.height, frameRate, bitrate),
-  };
+  return buildVideoFormat(format.aspectRatio, format.shortEdge, frameRate);
 }
 
 export function videoFormatSupportKey(format: VideoFormat): string {
@@ -166,6 +166,11 @@ async function resolveCodecString(format: VideoFormat): Promise<string | null> {
     if (await probeCodec(format, codec)) return codec;
   }
   return null;
+}
+
+export async function probeVideoFormat(format: VideoFormat): Promise<string | null> {
+  if (!hasVideoEncoder()) return null;
+  return resolveCodecString(format);
 }
 
 /**

@@ -119,14 +119,7 @@
         </label>
         <label>
           <span data-i18n="durationLabel">Duration</span>
-          <select id="duration">
-            <option value="10" selected data-i18n="durationSeconds" data-i18n-count="10">10 seconds</option>
-            <option value="15" data-i18n="durationSeconds" data-i18n-count="15">15 seconds</option>
-            <option value="20" data-i18n="durationSeconds" data-i18n-count="20">20 seconds</option>
-            <option value="30" data-i18n="durationSeconds" data-i18n-count="30">30 seconds</option>
-            <option value="45" data-i18n="durationSeconds" data-i18n-count="45">45 seconds</option>
-            <option value="60" data-i18n="durationSeconds" data-i18n-count="60">60 seconds</option>
-          </select>
+          <input id="duration" type="number" min="10" max="300" step="1" inputmode="numeric" value="10" required />
         </label>
         <label>
           <span data-i18n="cameraMovementLabel">Camera movement</span>
@@ -138,24 +131,21 @@
           </select>
         </label>
         <label>
-          <span data-i18n="videoFormatLabel">Video format</span>
-          <select id="video-format" aria-describedby="format-warning">
-            <option value="standard" selected data-i18n="formatSquare480">Square · 480p</option>
-            <option value="high" data-i18n="formatSquare720">Square · 720p</option>
-            <option value="ultra" data-i18n="formatSquare1080">Square · 1080p</option>
-            <option value="portrait" data-i18n="formatPortrait">Portrait · 1080×1920</option>
-            <option value="landscape" data-i18n="formatLandscape">Landscape · 1920×1080</option>
+          <span data-i18n="aspectRatioLabel">Aspect ratio</span>
+          <select id="aspect-ratio" aria-describedby="format-warning">
+            <option value="square" selected data-i18n="aspectSquare">Square</option>
+            <option value="portrait" data-i18n="aspectPortrait">Portrait</option>
+            <option value="landscape" data-i18n="aspectLandscape">Landscape</option>
           </select>
-          <span class="field-help" data-i18n="videoFormatHelp">Larger formats take longer to create and produce larger files.</span>
+        </label>
+        <label>
+          <span data-i18n="resolutionLabel">Resolution</span>
+          <input id="resolution" type="number" min="480" max="2160" step="2" inputmode="numeric" value="480" aria-describedby="format-warning" required />
+          <span class="field-help" data-i18n="videoFormatHelp">Enter the short edge in pixels from 480 through 2160. Larger formats take longer and produce larger files.</span>
         </label>
         <label>
           <span data-i18n="frameRateLabel">Frame rate</span>
-          <select id="frame-rate" aria-describedby="format-warning">
-            <option value="recommended" selected>Recommended · 24 fps</option>
-            <option value="24">24 fps</option>
-            <option value="30">30 fps</option>
-            <option value="60">60 fps</option>
-          </select>
+          <input id="frame-rate" type="number" min="15" max="120" step="1" inputmode="numeric" value="30" aria-describedby="format-warning" required />
           <span class="field-help" data-i18n="frameRateHelp">Higher frame rates look smoother but take longer and create larger files.</span>
         </label>
         <p id="format-warning" class="status hidden" role="status"></p>

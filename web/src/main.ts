@@ -43,17 +43,15 @@ import type {
   RenderSize,
   TimelineFrame,
 } from './types';
-import type { VideoFormat, VideoFormatSupport, VideoFrameRate } from './video';
+import type { VideoAspectRatio, VideoFormat, VideoFormatSupport } from './video';
 import {
   ALL_VIDEO_FORMATS,
+  buildVideoFormat,
   createJourneyMp4,
   hasVideoEncoder,
   probeVideoFormats,
+  probeVideoFormat,
   resolveVideoFormat,
-  VIDEO_FRAME_RATES,
-  VIDEO_FORMATS,
-  videoFormatAtFrameRate,
-  videoFormatByKey,
   videoFormatSupportKey,
 } from './video';
 
@@ -88,10 +86,11 @@ const endSelect = element<HTMLSelectElement>('end-month');
 const startDateInput = element<HTMLInputElement>('start-date');
 const endDateInput = element<HTMLInputElement>('end-date');
 const titleInput = element<HTMLInputElement>('video-title');
-const durationSelect = element<HTMLSelectElement>('duration');
+const durationSelect = element<HTMLInputElement>('duration');
 const cameraMovementSelect = element<HTMLSelectElement>('camera-movement');
-const formatSelect = element<HTMLSelectElement>('video-format');
-const frameRateSelect = element<HTMLSelectElement>('frame-rate');
+const aspectRatioSelect = element<HTMLSelectElement>('aspect-ratio');
+const resolutionInput = element<HTMLInputElement>('resolution');
+const frameRateSelect = element<HTMLInputElement>('frame-rate');
 const formatWarning = element<HTMLParagraphElement>('format-warning');
 const selectionSummary = element<HTMLParagraphElement>('selection-summary');
 const mapConsent = element<HTMLInputElement>('map-consent');
@@ -204,6 +203,7 @@ let settingsErrorKey: TextKey | null = null;
 let compatibilityKey: TextKey = 'compatibilityChecking';
 let fileStatusState: FileStatusState = { kind: 'key', key: 'fileStatusEmpty' };
 let progressState: ProgressState = { kind: 'key', key: 'progressReady' };
+let formatProbeGeneration = 0;
 
 /** Dragging a desktop window fires resize continuously, and every applied size clears the bitmap. */
 const PREVIEW_RESIZE_DEBOUNCE_MS = 150;
@@ -395,30 +395,31 @@ function overlayText(): OverlayText {
   };
 }
 
-function baseFormat(): VideoFormat {
-  return videoFormatByKey(formatSelect.value) ?? VIDEO_FORMATS[0];
-}
-
-function selectedFrameRate(format = baseFormat()): VideoFrameRate {
-  if (frameRateSelect.value === 'recommended') return format.frameRate as VideoFrameRate;
-  const value = Number(frameRateSelect.value);
-  return VIDEO_FRAME_RATES.includes(value as VideoFrameRate) ? value as VideoFrameRate : 24;
-}
-
 function currentFormat(): VideoFormat {
-  const format = baseFormat();
-  return videoFormatAtFrameRate(format, selectedFrameRate(format));
+  const aspect = aspectRatioSelect.value as VideoAspectRatio;
+  const shortEdge = resolutionInput.validity.valid ? Number(resolutionInput.value) : 480;
+  const frameRate = frameRateSelect.validity.valid ? Number(frameRateSelect.value) : 30;
+  return buildVideoFormat(aspect, shortEdge, frameRate);
 }
 
-function renderFrameRateOptions(): void {
-  const recommended = frameRateSelect.querySelector<HTMLOptionElement>('option[value="recommended"]');
-  if (recommended) {
-    recommended.textContent = i18n.t('frameRateRecommended', { fps: baseFormat().frameRate });
+function exportInputsValid(): boolean {
+  return durationSelect.validity.valid && resolutionInput.validity.valid && frameRateSelect.validity.valid;
+}
+
+async function probeCurrentFormat(): Promise<void> {
+  if (!resolutionInput.validity.valid || !frameRateSelect.validity.valid) {
+    refreshActionAvailability();
+    return;
   }
-  VIDEO_FRAME_RATES.forEach((fps) => {
-    const option = frameRateSelect.querySelector<HTMLOptionElement>(`option[value="${fps}"]`);
-    if (option) option.textContent = i18n.t('frameRateValue', { fps });
-  });
+  const generation = ++formatProbeGeneration;
+  const format = currentFormat();
+  const codec = await probeVideoFormat(format);
+  if (generation !== formatProbeGeneration) return;
+  const next = new Map(formatSupport ?? []);
+  next.set(videoFormatSupportKey(format), codec);
+  formatSupport = next;
+  compatibilityChecked = true;
+  refreshActionAvailability();
 }
 
 function stopPreview(): void {
@@ -531,7 +532,8 @@ function updateFormatWarning(format: VideoFormat, supported: boolean): void {
   formatWarning.textContent = message ?? '';
   formatWarning.classList.toggle('hidden', message === null);
   formatWarning.classList.toggle('error', unsupported);
-  formatSelect.setAttribute('aria-invalid', unsupported ? 'true' : 'false');
+  aspectRatioSelect.setAttribute('aria-invalid', unsupported ? 'true' : 'false');
+  resolutionInput.setAttribute('aria-invalid', unsupported ? 'true' : 'false');
   frameRateSelect.setAttribute('aria-invalid', unsupported ? 'true' : 'false');
 }
 
@@ -573,12 +575,14 @@ function selectedDistanceKm(points: GeoPoint[]): number {
 
 function refreshActionAvailability(points = currentPoints()): void {
   const hasJourney = points.length >= 2 && selectedDistanceKm(points) > 0;
+  const inputsValid = exportInputsValid();
   const format = currentFormat();
   const formatSupported = isFormatSupported(format);
   // Preview never depends on encoder support: an unencodable format is still previewable.
-  previewButton.disabled = isExporting || isPreparing || !hasJourney;
-  createButton.disabled = isExporting || isPreparing || !hasJourney || !formatSupported;
-  formatSelect.disabled = isExporting || isPreparing;
+  previewButton.disabled = isExporting || isPreparing || !hasJourney || !durationSelect.validity.valid || !resolutionInput.validity.valid;
+  createButton.disabled = isExporting || isPreparing || !hasJourney || !formatSupported || !inputsValid;
+  aspectRatioSelect.disabled = isExporting || isPreparing;
+  resolutionInput.disabled = isExporting || isPreparing;
   frameRateSelect.disabled = isExporting || isPreparing;
   if (!compatibilityChecked) {
     createButton.title = i18n.t('hintCheckingSupport');
@@ -697,7 +701,6 @@ function renderLocalizedText(): void {
   applyStrings(document, i18n);
   syncDocumentLang(i18n);
   renderDistanceUnitOptions();
-  renderFrameRateOptions();
   renderCompatibilityStatus();
   renderFileStatus();
   renderProgressLabel();
@@ -879,19 +882,26 @@ startSelect.addEventListener('change', updateSelection);
 endSelect.addEventListener('change', updateSelection);
 startDateInput.addEventListener('change', updateSelection);
 endDateInput.addEventListener('change', updateSelection);
-durationSelect.addEventListener('change', updateSelection);
+durationSelect.addEventListener('input', updateSelection);
 cameraMovementSelect.addEventListener('change', updateSelection);
 languageSelect.addEventListener('change', onLanguageChange);
 distanceUnitSelect.addEventListener('change', onDistanceUnitChange);
-formatSelect.addEventListener('change', () => {
+aspectRatioSelect.addEventListener('change', () => {
   stopPreview();
-  renderFrameRateOptions();
   applyVideoFormat();
   updateSelection();
+  void probeCurrentFormat();
 });
-frameRateSelect.addEventListener('change', () => {
+resolutionInput.addEventListener('input', () => {
+  stopPreview();
+  applyVideoFormat();
+  updateSelection();
+  void probeCurrentFormat();
+});
+frameRateSelect.addEventListener('input', () => {
   stopPreview();
   renderSelection();
+  void probeCurrentFormat();
 });
 exactDateToggle.addEventListener('change', () => {
   monthRangeFields.classList.toggle('hidden', exactDateToggle.checked);

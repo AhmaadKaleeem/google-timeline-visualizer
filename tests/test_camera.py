@@ -6,6 +6,7 @@ from visualizer import (
     build_visual_journey_timing,
     ease_in_out_cubic,
     ease_out_cubic,
+    frame_plan,
     latlon_to_meters,
 )
 
@@ -28,7 +29,38 @@ def test_cli_defaults_match_android(tmp_path):
     assert args.input == timeline
     assert args.camera_movement == 'steady'
     assert args.long_trip_compression == 'balanced'
-    assert args.pacing_model == 'legacy'
+    assert args.pacing_model == 'visual_zoom'
+    assert args.fps == 30
+
+
+def test_cli_accepts_android_export_limits(tmp_path):
+    timeline = tmp_path / 'Timeline.json'
+    timeline.write_text('[]', encoding='utf-8')
+    args = build_argument_parser().parse_args([
+        '--input', str(timeline), '--fps', '120', '--resolution', '2160',
+        '--width', '1440', '--height', '2160',
+    ])
+    assert args.fps == 120
+    assert args.resolution == '2160'
+    assert (args.width, args.height) == (1440, 2160)
+
+
+def test_android_aligned_cli_names_are_backward_compatible_aliases(tmp_path):
+    timeline = tmp_path / 'Timeline.json'
+    timeline.write_text('[]', encoding='utf-8')
+    args = build_argument_parser().parse_args([
+        '--input', str(timeline), '--frame-rate', '60', '--zoom-style', 'close_up',
+        '--long-trip-pacing', 'strong', '--aspect', 'portrait', '--gps-outlier-filter', 'off',
+    ])
+    assert (args.fps, args.camera_movement, args.long_trip_compression) == (60, 'close_up', 'strong')
+    assert (args.aspect_ratio, args.filter_outliers) == ('portrait', 'off')
+
+
+def test_selected_duration_includes_android_overview_ending():
+    total, journey, outro = frame_plan(10, 30)
+    assert total == 300
+    assert journey == 255
+    assert outro == 45
 
 
 def test_balanced_compression_reduces_long_segments_share_without_changing_duration():

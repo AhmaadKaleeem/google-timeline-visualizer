@@ -1,4 +1,6 @@
 import json
+import shutil
+import subprocess
 
 import pytest
 
@@ -9,6 +11,7 @@ from visualizer import (
     TimelineParseError,
     build_argument_parser,
     ensure_ffmpeg_available,
+    ffmpeg_writer,
     parse_timeline,
 )
 
@@ -26,6 +29,22 @@ def test_directory_input_is_rejected_by_argparse(tmp_path):
     with pytest.raises(SystemExit) as error:
         build_argument_parser().parse_args(['--input', str(tmp_path)])
 
+    assert error.value.code == 2
+
+
+@pytest.mark.parametrize('arguments', [
+    ['--fps', '14'],
+    ['--fps', '121'],
+    ['--duration', '9'],
+    ['--duration', '301'],
+    ['--width', '481'],
+    ['--height', '4096'],
+])
+def test_export_values_outside_android_limits_are_rejected(tmp_path, arguments):
+    timeline = tmp_path / 'Timeline.json'
+    timeline.write_text('[]', encoding='utf-8')
+    with pytest.raises(SystemExit) as error:
+        build_argument_parser().parse_args(['--input', str(timeline), *arguments])
     assert error.value.code == 2
 
 
@@ -75,6 +94,34 @@ def test_missing_ffmpeg_raises_typed_error(monkeypatch):
 
     with pytest.raises(FfmpegUnavailableError, match='ffmpeg is required'):
         ensure_ffmpeg_available()
+
+
+def test_ffmpeg_writer_embeds_resolved_title(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(visualizer.animation, 'FFMpegWriter', lambda **kwargs: captured.update(kwargs) or object())
+    writer = ffmpeg_writer(120, 'My Journey')
+    assert writer is not None
+    assert captured == {'fps': 120, 'metadata': {'title': 'My Journey'}}
+
+
+@pytest.mark.skipif(shutil.which('ffmpeg') is None or shutil.which('ffprobe') is None, reason='FFmpeg tools unavailable')
+def test_real_ffmpeg_output_has_requested_rate_duration_dimensions_and_title(tmp_path):
+    figure = visualizer.plt.figure(figsize=(1, 1), dpi=100)
+    visualizer.plt.plot([0, 1], [0, 1])
+    clip = visualizer.animation.FuncAnimation(figure, lambda _frame: (), frames=15)
+    output = tmp_path / 'probe.mp4'
+    clip.save(output, writer=ffmpeg_writer(15, 'Parity Probe'), dpi=100)
+    visualizer.plt.close(figure)
+    details = json.loads(subprocess.check_output([
+        'ffprobe', '-v', 'error', '-select_streams', 'v:0',
+        '-show_entries', 'stream=width,height,avg_frame_rate:format=duration:format_tags=title',
+        '-of', 'json', str(output),
+    ], text=True, encoding='utf-8'))
+    stream = details['streams'][0]
+    assert (stream['width'], stream['height']) == (100, 100)
+    assert stream['avg_frame_rate'] == '15/1'
+    assert float(details['format']['duration']) == pytest.approx(1.0, abs=0.05)
+    assert details['format']['tags']['title'] == 'Parity Probe'
 
 
 def test_main_checks_ffmpeg_before_parsing(monkeypatch, tmp_path, capsys):

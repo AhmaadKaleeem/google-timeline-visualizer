@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   availableMonths,
   localDateKey,
@@ -70,6 +71,17 @@ describe('parseTimelineJson', () => {
       timelinePath: [{ point: '33.5°, 126.5°', time: '2025-03-10T00:00:00Z' }],
     },
   ];
+
+  it('matches the shared platform parity fixture', () => {
+    const fixtureRoot = new URL('../../test-fixtures/', import.meta.url);
+    const data = JSON.parse(readFileSync(new URL('platform-parity-sample.json', fixtureRoot), 'utf8'));
+    const expected = JSON.parse(readFileSync(new URL('platform-parity-expected.json', fixtureRoot), 'utf8'));
+    const points = parseTimelineJson(data);
+    expect(points).toHaveLength(expected.pointCount);
+    expect(points.map((point) => point.latitude)).toEqual(expected.latitudes);
+    expect(points[0].instant.toISOString().replace('.000Z', 'Z')).toBe(expected.firstInstant);
+    expect(points.at(-1)?.instant.toISOString().replace('.000Z', 'Z')).toBe(expected.lastInstant);
+  });
 
   it('supports direct-array and semanticSegments roots', () => {
     expect(parseTimelineJson(directExport)).toHaveLength(3);
