@@ -26,6 +26,7 @@ class DeviceSmokeTest {
     fun emptyLibraryLaunchAndBackNavigationWorkOnDevice() {
         completeJournalOnboarding()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            waitForVisible(scenario, R.id.videosScreen)
             scenario.onActivity { activity ->
                 assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
                 assertEquals(View.GONE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
@@ -148,5 +149,17 @@ class DeviceSmokeTest {
 
     private fun completeJournalOnboarding() {
         JournalOnboardingStore(ApplicationProvider.getApplicationContext()).complete()
+    }
+
+    private fun waitForVisible(scenario: ActivityScenario<MainActivity>, viewId: Int) {
+        val deadline = System.currentTimeMillis() + 10_000L
+        var visible = false
+        while (System.currentTimeMillis() < deadline && !visible) {
+            scenario.onActivity { activity ->
+                visible = activity.findViewById<View>(viewId).visibility == View.VISIBLE
+            }
+            if (!visible) Thread.sleep(50)
+        }
+        assertTrue(visible)
     }
 }

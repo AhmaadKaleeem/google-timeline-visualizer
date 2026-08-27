@@ -86,7 +86,9 @@ class LargeTimelineImportDeviceTest {
                 scenario.onActivity { activity ->
                     val loading = activity.findViewById<View>(R.id.loadingGroup).visibility == View.VISIBLE
                     if (loading) assertEquals(false, activity.findViewById<View>(R.id.importButton).isEnabled)
-                    imported = !loading && activity.journalMetadataReady()
+                    imported = !loading &&
+                        activity.journalMetadataReady() &&
+                        activity.findViewById<View>(R.id.editorGroup).visibility == View.VISIBLE
                 }
                 if (!imported) Thread.sleep(100)
             }
