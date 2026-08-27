@@ -35,6 +35,13 @@ def test_release_workflow_can_update_an_existing_release() -> None:
     assert 'gh release upload "$RELEASE_TAG" "$apk" "$apk.sha256" --clobber' in workflow
 
 
+def test_release_workflow_uses_production_version_when_flavors_override_it() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "expected_version_code=\"$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*$/\\1/p' app/build.gradle.kts | head -n 1)\"" in workflow
+    assert "expected_version_name=\"$(sed -nE 's/^[[:space:]]*versionName = \"([^\"]+)\".*$/\\1/p' app/build.gradle.kts | head -n 1)\"" in workflow
+
+
 def test_release_workflow_requires_the_carto_project_key() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
