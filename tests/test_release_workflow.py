@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+JOURNAL_LAB_WORKFLOW = ROOT / ".github" / "workflows" / "journal-lab.yml"
 
 
 def test_release_workflow_verifies_apk_before_publishing() -> None:
@@ -47,3 +48,19 @@ def test_repository_normalizes_text_without_touching_release_binaries() -> None:
     assert "* text=auto eol=lf" in attributes
     for extension in ("png", "mp4", "apk", "aab", "jks", "keystore"):
         assert f"*.{extension} binary !eol" in attributes
+
+
+def test_journal_lab_workflow_can_rebuild_an_existing_immutable_tag() -> None:
+    workflow = JOURNAL_LAB_WORKFLOW.read_text(encoding="utf-8")
+
+    for required in (
+        "workflow_dispatch:",
+        "Existing immutable Journal Lab tag",
+        "LAB_RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}",
+        "ref: ${{ env.LAB_RELEASE_TAG }}",
+        'test "$(git describe --tags --exact-match)" = "$LAB_RELEASE_TAG"',
+        'test "$LAB_RELEASE_TAG" = "journal-lab-$EXPECTED_VERSION_CODE"',
+        'if gh release view "$LAB_RELEASE_TAG" >/dev/null 2>&1; then',
+        '--verify-tag',
+    ):
+        assert required in workflow
