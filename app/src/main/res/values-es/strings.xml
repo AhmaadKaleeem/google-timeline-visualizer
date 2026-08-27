@@ -11,8 +11,8 @@
     <string name="preview">Avance</string>
     <string name="pause_preview">Pausar vista previa</string>
     <string name="export_video">Crear vídeo</string>
-    <string name="video_title_template">Título del vídeo</string>
-    <string name="title_template_help">Utilice {year} y {name}. Guardado para tu próximo vídeo.</string>
+    <string name="video_title_template">Título que aparece en el vídeo</string>
+    <string name="title_template_help">Edita el título que aparece en este vídeo.</string>
     <string name="start_year">Año de inicio</string>
     <string name="end_year">fin de año</string>
     <string name="duration">Duración de la animación de ruta</string>
@@ -23,6 +23,7 @@
     <string name="share_travel_video">Compartir vídeo de viaje</string>
     <string name="import_failed">No se pudo cargar Timeline</string>
     <string name="import_failed_detail">Este archivo no se pudo leer. Seleccione una exportación JSON Timeline compatible.</string>
+    <string name="preview_preparation_failed">No se pudo preparar la vista previa del video.</string>
     <string name="timeline_error_malformed">Este archivo no es un JSON válido o completo.</string>
     <string name="timeline_error_legacy">Este es un formato antiguo de Google Takeout. Exporte los datos de Timeline desde su teléfono.</string>
     <string name="timeline_error_raw_only">Este archivo no contiene visitas, trayectos ni ubicaciones sin procesar que se puedan usar.</string>
@@ -144,6 +145,7 @@
     <string name="selected_period">Periodo seleccionado</string>
     <string name="video_details">Detalles del vídeo</string>
     <string name="journey">Viaje</string>
+    <string name="journey_preview">Vista previa del viaje</string>
     <string name="journey_overview">Resumen del viaje</string>
     <string name="save_image">Salvar el imagen</string>
     <string name="share_image">Compartir imagen</string>
@@ -165,7 +167,13 @@
     <string name="save_as_failed">No se pudo guardar una copia del video.</string>
     <string name="video_copy_saved">Copia de vídeo guardada</string>
     <string name="advanced_settings">Configuraciones avanzadas</string>
-    <string name="advanced_settings_summary">Elija el estilo de zoom, el tiempo de viaje largo y el formato de exportación.</string>
+    <string name="advanced_settings_summary">Elige la vista del mapa y el formato de exportación. El ritmo de la ruta se adapta automáticamente.</string>
+    <string name="map_view">Vista del mapa</string>
+    <string name="map_view_fixed">Escala fija</string>
+    <string name="map_view_wide">Amplia</string>
+    <string name="map_view_balanced">Equilibrada</string>
+    <string name="map_view_close_up">Primer plano</string>
+    <string name="automatic_visual_pacing_summary">El movimiento se adapta a la escala visible del mapa. Los viajes amplios avanzan con rapidez y las rutas cercanas se mantienen tranquilas.</string>
     <string name="camera_movement">Estilo de zoom</string>
     <string name="camera_fixed">Fijo</string><string name="camera_steady">Equilibrado</string><string name="camera_dynamic">Activo</string><string name="camera_close_up">Cercano</string>
     <string name="camera_fixed_summary">Sigue la ruta sin cambiar la escala.</string>
@@ -230,7 +238,7 @@
     <string name="settings">Ajustes</string>
     <string name="settings_summary">Establezca los valores predeterminados utilizados para vistas previas y videos nuevos.</string>
     <string name="video_defaults">Valores predeterminados de vídeo</string>
-    <string name="video_defaults_summary">Estos ajustes controlan juntos el encuadre y el ritmo de la ruta.</string>
+    <string name="video_defaults_summary">Elige la vista del mapa y el formato. El ritmo del movimiento se adapta automáticamente a la escala visible.</string>
     <string name="aspect_ratio">Relación de aspecto</string><string name="aspect_square">Cuadrado</string><string name="aspect_portrait">Vertical</string><string name="aspect_landscape">Horizontal</string>
     <string name="reset_video_defaults">Restablecer valores de vídeo</string><string name="video_defaults_restored">Valores de vídeo restablecidos</string>
     <string name="export_quality">Calidad de exportación</string><string name="export_quality_summary">Las resoluciones más altas crean archivos mayores y pueden no funcionar en todos los dispositivos.</string>
@@ -260,7 +268,7 @@
     <string name="video_playback_failed">Este vídeo no se pudo reproducir dentro de Timeline Visualizer.</string>
     <string name="open_in_another_app">Abrir en otra aplicación</string>
     <string name="preset">Ajuste predefinido</string>
-    <string name="preset_custom">Personalizado</string>
+    <string name="preset_custom">Ajustes personalizados</string>
     <string name="preset_custom_summary">Opciones manuales para este vídeo</string>
     <string name="preset_applied_summary">Aplicado a este vídeo · Resolución sin cambios</string>
     <string name="save_preset">Guardar</string>
@@ -404,7 +412,7 @@
     <string name="semantic_data_unavailable">Este archivo de línea de tiempo contiene únicamente ubicaciones sin formato.</string>
     <string name="settings_details">Detalles de configuración</string>
     <string name="settings_unavailable">La configuración no se registró para este video anterior.</string>
-    <string name="show_all_suggestions">Mostrar todo (%1$d)</string>
+    <string name="show_all_suggestions">Mostrar %1$d más</string>
     <string name="show_fewer_suggestions">Mostrar menos</string>
     <string name="strong_match">Coincidencia alta</string>
     <string name="suggested_trips">Viajes sugeridos</string>
@@ -441,4 +449,107 @@
     <string name="yearly_recap_badge">Resumen anual</string>
     <plurals name="library_project_count"><item quantity="one">%d proyecto</item><item quantity="other">%d proyectos</item></plurals>
     <plurals name="library_video_count"><item quantity="one">%d vídeo</item><item quantity="other">%d vídeos</item></plurals>
+    <string name="journal_reminders">Recordatorios del diario de viaje</string>
+    <string name="journal_reminders_summary">Los recordatorios opcionales y discretos te ayudan a conservar los detalles recientes de las rutas. Tu diario funciona aunque estén desactivados.</string>
+    <string name="journal_status_no_detail">Esta exportación contiene el historial de Timeline, pero no había ubicaciones detalladas disponibles.</string>
+    <string name="journal_status_current">Se conservaron nuevos detalles de rutas hace %1$d días.</string>
+    <string name="journal_status_gentle">Han pasado %1$d días desde que tu diario capturó nuevos detalles de rutas.</string>
+    <string name="journal_status_due">Amplía tu diario con los últimos días de Timeline.</string>
+    <string name="journal_status_at_risk">Algunos detalles de rutas que aún no se han conservado podrían desaparecer pronto de futuras exportaciones.</string>
+    <string name="journal_status_overdue">Actualiza tu diario cuando puedas. La aplicación no puede recuperar los detalles que falten en exportaciones anteriores.</string>
+    <string name="journal_status_detail">Rutas detalladas\n%1$s · %2$s · %3$s puntos\n\nHistorial del viaje\n%4$s · %5$s · %6$s entradas en la última cronología\n\nÚltima actualización %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="one">%d día</item>
+        <item quantity="other">%d días</item>
+    </plurals>
+    <string name="journal_growth_title">Tu diario ha crecido</string>
+    <string name="journal_created_title">Tu diario de viaje está listo</string>
+    <string name="journal_backfill_title">Una parte anterior ahora tiene más detalles</string>
+    <string name="journal_timeline_growth_title">Se añadió más historial de Timeline</string>
+    <string name="journal_up_to_date_title">Tu diario está al día</string>
+    <string name="journal_growth_detail">%1$s\n%2$s\nLas rutas detalladas ahora llegan hasta %3$s</string>
+    <string name="journal_backfill_detail">Se añadieron %1$s a un periodo anterior. La fecha detallada más reciente no ha cambiado.</string>
+    <string name="journal_timeline_growth_detail">Se añadió el mejor historial de Timeline disponible sin cambiar la fecha más reciente de tus rutas detalladas.</string>
+    <string name="journal_up_to_date_detail">No se encontraron nuevos detalles de rutas. Tu diario guardado no ha cambiado.</string>
+    <string name="keep_journal_growing">Sigue ampliando tu diario</string>
+    <string name="journal_reminder_invitation">Recibe uno o dos recordatorios discretos cuando convenga actualizar los detalles recientes de las rutas.</string>
+    <string name="turn_on_reminders">Activar recordatorios</string>
+    <string name="update_journal">Actualizar diario</string>
+    <string name="remind_in_three_days">Recordármelo en 3 días</string>
+    <string name="turn_off">Desactivar</string>
+    <string name="journal_reminder_channel">Recordatorios del diario de viaje</string>
+    <string name="journal_reminder_channel_summary">Recordatorios opcionales para conservar los detalles recientes de las rutas</string>
+    <string name="journal_reminder_day24_title">Sigue ampliando tu diario de viaje</string>
+    <string name="journal_reminder_day24_detail">Añade los últimos días de tu exportación de Timeline y conserva los detalles de sus rutas.</string>
+    <string name="journal_reminder_day29_title">Conserva los detalles recientes de las rutas</string>
+    <string name="journal_reminder_day29_detail">Han pasado 29 días desde que tu diario capturó nuevos detalles. Algunas ubicaciones detalladas anteriores podrían desaparecer pronto de futuras exportaciones.</string>
+    <string name="journal_reminders_enabled">Los recordatorios del diario de viaje están activados.</string>
+    <string name="journal_reminders_permission_denied">Los recordatorios siguen desactivados. Puedes habilitar las notificaciones más tarde en los ajustes de Android.</string>
+    <string name="journal_import_result_done">Listo</string>
+    <string name="journal_import_result_create">Crear un vídeo</string>
+    <string name="journal_home_due_detail">Han pasado %1$d días desde que tu diario capturó nuevos detalles de rutas. Añade los últimos días de Timeline.</string>
+    <string name="journal_home_risk_detail">Han pasado %1$d días desde que tu diario capturó nuevos detalles de rutas. Algunos detalles que aún no se han conservado podrían desaparecer pronto de futuras exportaciones.</string>
+    <string name="journal_home_overdue_detail">Han pasado %1$d días desde que tu diario capturó nuevos detalles de rutas. Actualízalo cuando puedas. Es posible que los detalles anteriores que falten no se puedan recuperar.</string>
+    <string name="onboarding_skip_to_choices">Ir a las opciones</string>
+    <string name="onboarding_journal_title">Crea tu diario de viaje privado</string>
+    <string name="onboarding_journal_body">Timeline de Google Maps puede recordar los lugares que visitas y las rutas que recorres.\n\nTimeline Visualizer convierte una copia exportada de ese historial en un diario de viaje privado y en vídeos animados de tus viajes.</string>
+    <string name="onboarding_source_title">Google Maps registra el viaje</string>
+    <string name="onboarding_source_body">Timeline Visualizer no rastrea tu ubicación. Primero, Timeline de Google Maps debe registrar tus viajes.\n\nTimeline está desactivado de forma predeterminada, por lo que debes habilitarlo para empezar a acumular nuevos viajes.</string>
+    <string name="onboarding_source_note">Timeline Visualizer solo lee el archivo que eliges. Tu exportación de Timeline no se sube al desarrollador.</string>
+    <string name="onboarding_layers_title">Un viaje, dos niveles de detalle</string>
+    <string name="onboarding_layers_body">Los detalles de la ruta muestran punto por punto el camino que recorriste. El historial de viajes recuerda visitas, actividades y viajes de forma más general.\n\nTu diario siempre usa los detalles de la ruta cuando están disponibles y recurre al historial de viajes cuando no lo están.</string>
+    <string name="onboarding_layers_note">No necesitas elegir un modo de datos. La aplicación usa automáticamente la mejor información disponible para cada parte de tu viaje.</string>
+    <string name="onboarding_preserve_title">Sigue ampliando los detalles de tus rutas</string>
+    <string name="onboarding_preserve_body">Las exportaciones recientes de Timeline suelen incluir detalles de ruta más completos. Es posible que esos detalles ya no aparezcan en una exportación posterior.\n\nImporta una exportación reciente con regularidad y tu diario conservará cada nueva sección detallada en este dispositivo.</string>
+    <string name="onboarding_preserve_note">Google no publica un periodo de conservación garantizado para los detalles de ruta. Actualizar cada 2 o 3 semanas es una recomendación prudente basada en exportaciones observadas.</string>
+    <string name="onboarding_start_title">Empieza tu diario de viaje</string>
+    <string name="onboarding_start_body">¿Ya tienes una exportación? Elige Timeline.json, location-history.json u otro archivo JSON compatible de Timeline de Google Maps.</string>
+    <string name="onboarding_start_note">Si Timeline aún no está habilitado, configúralo primero. Google Maps solo puede registrar nuevos viajes a partir de ese momento.</string>
+    <string name="onboarding_choose_export">Elegir exportación de Timeline</string>
+    <string name="onboarding_setup_maps">Configurar Timeline de Google Maps</string>
+    <string name="onboarding_page_position">%1$d de %2$d</string>
+    <string name="onboarding_page_announcement">Página %1$d de %2$d. %3$s</string>
+    <string name="journal_how_it_works">Cómo funciona el diario de viaje</string>
+    <string name="journal_setup_card_title">Empieza tu diario de viaje</string>
+    <string name="journal_setup_card_detail">Importa una exportación de Timeline de Google Maps para conservar tu historial de viajes y empezar a crear rutas detalladas.</string>
+    <string name="journal_setup_card_action">Configurar el diario</string>
+    <string name="journal_update_added_detail">Se añadieron %1$s.\n\n%2$s</string>
+    <string name="import_timeline_to_journal">Importar cronología</string>
+    <string name="import_updated_timeline">Importar cronología actualizada</string>
+    <string name="get_updated_timeline_file">Obtener archivo de cronología actualizado</string>
+    <string name="journal_route_load_failed">Tu diario está seguro, pero no se pudieron preparar sus rutas. Inténtalo de nuevo.</string>
+    <string name="save_as_preset">Guardar como preajuste</string>
+    <string name="preparing_your_journeys">Preparando tus viajes…</string>
+    <string name="preparing_detailed_routes">Preparando rutas detalladas</string>
+    <string name="combining_journey_history">Combinando el historial de viajes</string>
+    <string name="saving_for_faster_starts">Guardando para iniciar más rápido</string>
+    <string name="journal_route_action_waiting">Tus viajes se están preparando. Se abrirá cuando estén listos.</string>
+    <string name="journal_freshness_inline">Las rutas detalladas se actualizaron por última vez hace %1$d días. Importa un archivo de Timeline actualizado.</string>
+    <plurals name="journal_import_added"><item quantity="one">El diario de viaje creció con %d ubicación detallada.</item><item quantity="other">El diario de viaje creció con %d ubicaciones detalladas.</item></plurals>
+    <string name="journal_import_added_timeline">Tu diario de viaje creció con el historial de Timeline disponible.</string>
+    <string name="journal_import_duplicate">Este archivo de Timeline ya está en tu diario de viaje. No se cambió nada.</string>
+    <string name="journal_import_failed_preserved">No se pudo añadir este archivo de Timeline. Tu diario de viaje guardado no cambió.</string>
+    <string name="journal_import_checking">Comprobando tu diario de viaje</string>
+    <string name="journal_import_saving">Guardando nuevos detalles</string>
+    <string name="journal_import_updating">Actualizando tus viajes</string>
+    <string name="journal_import_working_detail">Tu diario guardado permanece seguro mientras termina.</string>
+    <string name="journal_import_read_progress">%1$s de %2$s leído</string>
+    <string name="journal_import_save_progress">%1$d de %2$d registros del diario guardados</string>
+    <string name="journal_import_in_progress">Actualizando el diario de viaje…</string>
+    <string name="journal_import_creating">Creando tu diario de viaje…</string>
+    <string name="journal_import_preparing">Preparando el diario de viaje…</string>
+    <string name="journal_import_created">Diario de viaje creado. %1$s y %2$s están listos.</string>
+    <string name="journal_import_created_timeline">Diario de viaje creado con el historial de Timeline disponible.</string>
+    <plurals name="journal_days_count"><item quantity="one">%d día</item><item quantity="other">%d días</item></plurals>
+    <plurals name="journal_detailed_locations_count"><item quantity="one">%d ubicación detallada</item><item quantity="other">%d ubicaciones detalladas</item></plurals>
+    <plurals name="journal_preserved_observations_count"><item quantity="one">%d observación detallada</item><item quantity="other">%d observaciones detalladas</item></plurals>
+    <string name="journal_import_no_changes">Tu diario de viaje ya contiene datos más recientes o coincidentes. No fue necesario actualizarlo.</string>
+    <string name="journal_import_mismatch_title">Puede ser un diario de viaje diferente</string>
+    <string name="journal_import_mismatch_message">Este archivo no tiene suficientes ubicaciones detalladas en común con tu diario de viaje guardado. No se cambió nada. La Timeline de otra persona no se puede añadir al mismo diario.</string>
+    <string name="travel_journal">Diario de viaje</string>
+    <string name="journal_setup_title">Configura tu diario de viaje</string>
+    <string name="journal_setup_summary">Tu diario conserva el mejor historial de viajes disponible en este dispositivo.</string>
+    <string name="journal_setup_intro_title">Crea tu diario de viaje</string>
+    <string name="journal_setup_intro_detail">Elige Timeline.json para guardar tu historial de viajes. Vuelve periódicamente con una exportación más reciente para ampliar las partes detalladas de tu diario.</string>
+    <string name="journal_automatic_source_summary">Los videos usan automáticamente tus rutas guardadas más detalladas. Tu diario de viaje completa los periodos que faltan con el mejor historial de Timeline disponible.</string>
 </resources>

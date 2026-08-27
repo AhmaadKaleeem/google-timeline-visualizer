@@ -11,8 +11,8 @@
     <string name="preview">Aperçu</string>
     <string name="pause_preview">Suspendre l\'aperçu</string>
     <string name="export_video">Créer une vidéo</string>
-    <string name="video_title_template">Titre de la vidéo</string>
-    <string name="title_template_help">Utilisez {year} et {name}. Enregistré pour votre prochaine vidéo.</string>
+    <string name="video_title_template">Titre affiché dans la vidéo</string>
+    <string name="title_template_help">Modifiez le titre affiché dans cette vidéo.</string>
     <string name="start_year">Année de début</string>
     <string name="end_year">Fin d\'année</string>
     <string name="duration">Durée de l\'animation de l\'itinéraire</string>
@@ -23,6 +23,7 @@
     <string name="share_travel_video">Partager une vidéo de voyage</string>
     <string name="import_failed">Impossible de charger Timeline</string>
     <string name="import_failed_detail">Ce fichier n\'a pas pu être lu. Sélectionnez une exportation JSON Timeline prise en charge.</string>
+    <string name="preview_preparation_failed">L\'aperçu de la vidéo n\'a pas pu être préparé.</string>
     <string name="timeline_error_malformed">Ce fichier ne contient pas de JSON valide ou complet.</string>
     <string name="timeline_error_legacy">Il s\'agit d\'un ancien format Google Takeout. Exportez les données Timeline depuis votre téléphone.</string>
     <string name="timeline_error_raw_only">Ce fichier ne contient aucune visite, aucun trajet ni aucune position brute utilisable.</string>
@@ -144,6 +145,7 @@
     <string name="selected_period">Période sélectionnée</string>
     <string name="video_details">Détails de la vidéo</string>
     <string name="journey">Voyage</string>
+    <string name="journey_preview">Aperçu du voyage</string>
     <string name="journey_overview">Aperçu du voyage</string>
     <string name="save_image">Enregistrer l\'image</string>
     <string name="share_image">Partager l\'image</string>
@@ -165,7 +167,13 @@
     <string name="save_as_failed">Impossible d\'enregistrer une copie de la vidéo</string>
     <string name="video_copy_saved">Copie vidéo enregistrée</string>
     <string name="advanced_settings">Paramètres avancés</string>
-    <string name="advanced_settings_summary">Choisissez le style de zoom, la synchronisation des longs trajets et le format de l\'exportation.</string>
+    <string name="advanced_settings_summary">Choisissez la vue de la carte et le format d\'exportation. Le rythme du trajet s\'adapte automatiquement.</string>
+    <string name="map_view">Vue de la carte</string>
+    <string name="map_view_fixed">Échelle fixe</string>
+    <string name="map_view_wide">Large</string>
+    <string name="map_view_balanced">Équilibrée</string>
+    <string name="map_view_close_up">Rapprochée</string>
+    <string name="automatic_visual_pacing_summary">Le mouvement s\'adapte à l\'échelle visible de la carte. Les longs trajets avancent rapidement et les parcours rapprochés restent calmes.</string>
     <string name="camera_movement">Style de zoom</string>
     <string name="camera_fixed">Fixe</string><string name="camera_steady">Équilibré</string><string name="camera_dynamic">Actif</string><string name="camera_close_up">Rapproché</string>
     <string name="camera_fixed_summary">Suit l\'itinéraire sans changer d\'échelle.</string>
@@ -230,7 +238,7 @@
     <string name="settings">Paramètres</string>
     <string name="settings_summary">Définissez les valeurs par défaut utilisées pour les aperçus et les nouvelles vidéos.</string>
     <string name="video_defaults">Paramètres vidéo par défaut</string>
-    <string name="video_defaults_summary">Ces réglages contrôlent ensemble le cadrage et le rythme du trajet.</string>
+    <string name="video_defaults_summary">Choisissez la vue de la carte et le format. Le rythme du mouvement s\'adapte automatiquement à l\'échelle visible.</string>
     <string name="aspect_ratio">Format d’image</string><string name="aspect_square">Carré</string><string name="aspect_portrait">Portrait</string><string name="aspect_landscape">Paysage</string>
     <string name="reset_video_defaults">Réinitialiser les réglages vidéo</string><string name="video_defaults_restored">Réglages vidéo réinitialisés</string>
     <string name="export_quality">Qualité d’exportation</string><string name="export_quality_summary">Les résolutions élevées créent des fichiers plus grands et peuvent ne pas fonctionner sur tous les appareils.</string>
@@ -260,7 +268,7 @@
     <string name="video_playback_failed">Cette vidéo n\'a pas pu être lue dans Timeline Visualizer.</string>
     <string name="open_in_another_app">Ouvrir dans une autre application</string>
     <string name="preset">Préréglage</string>
-    <string name="preset_custom">Personnalisé</string>
+    <string name="preset_custom">Paramètres personnalisés</string>
     <string name="preset_custom_summary">Choix manuels pour cette vidéo</string>
     <string name="preset_applied_summary">Appliqué à cette vidéo · Résolution inchangée</string>
     <string name="save_preset">Enregistrer</string>
@@ -404,7 +412,7 @@
     <string name="semantic_data_unavailable">Ce fichier Timeline contient uniquement des emplacements bruts.</string>
     <string name="settings_details">Détails des paramètres</string>
     <string name="settings_unavailable">Les paramètres n\'ont pas été enregistrés pour cette ancienne vidéo.</string>
-    <string name="show_all_suggestions">Afficher tout (%1$d)</string>
+    <string name="show_all_suggestions">Afficher %1$d de plus</string>
     <string name="show_fewer_suggestions">Afficher moins</string>
     <string name="strong_match">Forte correspondance</string>
     <string name="suggested_trips">Voyages suggérés</string>
@@ -441,4 +449,107 @@
     <string name="yearly_recap_badge">Récapitulatif annuel</string>
     <plurals name="library_project_count"><item quantity="one">%d projet</item><item quantity="other">%d projets</item></plurals>
     <plurals name="library_video_count"><item quantity="one">%d vidéo</item><item quantity="other">%d vidéos</item></plurals>
+    <string name="journal_reminders">Rappels du carnet de voyage</string>
+    <string name="journal_reminders_summary">Des rappels facultatifs et discrets vous aident à conserver les détails récents de vos itinéraires. Votre carnet fonctionne même lorsque les rappels sont désactivés.</string>
+    <string name="journal_status_no_detail">Cette exportation contient l’historique Timeline, mais aucun emplacement détaillé n’était disponible.</string>
+    <string name="journal_status_current">De nouveaux détails d’itinéraire ont été conservés il y a %1$d jours.</string>
+    <string name="journal_status_gentle">Cela fait %1$d jours que votre carnet n’a pas enregistré de nouveaux détails d’itinéraire.</string>
+    <string name="journal_status_due">Enrichissez votre carnet avec les derniers jours de Timeline.</string>
+    <string name="journal_status_at_risk">Certains détails d’itinéraire non conservés pourraient bientôt disparaître des prochaines exportations.</string>
+    <string name="journal_status_overdue">Mettez à jour votre carnet dès que possible. L’application ne peut pas récupérer les détails absents des exportations précédentes.</string>
+    <string name="journal_status_detail">Itinéraires détaillés\n%1$s · %2$s · %3$s points\n\nHistorique des trajets\n%4$s · %5$s · %6$s entrées dans la dernière chronologie\n\nDernière mise à jour %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="one">%d jour</item>
+        <item quantity="other">%d jours</item>
+    </plurals>
+    <string name="journal_growth_title">Votre carnet s’est enrichi</string>
+    <string name="journal_created_title">Votre carnet de voyage est prêt</string>
+    <string name="journal_backfill_title">Une période plus ancienne est désormais plus détaillée</string>
+    <string name="journal_timeline_growth_title">Davantage d’historique Timeline a été ajouté</string>
+    <string name="journal_up_to_date_title">Votre carnet est à jour</string>
+    <string name="journal_growth_detail">%1$s\n%2$s\nLes itinéraires détaillés couvrent désormais la période jusqu’au %3$s</string>
+    <string name="journal_backfill_detail">%1$s ont été ajoutés à une période antérieure. La date détaillée la plus récente reste inchangée.</string>
+    <string name="journal_timeline_growth_detail">Le meilleur historique Timeline disponible a été ajouté sans modifier la date la plus récente de vos itinéraires détaillés.</string>
+    <string name="journal_up_to_date_detail">Aucun nouveau détail d’itinéraire n’a été trouvé. Votre carnet enregistré n’a pas été modifié.</string>
+    <string name="keep_journal_growing">Continuez à enrichir votre carnet</string>
+    <string name="journal_reminder_invitation">Recevez un ou deux rappels discrets lorsque les détails récents de vos itinéraires pourraient nécessiter une mise à jour.</string>
+    <string name="turn_on_reminders">Activer les rappels</string>
+    <string name="update_journal">Mettre à jour le carnet</string>
+    <string name="remind_in_three_days">Me le rappeler dans 3 jours</string>
+    <string name="turn_off">Désactiver</string>
+    <string name="journal_reminder_channel">Rappels du carnet de voyage</string>
+    <string name="journal_reminder_channel_summary">Rappels facultatifs pour conserver les détails récents des itinéraires</string>
+    <string name="journal_reminder_day24_title">Continuez à enrichir votre carnet de voyage</string>
+    <string name="journal_reminder_day24_detail">Ajoutez les derniers jours de votre exportation Timeline et conservez les détails de leurs itinéraires.</string>
+    <string name="journal_reminder_day29_title">Conservez les détails récents de vos itinéraires</string>
+    <string name="journal_reminder_day29_detail">Cela fait 29 jours que votre carnet n’a pas enregistré de nouveaux détails. Certains emplacements détaillés plus anciens pourraient bientôt disparaître des prochaines exportations.</string>
+    <string name="journal_reminders_enabled">Les rappels du carnet de voyage sont activés.</string>
+    <string name="journal_reminders_permission_denied">Les rappels restent désactivés. Vous pourrez activer les notifications plus tard dans les paramètres Android.</string>
+    <string name="journal_import_result_done">Terminé</string>
+    <string name="journal_import_result_create">Créer une vidéo</string>
+    <string name="journal_home_due_detail">Cela fait %1$d jours que votre carnet n’a pas enregistré de nouveaux détails d’itinéraire. Ajoutez les derniers jours de Timeline.</string>
+    <string name="journal_home_risk_detail">Cela fait %1$d jours que votre carnet n’a pas enregistré de nouveaux détails d’itinéraire. Certains détails non conservés pourraient bientôt disparaître des prochaines exportations.</string>
+    <string name="journal_home_overdue_detail">Cela fait %1$d jours que votre carnet n’a pas enregistré de nouveaux détails d’itinéraire. Mettez-le à jour dès que possible. Les détails antérieurs manquants ne pourront peut-être pas être récupérés.</string>
+    <string name="onboarding_skip_to_choices">Passer aux options</string>
+    <string name="onboarding_journal_title">Créez votre carnet de voyage privé</string>
+    <string name="onboarding_journal_body">Timeline de Google Maps peut mémoriser les lieux que vous visitez et les itinéraires que vous parcourez.\n\nTimeline Visualizer transforme une copie exportée de cet historique en carnet de voyage privé et en vidéos de voyage animées.</string>
+    <string name="onboarding_source_title">Google Maps enregistre le voyage</string>
+    <string name="onboarding_source_body">Timeline Visualizer ne suit pas votre position. Vos voyages doivent d’abord être enregistrés par Timeline de Google Maps.\n\nTimeline est désactivé par défaut. Vous devez donc l’activer avant de pouvoir commencer à accumuler de nouveaux voyages.</string>
+    <string name="onboarding_source_note">Timeline Visualizer lit uniquement le fichier que vous choisissez. Votre exportation Timeline n’est pas envoyée au développeur.</string>
+    <string name="onboarding_layers_title">Un voyage, deux niveaux de détail</string>
+    <string name="onboarding_layers_body">Les détails d’itinéraire montrent point par point le trajet que vous avez parcouru. L’historique de voyage mémorise plus largement les visites, les activités et les voyages.\n\nVotre carnet utilise toujours les détails d’itinéraire lorsqu’ils sont disponibles et l’historique de voyage comme solution de secours.</string>
+    <string name="onboarding_layers_note">Vous n’avez pas à choisir de mode de données. L’application utilise automatiquement les meilleures informations disponibles pour chaque partie de votre voyage.</string>
+    <string name="onboarding_preserve_title">Continuez à enrichir vos itinéraires détaillés</string>
+    <string name="onboarding_preserve_body">Les exportations Timeline récentes contiennent souvent des itinéraires plus détaillés. Ces détails peuvent ne plus figurer dans une exportation ultérieure.\n\nImportez régulièrement une nouvelle exportation. Votre carnet conservera chaque nouvelle section détaillée sur cet appareil.</string>
+    <string name="onboarding_preserve_note">Google ne publie aucune durée de conservation garantie pour les détails d’itinéraire. Une mise à jour toutes les 2 à 3 semaines est une recommandation prudente fondée sur les exportations observées.</string>
+    <string name="onboarding_start_title">Commencez votre carnet de voyage</string>
+    <string name="onboarding_start_body">Vous avez déjà une exportation ? Choisissez Timeline.json, location-history.json ou un autre fichier JSON Timeline de Google Maps compatible.</string>
+    <string name="onboarding_start_note">Si Timeline n’est pas encore activé, configurez-le d’abord. Google Maps ne peut enregistrer de nouveaux voyages qu’à partir de ce moment.</string>
+    <string name="onboarding_choose_export">Choisir une exportation Timeline</string>
+    <string name="onboarding_setup_maps">Configurer Timeline de Google Maps</string>
+    <string name="onboarding_page_position">%1$d sur %2$d</string>
+    <string name="onboarding_page_announcement">Page %1$d sur %2$d. %3$s</string>
+    <string name="journal_how_it_works">Fonctionnement du carnet de voyage</string>
+    <string name="journal_setup_card_title">Commencez votre carnet de voyage</string>
+    <string name="journal_setup_card_detail">Importez une exportation Timeline de Google Maps pour conserver votre historique de voyage et commencer à créer des itinéraires détaillés.</string>
+    <string name="journal_setup_card_action">Configurer le carnet</string>
+    <string name="journal_update_added_detail">%1$s ont été ajoutés.\n\n%2$s</string>
+    <string name="import_timeline_to_journal">Importer la chronologie</string>
+    <string name="import_updated_timeline">Importer la chronologie mise à jour</string>
+    <string name="get_updated_timeline_file">Obtenir le fichier Timeline mis à jour</string>
+    <string name="journal_route_load_failed">Votre carnet est en sécurité, mais ses itinéraires n’ont pas pu être préparés. Veuillez réessayer.</string>
+    <string name="save_as_preset">Enregistrer comme préréglage</string>
+    <string name="preparing_your_journeys">Préparation de vos voyages…</string>
+    <string name="preparing_detailed_routes">Préparation des itinéraires détaillés</string>
+    <string name="combining_journey_history">Combinaison de l’historique des voyages</string>
+    <string name="saving_for_faster_starts">Enregistrement pour des démarrages plus rapides</string>
+    <string name="journal_route_action_waiting">Vos voyages sont en cours de préparation. Cette page s’ouvrira lorsqu’ils seront prêts.</string>
+    <string name="journal_freshness_inline">Les itinéraires détaillés ont été mis à jour il y a %1$d jours. Importez un fichier Timeline actualisé.</string>
+    <plurals name="journal_import_added"><item quantity="one">Le carnet de voyage s’est enrichi de %d position détaillée.</item><item quantity="other">Le carnet de voyage s’est enrichi de %d positions détaillées.</item></plurals>
+    <string name="journal_import_added_timeline">Votre carnet de voyage s’est enrichi de l’historique Timeline disponible.</string>
+    <string name="journal_import_duplicate">Ce fichier Timeline figure déjà dans votre carnet de voyage. Rien n’a été modifié.</string>
+    <string name="journal_import_failed_preserved">Ce fichier Timeline n’a pas pu être ajouté. Votre carnet de voyage enregistré n’a pas été modifié.</string>
+    <string name="journal_import_checking">Vérification de votre carnet de voyage</string>
+    <string name="journal_import_saving">Enregistrement des nouveaux détails</string>
+    <string name="journal_import_updating">Mise à jour de vos voyages</string>
+    <string name="journal_import_working_detail">Votre carnet enregistré reste protégé pendant cette opération.</string>
+    <string name="journal_import_read_progress">%1$s sur %2$s lus</string>
+    <string name="journal_import_save_progress">%1$d enregistrements du carnet sur %2$d sauvegardés</string>
+    <string name="journal_import_in_progress">Mise à jour du carnet de voyage…</string>
+    <string name="journal_import_creating">Création de votre carnet de voyage…</string>
+    <string name="journal_import_preparing">Préparation du carnet de voyage…</string>
+    <string name="journal_import_created">Carnet de voyage créé. %1$s et %2$s sont prêts.</string>
+    <string name="journal_import_created_timeline">Carnet de voyage créé avec l’historique Timeline disponible.</string>
+    <plurals name="journal_days_count"><item quantity="one">%d jour</item><item quantity="other">%d jours</item></plurals>
+    <plurals name="journal_detailed_locations_count"><item quantity="one">%d position détaillée</item><item quantity="other">%d positions détaillées</item></plurals>
+    <plurals name="journal_preserved_observations_count"><item quantity="one">%d observation détaillée</item><item quantity="other">%d observations détaillées</item></plurals>
+    <string name="journal_import_no_changes">Votre carnet de voyage contient déjà des données plus récentes ou identiques. Aucune mise à jour n’était nécessaire.</string>
+    <string name="journal_import_mismatch_title">Il peut s’agir d’un autre carnet de voyage</string>
+    <string name="journal_import_mismatch_message">Ce fichier ne contient pas assez de positions détaillées en commun avec votre carnet de voyage enregistré. Rien n’a été modifié. La Timeline d’une autre personne ne peut pas être ajoutée au même carnet.</string>
+    <string name="travel_journal">Carnet de voyage</string>
+    <string name="journal_setup_title">Configurer votre carnet de voyage</string>
+    <string name="journal_setup_summary">Votre carnet conserve le meilleur historique de voyages disponible sur cet appareil.</string>
+    <string name="journal_setup_intro_title">Créez votre carnet de voyage</string>
+    <string name="journal_setup_intro_detail">Choisissez Timeline.json pour enregistrer votre historique de voyages. Importez régulièrement une exportation plus récente afin d’enrichir les parties détaillées de votre carnet.</string>
+    <string name="journal_automatic_source_summary">Les vidéos utilisent automatiquement vos itinéraires enregistrés les plus détaillés. Votre carnet de voyage complète les périodes manquantes avec le meilleur historique Timeline disponible.</string>
 </resources>

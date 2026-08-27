@@ -89,7 +89,7 @@ CAMERA_MOVEMENTS = {
     'dynamic': dict(context_fraction=0.10, minimum_context_km=100.0, maximum_context_km=350.0,
                     padding=2.2, minimum_span=0.00045, zoom_out_alpha=0.24,
                     zoom_in_alpha=0.06, leg_aware=True, fixed_zoom=False),
-    'close_up': dict(context_fraction=0.035, minimum_context_km=15.0, maximum_context_km=120.0,
+    'close_up': dict(context_fraction=0.035, minimum_context_km=6.0, maximum_context_km=120.0,
                      padding=1.7, minimum_span=0.00030, zoom_out_alpha=0.30,
                      zoom_in_alpha=0.075, leg_aware=True, fixed_zoom=False),
 }
@@ -124,6 +124,7 @@ TRANSFER_PADDING = 2.8
 CAMERA_TRACK_SAMPLES = 480
 CAMERA_DEAD_ZONE_HALF = 0.20
 FIXED_ZOOM_PERCENTILE = 0.80
+VISUAL_ZOOM_WORK_WEIGHT = 0.35
 MIN_TRANSFER_THRESHOLD_KM = 60.0
 MAX_TRANSFER_THRESHOLD_KM = 120.0
 TRANSFER_TO_TYPICAL_RATIO = 3.0
@@ -769,12 +770,144 @@ def extract_timeline_points(
     return sorted(unique.values(), key=lambda point: point['dt'])
 
 
+def extract_journal_route_points(
+    data: Any,
+    year: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    maximum_accuracy_meters: float = 100.0,
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """Build a Journal-style detailed-first route for the selected period.
+
+    Detailed positions use the same core filters and 30-minute coverage-island
+    boundary as Journal Lab v13. Semantic geometry is retained only outside
+    accepted detailed coverage.
+    """
+    semantic = extract_timeline_points(data, year=year, start_date=start_date, end_date=end_date)
+    raw_signals = data.get('rawSignals', []) if isinstance(data, dict) else []
+    detailed = []
+    accuracy_rejected = 0
+    for raw_signal in raw_signals:
+        position = raw_signal.get('position') if isinstance(raw_signal, dict) else None
+        if not isinstance(position, dict):
+            continue
+        coordinate = parse_coordinate(position.get('LatLng') or position.get('latLng'))
+        try:
+            timestamp = dateutil.parser.parse(position.get('timestamp'))
+            accuracy = float(position.get('accuracyMeters'))
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if coordinate is None or not math.isfinite(accuracy) or accuracy < 0:
+            continue
+        if not _date_in_range(timestamp, year=year, start_date=start_date, end_date=end_date):
+            continue
+        if accuracy > maximum_accuracy_meters:
+            accuracy_rejected += 1
+            continue
+        detailed.append({
+            'dt': timestamp,
+            'lat': coordinate[0],
+            'lon': coordinate[1],
+            'accuracy': accuracy,
+        })
+
+    detailed.sort(key=lambda point: point['dt'])
+    normalized = []
+    group_start = 0
+    while group_start < len(detailed):
+        group_end = group_start + 1
+        while group_end < len(detailed) and detailed[group_end]['dt'] == detailed[group_start]['dt']:
+            group_end += 1
+        by_coordinate = {}
+        for point in detailed[group_start:group_end]:
+            key = (point['lat'], point['lon'])
+            if key not in by_coordinate or point['accuracy'] < by_coordinate[key]['accuracy']:
+                by_coordinate[key] = point
+        if len(by_coordinate) == 1:
+            normalized.append(next(iter(by_coordinate.values())))
+        group_start = group_end
+
+    without_spikes = []
+    if len(normalized) < 3:
+        without_spikes = normalized
+    else:
+        without_spikes.append(normalized[0])
+        for index in range(1, len(normalized) - 1):
+            before = without_spikes[-1]
+            candidate = normalized[index]
+            after = normalized[index + 1]
+            window = after['dt'] - before['dt']
+            rejoin_tolerance = max(0.2, (before['accuracy'] + after['accuracy']) * 2.0 / 1000.0)
+            ingress = haversine_dist(before['lat'], before['lon'], candidate['lat'], candidate['lon'])
+            egress = haversine_dist(candidate['lat'], candidate['lon'], after['lat'], after['lon'])
+            minimum_spike = max(0.5, candidate['accuracy'] * 5.0 / 1000.0)
+            ingress_hours = (candidate['dt'] - before['dt']).total_seconds() / 3600.0
+            egress_hours = (after['dt'] - candidate['dt']).total_seconds() / 3600.0
+            is_spike = (
+                timedelta(0) <= window <= timedelta(minutes=20)
+                and haversine_dist(before['lat'], before['lon'], after['lat'], after['lon']) <= rejoin_tolerance
+                and ingress >= minimum_spike
+                and egress >= minimum_spike
+                and (ingress_hours <= 0 or ingress / ingress_hours > 250.0)
+                and (egress_hours <= 0 or egress / egress_hours > 250.0)
+            )
+            if not is_spike:
+                without_spikes.append(candidate)
+        without_spikes.append(normalized[-1])
+
+    stabilized = []
+    for candidate in without_spikes:
+        if not stabilized:
+            stabilized.append(candidate)
+            continue
+        previous = stabilized[-1]
+        elapsed = candidate['dt'] - previous['dt']
+        uncertainty_km = max(0.025, (previous['accuracy'] + candidate['accuracy']) / 1000.0)
+        overlaps = (
+            timedelta(0) <= elapsed <= timedelta(minutes=10)
+            and haversine_dist(previous['lat'], previous['lon'], candidate['lat'], candidate['lon']) <= uncertainty_km
+        )
+        if overlaps:
+            if candidate['accuracy'] < previous['accuracy']:
+                stabilized[-1] = candidate
+        else:
+            stabilized.append(candidate)
+
+    islands = []
+    for point in stabilized:
+        if not islands or point['dt'] - islands[-1][-1]['dt'] > timedelta(minutes=30):
+            islands.append([point])
+        else:
+            islands[-1].append(point)
+    coverage = [(island[0]['dt'], island[-1]['dt']) for island in islands]
+    semantic_backup = []
+    island_index = 0
+    for point in semantic:
+        while island_index < len(coverage) and coverage[island_index][1] < point['dt']:
+            island_index += 1
+        covered = (
+            island_index < len(coverage)
+            and coverage[island_index][0] <= point['dt'] <= coverage[island_index][1]
+        )
+        if not covered:
+            semantic_backup.append(point)
+
+    combined = sorted(stabilized + semantic_backup, key=lambda point: point['dt'])
+    return combined, {
+        'detailed_input': len(detailed) + accuracy_rejected,
+        'detailed_usable': len(stabilized),
+        'detailed_islands': len(islands),
+        'semantic_backup': len(semantic_backup),
+    }
+
+
 def parse_timeline(
     input_path: Path,
     year: Optional[int] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     location_filter: str = "conservative",
+    route_source: str = "semantic",
 ) -> Tuple[List[datetime], List[float], List[float], List[float], List[float], List[float]]:
     print(f"Loading {input_path}...")
     try:
@@ -783,7 +916,21 @@ def parse_timeline(
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise TimelineParseError(f"Could not read Timeline JSON: {error}") from error
 
-    raw_points = extract_timeline_points(data, year=year, start_date=start_date, end_date=end_date)
+    if route_source == 'journal':
+        raw_points, journal_stats = extract_journal_route_points(
+            data,
+            year=year,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        print(
+            "Journal route: "
+            f"{journal_stats['detailed_usable']} detailed points in "
+            f"{journal_stats['detailed_islands']} islands; "
+            f"{journal_stats['semantic_backup']} semantic backup points."
+        )
+    else:
+        raw_points = extract_timeline_points(data, year=year, start_date=start_date, end_date=end_date)
     if not raw_points:
         period_str = str(year) if year is not None else f"{start_date} to {end_date}"
         raise NoDataFoundError(f"No data points found for period {period_str}.")
@@ -965,6 +1112,79 @@ def camera_at(
     return center_x, center_y, span_x, span_y
 
 
+def build_visual_journey_timing(
+    cum_dist: List[float],
+    xs: List[float],
+    ys: List[float],
+    lats: List[float],
+    lons: List[float],
+    movement_name: str,
+    aspect: float = 1.0,
+    trip_detection: str = 'balanced',
+    local_framing: str = 'balanced',
+    include_zoom_work: bool = False,
+):
+    """Map elapsed progress to route distance using motion measured in viewport units.
+
+    The provisional camera is built over uniform geographic distance. Each interval
+    then receives time according to how much projected ground crosses the viewport.
+    The optional zoom term also budgets time for scale changes, which reduces route
+    travel while the camera is closing in without changing the selected duration.
+    """
+    total_km = cum_dist[-1] if cum_dist else 0.0
+    if len(cum_dist) < 2 or total_km <= 0:
+        return lambda progress: total_km * max(0.0, min(1.0, progress))
+
+    linear_distance_at = lambda progress: total_km * max(0.0, min(1.0, progress))
+    provisional_track = build_camera_track(
+        cum_dist,
+        xs,
+        ys,
+        lats,
+        lons,
+        movement_name,
+        linear_distance_at,
+        aspect=aspect,
+        trip_detection=trip_detection,
+        local_framing=local_framing,
+    )
+
+    distances = [total_km * sample / CAMERA_TRACK_SAMPLES for sample in range(CAMERA_TRACK_SAMPLES + 1)]
+    markers = [
+        latlon_to_meters(*position_at_distance(cum_dist, lats, lons, distance_km))
+        for distance_km in distances
+    ]
+    cumulative_work = [0.0]
+    for index in range(1, len(distances)):
+        before = provisional_track[index - 1]
+        after = provisional_track[index]
+        span_x = math.sqrt(max(1.0, before[2]) * max(1.0, after[2]))
+        span_y = math.sqrt(max(1.0, before[3]) * max(1.0, after[3]))
+        ground_work = math.hypot(
+            (markers[index][0] - markers[index - 1][0]) / span_x,
+            (markers[index][1] - markers[index - 1][1]) / span_y,
+        )
+        zoom_work = 0.0
+        if include_zoom_work:
+            zoom_work = VISUAL_ZOOM_WORK_WEIGHT * abs(math.log2(after[3] / before[3]))
+        cumulative_work.append(cumulative_work[-1] + ground_work + zoom_work)
+
+    total_work = cumulative_work[-1]
+    if total_work <= 0:
+        return linear_distance_at
+    elapsed_fractions = [value / total_work for value in cumulative_work]
+
+    def distance_at(progress: float) -> float:
+        elapsed = max(0.0, min(1.0, progress))
+        to_index = min(max(bisect.bisect_left(elapsed_fractions, elapsed), 1), len(distances) - 1)
+        from_index = to_index - 1
+        width = elapsed_fractions[to_index] - elapsed_fractions[from_index]
+        fraction = 0.0 if width <= 0 else (elapsed - elapsed_fractions[from_index]) / width
+        return lerp(distances[from_index], distances[to_index], fraction)
+
+    return distance_at
+
+
 def calculate_overview_viewport(
     xs: List[float], ys: List[float], aspect: float = 1.0
 ) -> Tuple[float, float, float, float]:
@@ -1026,6 +1246,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
                         help="Camera behavior: fixed, steady, dynamic, or close_up")
     parser.add_argument('--long-trip-compression', '-p', choices=COMPRESSION_EXPONENTS.keys(), default='balanced',
                         help="Timing compression: off, gentle, balanced, strong, or stronger")
+    parser.add_argument('--pacing-model', choices=['legacy', 'visual', 'visual_zoom'], default='legacy',
+                        help="Pacing basis: legacy distance compression, visual ground speed, or visual speed plus zoom work")
     parser.add_argument('--trip-detection', choices=TRIP_DETECTION_MULTIPLIERS.keys(), default='balanced',
                         help="Trip detection sensitivity: conservative, balanced, sensitive")
     parser.add_argument('--local-framing', choices=LOCAL_FRAMING_SETTINGS.keys(), default='balanced',
@@ -1038,6 +1260,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument('--height', type=int, default=None, help="Custom video height in pixels")
     parser.add_argument('--filter-outliers', choices=['conservative', 'off'], default='conservative',
                         help="GPS outlier filter: conservative or off")
+    parser.add_argument('--route-source', choices=['semantic', 'journal'], default='semantic',
+                        help="Route source: semantic points or Journal-style detailed-first fusion")
     parser.add_argument('--preset', type=str, default=None, help="Base64 URL preset token")
     parser.add_argument('--unit', choices=['km', 'mi'], default='km', help="Distance display unit: km or mi")
     return parser
@@ -1089,6 +1313,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             start_date,
             end_date,
             args.filter_outliers,
+            args.route_source,
         )
     except TimelineCliError as error:
         print(f"Error: {error}", file=sys.stderr)
@@ -1117,7 +1342,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     outro_frames = int(OUTRO_SECONDS * fps)
     total_frames = journey_frames + outro_frames
 
-    distance_at = build_journey_timing(cum_dist, args.long_trip_compression, args.trip_detection)
+    if args.pacing_model == 'legacy':
+        distance_at = build_journey_timing(cum_dist, args.long_trip_compression, args.trip_detection)
+    else:
+        distance_at = build_visual_journey_timing(
+            cum_dist,
+            xs,
+            ys,
+            lats,
+            lons,
+            args.camera_movement,
+            aspect=aspect,
+            trip_detection=args.trip_detection,
+            local_framing=args.local_framing,
+            include_zoom_work=args.pacing_model == 'visual_zoom',
+        )
+    print(f"Pacing model: {args.pacing_model}")
     print(f"Target: {journey_duration}s (+{OUTRO_SECONDS}s outro) @ {fps}fps. Resolution: {width_px}x{height_px}")
 
     # Build camera track and frame calculations
