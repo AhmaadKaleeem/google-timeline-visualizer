@@ -73,6 +73,9 @@ export const zhCN: Strings = {
   durationSeconds: {
     other: '{count} 秒',
   },
+  useRecommendedDuration: {
+    other: '使用建议时长 · {count} 秒',
+  },
   cameraMovementLabel: '镜头移动',
   cameraFixed: '固定缩放',
   cameraSteady: '平稳跟随',

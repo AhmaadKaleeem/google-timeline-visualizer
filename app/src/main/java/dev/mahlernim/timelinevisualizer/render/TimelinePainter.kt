@@ -427,6 +427,25 @@ class TimelinePainter {
         return checkNotNull(cachedTiming).distanceAt(progress)
     }
 
+    internal fun recommendedDurationSeconds(
+        journey: Journey,
+        width: Int,
+        height: Int,
+        cameraSettings: CameraSettings,
+    ): Int? {
+        val track = cachedCameraTrack?.takeIf {
+            cachedCameraJourney === journey &&
+                cachedCameraWidth == width &&
+                cachedCameraHeight == height &&
+                cachedCameraSettings == cameraSettings
+        } ?: return null
+        return DurationRecommendation.recommend(
+            frames = track.frames,
+            aspect = track.aspect,
+            largeTransferCount = journey.legs.count { it.isTransfer },
+        )
+    }
+
     private fun playbackPosition(
         journey: Journey,
         progress: Float,
@@ -1659,7 +1678,7 @@ class TimelinePainter {
 
     internal class CameraTrack(
         internal val frames: List<CameraFrame>,
-        private val aspect: Double,
+        internal val aspect: Double,
         internal val timing: JourneyTiming,
     ) {
         fun viewportAt(progress: Float): Viewport {

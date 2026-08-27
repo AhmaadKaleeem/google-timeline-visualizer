@@ -626,6 +626,9 @@ class MainActivity : AppCompatActivity() {
                 applyDuration(VideoDuration.presets[position])
             }
         }
+        editor.durationRecommendationButton.setOnClickListener {
+            editor.timelineView.recommendedDurationSeconds()?.let(::applyDuration)
+        }
         makeDropdownOpenReliably(editor.durationDropdown)
         configureAdvancedSettings()
         configurePresets()
@@ -2823,7 +2826,16 @@ class MainActivity : AppCompatActivity() {
         showProgress(0f)
         editor.videoReadyGroup.visibility = View.GONE
         editor.periodSummaryText.text = selectedPeriodSummary(selected, ignoredCount)
+        updateDurationRecommendation()
         updateCameraPreparationUi()
+    }
+
+    private fun updateDurationRecommendation() {
+        val recommendation = editor.timelineView.recommendedDurationSeconds()
+        editor.durationRecommendationButton.apply {
+            visibility = if (recommendation != null && recommendation != routeDurationSeconds) View.VISIBLE else View.GONE
+            if (recommendation != null) text = getString(R.string.use_recommended_duration, recommendation)
+        }
     }
 
     internal fun selectedPeriodSummary(selected: Journey, ignoredCount: Int = 0): String {
@@ -3770,6 +3782,7 @@ class MainActivity : AppCompatActivity() {
                     pendingImportCompletionUri = null
                 }
             }
+            updateDurationRecommendation()
             updateCameraPreparationUi()
         }
         editor.timelineView.onCameraPreparationFailed = { error ->
@@ -4054,6 +4067,7 @@ class MainActivity : AppCompatActivity() {
         animation?.cancel()
         editor.timelineView.journeyDurationSeconds = seconds
         showProgress(editor.timelineSeek.progress / 1000f)
+        updateDurationRecommendation()
         if (presetsConfigured) syncPresetMatch()
     }
 

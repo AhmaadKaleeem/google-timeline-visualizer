@@ -198,6 +198,10 @@ class TimelineView @JvmOverloads constructor(
         restartCameraPreparation()
     }
 
+    fun recommendedDurationSeconds(): Int? = journey?.let {
+        painter.recommendedDurationSeconds(it, width, height, cameraSettings)
+    }
+
     private fun restartCameraPreparation() {
         cameraPreparationJob?.cancel()
         cameraPreparationGeneration += 1

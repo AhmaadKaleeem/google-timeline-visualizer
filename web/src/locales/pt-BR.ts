@@ -74,6 +74,11 @@ export const ptBR: Strings = {
     many: '{count} segundos',
     other: '{count} segundos',
   },
+  useRecommendedDuration: {
+    one: 'Usar duração recomendada · {count} segundo',
+    other: 'Usar duração recomendada · {count} segundos',
+    many: 'Usar duração recomendada · {count} segundos',
+  },
   cameraMovementLabel: 'Movimento da câmera',
   cameraFixed: 'Zoom fixo',
   cameraSteady: 'Acompanhamento estável',

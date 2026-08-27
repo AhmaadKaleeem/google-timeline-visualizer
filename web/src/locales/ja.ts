@@ -71,6 +71,9 @@ export const ja: Strings = {
   durationSeconds: {
     other: '{count}秒',
   },
+  useRecommendedDuration: {
+    other: 'おすすめの再生時間を使用 · {count}秒',
+  },
   cameraMovementLabel: 'カメラの動き',
   cameraFixed: '固定ズーム',
   cameraSteady: '安定追従',

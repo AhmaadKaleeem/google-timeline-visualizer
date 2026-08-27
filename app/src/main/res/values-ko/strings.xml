@@ -44,6 +44,7 @@
     <string name="custom_duration_hint">초</string>
     <string name="custom_duration_range">10에서 300 사이의 정수를 입력하세요.</string>
     <string name="long_duration_warning">긴 동영상은 렌더링 시간과 저장 공간이 더 필요합니다.</string>
+    <string name="use_recommended_duration">추천 재생 시간 사용 · %1$d초</string>
     <string name="reading_timeline">타임라인 파일 읽는 중</string>
     <string name="opening_timeline">파일 여는 중</string>
     <string name="opening_file">파일 여는 중</string>
