@@ -1,5 +1,6 @@
 from datetime import date
 import json
+from pathlib import Path
 
 from visualizer import (
     extract_journal_route_points,
@@ -220,3 +221,14 @@ def test_title_template_expansion():
 def test_distance_formatting():
     assert format_distance(100.0, "km") == "100.0 km"
     assert format_distance(100.0, "mi") == "62.1 mi"
+
+
+def test_shared_platform_parity_fixture():
+    root = Path(__file__).parents[1] / "test-fixtures"
+    data = json.loads((root / "platform-parity-sample.json").read_text(encoding="utf-8"))
+    expected = json.loads((root / "platform-parity-expected.json").read_text(encoding="utf-8"))
+    points = extract_timeline_points(data)
+    assert len(points) == expected["pointCount"]
+    assert [point["lat"] for point in points] == expected["latitudes"]
+    assert points[0]["dt"].isoformat().replace("+00:00", "Z") == expected["firstInstant"]
+    assert points[-1]["dt"].isoformat().replace("+00:00", "Z") == expected["lastInstant"]

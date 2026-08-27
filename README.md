@@ -188,6 +188,9 @@ is loaded, the app explains this transfer and lets you cancel. See the full
 The original Python generator remains available for desktop users. It requires
 Python 3.9+, FFmpeg, and the packages in `requirements.txt`.
 
+See [platform parity](docs/platform-parity.md) for the portable features shared by
+Android, the desktop CLI, and the web app, plus the intentionally Android-only features.
+
 ```bash
 python -m pip install -r requirements.txt
 python visualizer.py --input Timeline.json --year 2025 --camera-movement steady \

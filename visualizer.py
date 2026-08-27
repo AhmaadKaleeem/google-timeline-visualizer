@@ -46,6 +46,10 @@ except ImportError as e:
 
 # --- CONFIGURATION DEFAULTS ---
 DEFAULT_FPS = 30
+MIN_FPS = 15
+MAX_FPS = 120
+MIN_SHORT_EDGE = 480
+MAX_SHORT_EDGE = 2160
 DEFAULT_DURATION = 30
 DEFAULT_TAIL_KM = 500
 THEME_COLOR = '#e90064'
@@ -1154,6 +1158,38 @@ def ensure_ffmpeg_available() -> None:
         )
 
 
+def bounded_int(name: str, minimum: int, maximum: int):
+    """Return an argparse converter that rejects values instead of silently clamping them."""
+    def convert(raw: str) -> int:
+        try:
+            value = int(raw)
+        except ValueError as error:
+            raise argparse.ArgumentTypeError(f"{name} must be a whole number") from error
+        if value < minimum or value > maximum:
+            raise argparse.ArgumentTypeError(f"{name} must be from {minimum} through {maximum}")
+        return value
+    return convert
+
+
+def even_dimension(raw: str) -> int:
+    value = bounded_int("custom dimensions", MIN_SHORT_EDGE, MAX_SHORT_EDGE)(raw)
+    if value % 2:
+        raise argparse.ArgumentTypeError("custom dimensions must be even for H.264 video")
+    return value
+
+
+def frame_plan(total_duration: int, fps: int) -> Tuple[int, int, int]:
+    """Return total, journey, and outro frames with the ending inside total duration."""
+    total_frames = total_duration * fps
+    outro_frames = min(int(OUTRO_SECONDS * fps), total_frames - 1)
+    return total_frames, total_frames - outro_frames, outro_frames
+
+
+def ffmpeg_writer(fps: int, title: str):
+    """Build the MP4 writer with the same resolved title shown in the video."""
+    return animation.FFMpegWriter(fps=fps, metadata={'title': title})
+
+
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Google Timeline Visualizer: create animated travel videos from your Timeline.json"
@@ -1165,25 +1201,27 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument('--output', '-o', default='travel_history.mp4', help="Output video path (.mp4)")
     parser.add_argument('--title', '-t', default="My Trips", help="Title displayed on video ({year} and {name} supported)")
     parser.add_argument('--name', default="", help="Name for title template substitution")
-    parser.add_argument('--duration', '-d', type=int, default=DEFAULT_DURATION, help="Video duration in seconds (10 to 300)")
-    parser.add_argument('--fps', type=int, default=DEFAULT_FPS, help="Frame rate (15 to 60 FPS)")
-    parser.add_argument('--camera-movement', '-c', choices=CAMERA_MOVEMENTS.keys(), default='steady',
+    parser.add_argument('--duration', '-d', type=bounded_int("duration", 10, 300), default=DEFAULT_DURATION,
+                        help="Total video duration in seconds, including the ending (10 to 300)")
+    parser.add_argument('--fps', '--frame-rate', dest='fps', type=bounded_int("frame rate", MIN_FPS, MAX_FPS), default=DEFAULT_FPS,
+                        help="Frame rate (15 to 120 FPS)")
+    parser.add_argument('--camera-movement', '--zoom-style', '-c', dest='camera_movement', choices=CAMERA_MOVEMENTS.keys(), default='steady',
                         help="Camera behavior: fixed, steady, dynamic, or close_up")
-    parser.add_argument('--long-trip-compression', '-p', choices=COMPRESSION_EXPONENTS.keys(), default='balanced',
+    parser.add_argument('--long-trip-compression', '--long-trip-pacing', '-p', dest='long_trip_compression', choices=COMPRESSION_EXPONENTS.keys(), default='balanced',
                         help="Timing compression: off, gentle, balanced, strong, or stronger")
-    parser.add_argument('--pacing-model', choices=['legacy', 'visual', 'visual_zoom'], default='legacy',
+    parser.add_argument('--pacing-model', choices=['legacy', 'visual', 'visual_zoom'], default='visual_zoom',
                         help="Pacing basis: legacy distance compression, visual ground speed, or visual speed plus zoom work")
     parser.add_argument('--trip-detection', choices=TRIP_DETECTION_MULTIPLIERS.keys(), default='balanced',
                         help="Trip detection sensitivity: conservative, balanced, sensitive")
     parser.add_argument('--local-framing', choices=LOCAL_FRAMING_SETTINGS.keys(), default='balanced',
                         help="Episode framing: off, balanced, close")
-    parser.add_argument('--aspect-ratio', '-a', choices=['square', 'portrait', 'landscape'], default='square',
+    parser.add_argument('--aspect-ratio', '--aspect', '-a', dest='aspect_ratio', choices=['square', 'portrait', 'landscape'], default='square',
                         help="Aspect ratio: square (1:1), portrait (9:16), or landscape (16:9)")
-    parser.add_argument('--resolution', '-r', choices=['480', '720', '1080'], default='720',
-                        help="Resolution: 480p, 720p, or 1080p")
-    parser.add_argument('--width', type=int, default=None, help="Custom video width in pixels")
-    parser.add_argument('--height', type=int, default=None, help="Custom video height in pixels")
-    parser.add_argument('--filter-outliers', choices=['conservative', 'off'], default='conservative',
+    parser.add_argument('--resolution', '-r', choices=['480', '720', '1080', '1440', '2160'], default='720',
+                        help="Short-edge resolution: 480p, 720p, 1080p, 1440p, or 2160p")
+    parser.add_argument('--width', type=even_dimension, default=None, help="Custom even video width (480 to 2160 pixels)")
+    parser.add_argument('--height', type=even_dimension, default=None, help="Custom even video height (480 to 2160 pixels)")
+    parser.add_argument('--filter-outliers', '--gps-outlier-filter', dest='filter_outliers', choices=['conservative', 'off'], default='conservative',
                         help="GPS outlier filter: conservative or off")
     parser.add_argument('--route-source', choices=['semantic', 'journal'], default='semantic',
                         help="Route source: semantic points or Journal-style detailed-first fusion")
@@ -1249,17 +1287,18 @@ def _main_inner(argv: Optional[List[str]] = None) -> int:
         '480': {'square': (480, 480), 'portrait': (480, 854), 'landscape': (854, 480)},
         '720': {'square': (720, 720), 'portrait': (720, 1280), 'landscape': (1280, 720)},
         '1080': {'square': (1080, 1080), 'portrait': (1080, 1920), 'landscape': (1920, 1080)},
+        '1440': {'square': (1440, 1440), 'portrait': (1440, 2560), 'landscape': (2560, 1440)},
+        '2160': {'square': (2160, 2160), 'portrait': (2160, 3840), 'landscape': (3840, 2160)},
     }
     default_w, default_h = res_sizes[args.resolution][args.aspect_ratio]
     width_px = args.width if args.width else default_w
     height_px = args.height if args.height else default_h
     aspect = width_px / float(height_px)
 
-    fps = max(15, min(60, args.fps))
-    journey_duration = max(10, min(300, args.duration))
-    journey_frames = journey_duration * fps
-    outro_frames = int(OUTRO_SECONDS * fps)
-    total_frames = journey_frames + outro_frames
+    fps = args.fps
+    total_duration = args.duration
+    total_frames, journey_frames, outro_frames = frame_plan(total_duration, fps)
+    journey_duration = journey_frames / fps
 
     if args.pacing_model == 'legacy':
         distance_at = build_journey_timing(cum_dist, args.long_trip_compression, args.trip_detection)
@@ -1277,7 +1316,7 @@ def _main_inner(argv: Optional[List[str]] = None) -> int:
             include_zoom_work=args.pacing_model == 'visual_zoom',
         )
     print(f"Pacing model: {args.pacing_model}")
-    print(f"Target: {journey_duration}s (+{OUTRO_SECONDS}s outro) @ {fps}fps. Resolution: {width_px}x{height_px}")
+    print(f"Target: {total_duration}s including {outro_frames / fps:g}s ending @ {fps}fps. Resolution: {width_px}x{height_px}")
 
     # Build camera track and frame calculations
     camera_track = build_camera_track(
@@ -1291,13 +1330,13 @@ def _main_inner(argv: Optional[List[str]] = None) -> int:
 
     frame_data = []
     for i in range(total_frames):
-        elapsed_sec = i / float(fps)
-        if elapsed_sec <= journey_duration:
-            j_progress = elapsed_sec / float(journey_duration)
+        if i < journey_frames:
+            j_progress = 1.0 if journey_frames == 1 else i / float(journey_frames - 1)
             o_progress = 0.0
         else:
             j_progress = 1.0
-            o_progress = min(1.0, (elapsed_sec - journey_duration) / OUTRO_TRANSITION_SECONDS)
+            outro_index = i - journey_frames
+            o_progress = min(1.0, outro_index / max(1.0, OUTRO_TRANSITION_SECONDS * fps))
         d = distance_at(j_progress)
         idx = min(max(bisect.bisect_right(cum_dist, d) - 1, 0), len(cum_dist) - 1)
         pt_x, pt_y = latlon_to_meters(*position_at_distance(cum_dist, lats, lons, d))
@@ -1437,7 +1476,8 @@ def _main_inner(argv: Optional[List[str]] = None) -> int:
     ani = animation.FuncAnimation(fig, update, frames=len(frame_data), blit=False)
 
     print(f"Saving to {args.output}...")
-    ani.save(args.output, writer='ffmpeg', fps=fps, dpi=100)
+    writer = ffmpeg_writer(fps, resolved_title)
+    ani.save(args.output, writer=writer, dpi=100)
     if _tile_fetch_failures > 5:
         print(f"Warning: {_tile_fetch_failures} tile fetches failed (first 5 shown above). Map may have blank areas.", file=sys.stderr)
     print("Done!")
