@@ -11,8 +11,8 @@
     <string name="preview">預覽</string>
     <string name="pause_preview">暫停預覽</string>
     <string name="export_video">建立影片</string>
-    <string name="video_title_template">影片標題</string>
-    <string name="title_template_help">使用 {year} 和 {name}。已儲存以供您的下一個影片使用。</string>
+    <string name="video_title_template">影片中顯示的標題</string>
+    <string name="title_template_help">編輯此影片中顯示的標題。</string>
     <string name="start_year">開始年份</string>
     <string name="end_year">結束年份</string>
     <string name="duration">影片長度</string>
@@ -23,6 +23,7 @@
     <string name="share_travel_video">分享旅遊影片</string>
     <string name="import_failed">無法載入時間軸</string>
     <string name="import_failed_detail">無法讀取該檔案。請選擇支援的時間軸.json 匯出檔。</string>
+    <string name="preview_preparation_failed">無法準備影片預覽。</string>
     <string name="timeline_error_malformed">這個檔案不是有效或完整的 JSON 檔案。</string>
     <string name="timeline_error_legacy">這是舊版的 Google Takeout 格式。請改從手機匯出時間軸資料。</string>
     <string name="timeline_error_raw_only">此檔案不包含可用的造訪地點、行程或原始定位資訊紀錄。</string>
@@ -137,6 +138,7 @@
     <string name="selected_period">所選期間</string>
     <string name="video_details">影片詳情</string>
     <string name="journey">行程</string>
+    <string name="journey_preview">行程預覽</string>
     <string name="journey_overview">行程概覽</string>
     <string name="save_image">儲存圖片</string>
     <string name="share_image">分享圖片</string>
@@ -158,7 +160,13 @@
     <string name="save_as_failed">無法另存影片檔</string>
     <string name="video_copy_saved">已另存影片檔</string>
     <string name="advanced_settings">進階設定</string>
-    <string name="advanced_settings_summary">選擇縮放方式、長途播放時間和輸出格式。</string>
+    <string name="advanced_settings_summary">選擇地圖視野和輸出格式。路線節奏會自動調整。</string>
+    <string name="map_view">地圖視野</string>
+    <string name="map_view_fixed">固定比例</string>
+    <string name="map_view_wide">寬廣</string>
+    <string name="map_view_balanced">均衡</string>
+    <string name="map_view_close_up">近景</string>
+    <string name="automatic_visual_pacing_summary">移動速度會適應目前地圖比例。大範圍旅程快速推進，近景路線則保持平穩。</string>
     <string name="camera_movement">縮放方式</string>
     <string name="camera_fixed">固定</string><string name="camera_steady">平衡</string><string name="camera_dynamic">主動</string><string name="camera_close_up">近距離</string>
     <string name="camera_fixed_summary">跟隨路線而不改變比例。</string>
@@ -223,7 +231,7 @@
     <string name="settings">設定</string>
     <string name="settings_summary">設定用於預覽和新影片的預設值。</string>
     <string name="video_defaults">影片預設值</string>
-    <string name="video_defaults_summary">這些設定共同控制路線的取景和播放節奏。</string>
+    <string name="video_defaults_summary">選擇地圖視野和格式。移動節奏會根據目前地圖比例自動調整。</string>
     <string name="aspect_ratio">長寬比</string><string name="aspect_square">正方形</string><string name="aspect_portrait">直向</string><string name="aspect_landscape">橫向</string>
     <string name="reset_video_defaults">重設影片預設值</string><string name="video_defaults_restored">已重設影片預設值</string>
     <string name="export_quality">匯出品質</string><string name="export_quality_summary">解析度越高，檔案越大，且並非所有裝置都支援。</string>
@@ -251,7 +259,7 @@
     <string name="video_playback_failed">無法在 Timeline Visualizer 中播放這部影片。</string>
     <string name="open_in_another_app">用其他應用程式開啟</string>
     <string name="preset">預設組合</string>
-    <string name="preset_custom">自訂</string>
+    <string name="preset_custom">自訂設定</string>
     <string name="preset_custom_summary">為此影片手動選取的設定</string>
     <string name="preset_applied_summary">已套用到此影片 · 解析度未變更</string>
     <string name="save_preset">儲存</string>
@@ -395,7 +403,7 @@
     <string name="semantic_data_unavailable">此時間軸檔案僅包含原始位置。</string>
     <string name="settings_details">設定詳情</string>
     <string name="settings_unavailable">未記錄該舊影片的設定。</string>
-    <string name="show_all_suggestions">顯示全部 (%1$d)</string>
+    <string name="show_all_suggestions">再顯示 %1$d 個</string>
     <string name="show_fewer_suggestions">顯示較少</string>
     <string name="strong_match">高度符合</string>
     <string name="suggested_trips">建議行程</string>
@@ -432,4 +440,106 @@
     <string name="yearly_recap_badge">年度回顧</string>
     <plurals name="library_project_count"><item quantity="other">%d 個專案</item></plurals>
     <plurals name="library_video_count"><item quantity="other">%d 部影片</item></plurals>
+    <string name="journal_reminders">旅行記錄提醒</string>
+    <string name="journal_reminders_summary">選用的安靜提醒可協助你保留近期的詳細路線。關閉提醒後，旅行記錄仍可正常使用。</string>
+    <string name="journal_status_no_detail">此匯出檔包含時間軸記錄，但沒有可用的詳細位置。</string>
+    <string name="journal_status_current">已於 %1$d 天前保留新的詳細路線。</string>
+    <string name="journal_status_gentle">旅行記錄已有 %1$d 天未擷取新的詳細路線。</string>
+    <string name="journal_status_due">加入時間軸中的最近日期，讓旅行記錄繼續成長。</string>
+    <string name="journal_status_at_risk">一些尚未保留的詳細路線可能很快會從未來的匯出檔中消失。</string>
+    <string name="journal_status_overdue">請在方便時更新旅行記錄。應用程式無法復原先前匯出檔中缺少的詳細資料。</string>
+    <string name="journal_status_detail">詳細路線\n%1$s · %2$s · %3$s 個點\n\n旅程記錄\n%4$s · %5$s · 最新時間軸中的 %6$s 個項目\n\n上次更新 %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="other">%d天</item>
+    </plurals>
+    <string name="journal_growth_title">旅行記錄已成長</string>
+    <string name="journal_created_title">旅行記錄已準備就緒</string>
+    <string name="journal_backfill_title">較早的記錄現在更詳細了</string>
+    <string name="journal_timeline_growth_title">已加入更多時間軸記錄</string>
+    <string name="journal_up_to_date_title">旅行記錄已是最新狀態</string>
+    <string name="journal_growth_detail">%1$s\n%2$s\n詳細路線現已延續至 %3$s</string>
+    <string name="journal_backfill_detail">已在較早的期間加入 %1$s。最新的詳細日期沒有變更。</string>
+    <string name="journal_timeline_growth_detail">已加入目前可用的最佳時間軸記錄，最新的詳細路線日期沒有變更。</string>
+    <string name="journal_up_to_date_detail">找不到新的詳細路線。已儲存的旅行記錄沒有變更。</string>
+    <string name="keep_journal_growing">讓旅行記錄繼續成長</string>
+    <string name="journal_reminder_invitation">當近期的詳細路線可能需要更新時，接收一兩次安靜提醒。</string>
+    <string name="turn_on_reminders">開啟提醒</string>
+    <string name="update_journal">更新旅行記錄</string>
+    <string name="remind_in_three_days">3 天後提醒我</string>
+    <string name="turn_off">關閉</string>
+    <string name="journal_reminder_channel">旅行記錄提醒</string>
+    <string name="journal_reminder_channel_summary">用於保留近期詳細路線的選用提醒</string>
+    <string name="journal_reminder_day24_title">讓旅行記錄繼續成長</string>
+    <string name="journal_reminder_day24_detail">加入時間軸匯出檔中的最近日期，並保留這些日期的詳細路線。</string>
+    <string name="journal_reminder_day29_title">保留近期的詳細路線</string>
+    <string name="journal_reminder_day29_detail">旅行記錄已有 29 天未擷取新的詳細資料。一些較早的詳細位置可能很快會從未來的匯出檔中消失。</string>
+    <string name="journal_reminders_enabled">旅行記錄提醒已開啟。</string>
+    <string name="journal_reminders_permission_denied">提醒仍維持關閉。你可以稍後在 Android 設定中啟用通知。</string>
+    <string name="journal_import_result_done">完成</string>
+    <string name="journal_import_result_create">建立影片</string>
+    <string name="journal_home_due_detail">旅行記錄已有 %1$d 天未擷取新的詳細路線。請加入時間軸中的最近日期。</string>
+    <string name="journal_home_risk_detail">旅行記錄已有 %1$d 天未擷取新的詳細路線。一些尚未保留的詳細資料可能很快會從未來的匯出檔中消失。</string>
+    <string name="journal_home_overdue_detail">旅行記錄已有 %1$d 天未擷取新的詳細路線。請在方便時更新。先前缺少的詳細資料可能無法復原。</string>
+    <string name="onboarding_skip_to_choices">跳到選項</string>
+    <string name="onboarding_journal_title">建立你的私人旅行記錄</string>
+    <string name="onboarding_journal_body">Google 地圖時間軸可以記住你去過的地點和走過的路線。\n\nTimeline Visualizer 會將匯出的這段歷史轉換成你的私人旅行記錄和動態旅行影片。</string>
+    <string name="onboarding_source_title">旅程由 Google 地圖記錄</string>
+    <string name="onboarding_source_body">Timeline Visualizer 不會追蹤你的位置。你的旅程必須先由 Google 地圖時間軸記錄。\n\n時間軸預設為關閉。你需要先啟用，才能開始累積新的旅程。</string>
+    <string name="onboarding_source_note">Timeline Visualizer 只會讀取你選擇的檔案。你的時間軸匯出檔不會上傳給開發者。</string>
+    <string name="onboarding_layers_title">一段旅程，兩種詳細程度</string>
+    <string name="onboarding_layers_body">詳細路線會逐點顯示你走過的路徑。旅程歷史則會記錄較概括的造訪地點、活動和旅行。\n\n有詳細路線時，旅行記錄一律優先使用詳細路線，否則會用旅程歷史補足。</string>
+    <string name="onboarding_layers_note">你不需要選擇資料模式。應用程式會自動為旅程的每個部分使用目前可用的最佳資訊。</string>
+    <string name="onboarding_preserve_title">持續豐富你的詳細路線</string>
+    <string name="onboarding_preserve_body">近期的時間軸匯出檔通常包含更豐富的路線詳細資料。這些詳細資料之後可能不會再出現在新的匯出檔中。\n\n定期匯入新的匯出檔，旅行記錄就會在這部裝置上保留每一段新增的詳細路線。</string>
+    <string name="onboarding_preserve_note">Google 沒有公布詳細路線的保證保留期限。建議每 2 至 3 週更新一次，這是根據實際觀察到的匯出檔所提供的審慎建議。</string>
+    <string name="onboarding_start_title">開始你的旅行記錄</string>
+    <string name="onboarding_start_body">已經有匯出檔了嗎？請選擇 Timeline.json、location-history.json，或其他支援的 Google 地圖時間軸 JSON 檔案。</string>
+    <string name="onboarding_start_note">如果尚未啟用時間軸，請先進行設定。Google 地圖只能從啟用時開始記錄新的旅程。</string>
+    <string name="onboarding_choose_export">選擇時間軸匯出檔</string>
+    <string name="onboarding_setup_maps">設定 Google 地圖時間軸</string>
+    <string name="onboarding_page_position">第 %1$d 頁，共 %2$d 頁</string>
+    <string name="onboarding_page_announcement">第 %1$d 頁，共 %2$d 頁。%3$s</string>
+    <string name="journal_how_it_works">旅行記錄的運作方式</string>
+    <string name="journal_setup_card_title">開始你的旅行記錄</string>
+    <string name="journal_setup_card_detail">匯入 Google 地圖時間軸匯出檔，保留你的旅程歷史並開始累積詳細路線。</string>
+    <string name="journal_setup_card_action">設定旅行記錄</string>
+    <string name="journal_update_added_detail">已新增 %1$s。\n\n%2$s</string>
+    <string name="import_timeline_to_journal">匯入時間軸</string>
+    <string name="import_updated_timeline">匯入更新後的時間軸</string>
+    <string name="get_updated_timeline_file">取得更新後的時間軸檔案</string>
+    <string name="journal_route_load_failed">您的旅行記錄是安全的，但無法準備路線。請再試一次。</string>
+    <string name="save_as_preset">另存為預設</string>
+    <string name="preparing_your_journeys">正在準備行程…</string>
+    <string name="preparing_detailed_routes">正在準備詳細路線</string>
+    <string name="combining_journey_history">正在合併行程記錄</string>
+    <string name="saving_for_faster_starts">正在儲存以便下次更快啟動</string>
+    <string name="journal_route_action_waiting">正在準備行程。準備完成後將自動開啟。</string>
+    <string name="journal_freshness_inline">詳細路線已於%1$d天前更新。請匯入更新的Timeline檔案。</string>
+    <plurals name="journal_import_added"><item quantity="other">旅行記錄新增了%d個詳細位置。</item></plurals>
+    <string name="journal_import_added_timeline">旅行記錄已加入現有Timeline歷史。</string>
+    <string name="journal_import_duplicate">此Timeline檔案已在旅行記錄中。未進行任何變更。</string>
+    <string name="journal_import_failed_preserved">無法加入此Timeline檔案。已儲存的旅行記錄未變更。</string>
+    <string name="journal_import_checking">正在檢查旅行記錄</string>
+    <string name="journal_import_saving">正在儲存新細節</string>
+    <string name="journal_import_updating">正在更新行程</string>
+    <string name="journal_import_working_detail">完成期間，已儲存的旅行記錄會保持安全。</string>
+    <string name="journal_import_read_progress">已讀取%1$s，共%2$s</string>
+    <string name="journal_import_save_progress">已儲存%1$d筆旅行記錄，共%2$d筆</string>
+    <string name="journal_import_in_progress">正在更新旅行記錄…</string>
+    <string name="journal_import_creating">正在建立旅行記錄…</string>
+    <string name="journal_import_preparing">正在準備旅行記錄…</string>
+    <string name="journal_import_created">旅行記錄已建立。%1$s和%2$s已準備就緒。</string>
+    <string name="journal_import_created_timeline">已使用現有Timeline歷史建立旅行記錄。</string>
+    <plurals name="journal_days_count"><item quantity="other">%d天</item></plurals>
+    <plurals name="journal_detailed_locations_count"><item quantity="other">%d個詳細位置</item></plurals>
+    <plurals name="journal_preserved_observations_count"><item quantity="other">%d個已保留的詳細觀測</item></plurals>
+    <string name="journal_import_no_changes">旅行記錄中已有相同或更新的資料。無需更新。</string>
+    <string name="journal_import_mismatch_title">這可能是另一份旅行記錄</string>
+    <string name="journal_import_mismatch_message">此檔案與已儲存旅行記錄共有的詳細位置不足。未進行任何變更。無法將其他人的Timeline加入同一份旅行記錄。</string>
+    <string name="travel_journal">旅行記錄</string>
+    <string name="journal_setup_title">設定旅行記錄</string>
+    <string name="journal_setup_summary">旅行記錄會在此裝置上保留現有最佳行程歷史。</string>
+    <string name="journal_setup_intro_title">建立旅行記錄</string>
+    <string name="journal_setup_intro_detail">選擇Timeline.json以儲存行程歷史。請定期匯入較新的匯出檔案，以增加旅行記錄中的詳細部分。</string>
+    <string name="journal_automatic_source_summary">影片會自動使用已儲存的最詳細路線。旅行記錄會用現有最佳時間軸記錄補上缺少的時段。</string>
 </resources>

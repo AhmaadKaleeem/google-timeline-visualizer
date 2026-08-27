@@ -11,8 +11,8 @@
     <string name="preview">Vorschau</string>
     <string name="pause_preview">Vorschau anhalten</string>
     <string name="export_video">Video erstellen</string>
-    <string name="video_title_template">Videotitel</string>
-    <string name="title_template_help">Verwenden Sie {year} und {name}. Für Ihr nächstes Video gespeichert.</string>
+    <string name="video_title_template">Im Video angezeigter Titel</string>
+    <string name="title_template_help">Bearbeiten Sie den Titel, der in diesem Video angezeigt wird.</string>
     <string name="start_year">Startjahr</string>
     <string name="end_year">Jahresende</string>
     <string name="duration">Länge der Routenanimation</string>
@@ -23,6 +23,7 @@
     <string name="share_travel_video">Teilen Sie Reisevideos</string>
     <string name="import_failed">Timeline konnte nicht geladen werden</string>
     <string name="import_failed_detail">Diese Datei konnte nicht gelesen werden. Wählen Sie einen unterstützten Timeline JSON-Export aus.</string>
+    <string name="preview_preparation_failed">Die Videovorschau konnte nicht vorbereitet werden.</string>
     <string name="timeline_error_malformed">Diese Datei enthält kein gültiges oder vollständiges JSON.</string>
     <string name="timeline_error_legacy">Dies ist ein älteres Google Takeout-Format. Exportieren Sie die Timeline-Daten stattdessen vom Telefon.</string>
     <string name="timeline_error_raw_only">Diese Datei enthält keine verwendbaren Besuche, Wege oder rohen Standortdaten.</string>
@@ -140,6 +141,7 @@
     <string name="selected_period">Ausgewählter Zeitraum</string>
     <string name="video_details">Videodetails</string>
     <string name="journey">Reise</string>
+    <string name="journey_preview">Reisevorschau</string>
     <string name="journey_overview">Reiseübersicht</string>
     <string name="save_image">Bild speichern</string>
     <string name="share_image">Bild teilen</string>
@@ -161,7 +163,13 @@
     <string name="save_as_failed">Eine Kopie des Videos konnte nicht gespeichert werden</string>
     <string name="video_copy_saved">Videokopie gespeichert</string>
     <string name="advanced_settings">Erweiterte Einstellungen</string>
-    <string name="advanced_settings_summary">Wählen Sie Zoomstil, Langstrecken-Timing und Exportformat.</string>
+    <string name="advanced_settings_summary">Wählen Sie Kartenansicht und Exportformat. Das Routentempo passt sich automatisch an.</string>
+    <string name="map_view">Kartenansicht</string>
+    <string name="map_view_fixed">Fester Maßstab</string>
+    <string name="map_view_wide">Weit</string>
+    <string name="map_view_balanced">Ausgewogen</string>
+    <string name="map_view_close_up">Nahansicht</string>
+    <string name="automatic_visual_pacing_summary">Die Bewegung passt sich dem sichtbaren Kartenmaßstab an. Weite Reisen bewegen sich zügig, während Nahaufnahmen ruhig bleiben.</string>
     <string name="camera_movement">Zoomstil</string>
     <string name="camera_fixed">Fest</string><string name="camera_steady">Ausgewogen</string><string name="camera_dynamic">Aktiv</string><string name="camera_close_up">Nah</string>
     <string name="camera_fixed_summary">Folgt der Route, ohne den Maßstab zu ändern.</string>
@@ -226,7 +234,7 @@
     <string name="settings">Einstellungen</string>
     <string name="settings_summary">Legen Sie die Standardeinstellungen für Vorschauen und neue Videos fest.</string>
     <string name="video_defaults">Videostandards</string>
-    <string name="video_defaults_summary">Diese Einstellungen steuern gemeinsam Kadrierung und Tempo der Route.</string>
+    <string name="video_defaults_summary">Wählen Sie Kartenansicht und Format. Das Bewegungstempo passt sich automatisch an den sichtbaren Maßstab an.</string>
     <string name="aspect_ratio">Seitenverhältnis</string><string name="aspect_square">Quadratisch</string><string name="aspect_portrait">Hochformat</string><string name="aspect_landscape">Querformat</string>
     <string name="reset_video_defaults">Videostandards zurücksetzen</string><string name="video_defaults_restored">Videostandards zurückgesetzt</string>
     <string name="export_quality">Exportqualität</string><string name="export_quality_summary">Höhere Auflösungen erzeugen größere Dateien und werden nicht von jedem Gerät unterstützt.</string>
@@ -255,7 +263,7 @@
     <string name="video_playback_failed">Dieses Video konnte in Timeline Visualizer nicht abgespielt werden.</string>
     <string name="open_in_another_app">In einer anderen App öffnen</string>
     <string name="preset">Voreinstellung</string>
-    <string name="preset_custom">Benutzerdefiniert</string>
+    <string name="preset_custom">Benutzerdefinierte Einstellungen</string>
     <string name="preset_custom_summary">Manuelle Auswahl für dieses Video</string>
     <string name="preset_applied_summary">Auf dieses Video angewendet · Auflösung unverändert</string>
     <string name="save_preset">Speichern</string>
@@ -399,7 +407,7 @@
     <string name="semantic_data_unavailable">Diese Timeline-Datei enthält nur Rohstandorte.</string>
     <string name="settings_details">Einzelheiten zu den Einstellungen</string>
     <string name="settings_unavailable">Für dieses ältere Video wurden keine Einstellungen aufgezeichnet.</string>
-    <string name="show_all_suggestions">Alle anzeigen (%1$d)</string>
+    <string name="show_all_suggestions">%1$d weitere anzeigen</string>
     <string name="show_fewer_suggestions">Weniger anzeigen</string>
     <string name="strong_match">Starke Übereinstimmung</string>
     <string name="suggested_trips">Empfohlene Ausflüge</string>
@@ -436,4 +444,110 @@
     <string name="yearly_recap_badge">Jahresrückblick</string>
     <plurals name="library_project_count"><item quantity="one">%d Projekt</item><item quantity="other">%d Projekte</item></plurals>
     <plurals name="library_video_count"><item quantity="one">%d Video</item><item quantity="other">%d Videos</item></plurals>
+    <string name="journal_reminders">Erinnerungen für das Reisetagebuch</string>
+    <string name="journal_reminders_summary">Optionale, leise Erinnerungen helfen dir, aktuelle Routendetails zu bewahren. Dein Reisetagebuch funktioniert auch ohne Erinnerungen.</string>
+    <string name="journal_status_no_detail">Dieser Export enthält den Zeitachsenverlauf, aber keine detaillierten Standorte.</string>
+    <string name="journal_status_current">Vor %1$d Tagen wurden neue Routendetails gespeichert.</string>
+    <string name="journal_status_gentle">Seit %1$d Tagen hat dein Reisetagebuch keine neuen Routendetails erfasst.</string>
+    <string name="journal_status_due">Erweitere dein Reisetagebuch um die neuesten Tage aus der Zeitachse.</string>
+    <string name="journal_status_at_risk">Einige noch nicht gespeicherte Routendetails könnten bald aus künftigen Exporten verschwinden.</string>
+    <string name="journal_status_overdue">Aktualisiere dein Reisetagebuch, wenn du kannst. Details, die in früheren Exporten fehlen, kann die App nicht wiederherstellen.</string>
+    <string name="journal_status_detail">Detaillierte Routen\n%1$s · %2$s · %3$s Punkte\n\nReiseverlauf\n%4$s · %5$s · %6$s Einträge in der neuesten Timeline\n\nZuletzt aktualisiert %7$s</string>
+    <plurals name="journal_coverage_days">
+        <item quantity="one">%d Tag</item>
+        <item quantity="other">%d Tage</item>
+    </plurals>
+    <string name="journal_growth_title">Dein Reisetagebuch ist gewachsen</string>
+    <string name="journal_created_title">Dein Reisetagebuch ist bereit</string>
+    <string name="journal_backfill_title">Ein älterer Abschnitt ist jetzt detaillierter</string>
+    <string name="journal_timeline_growth_title">Mehr Zeitachsenverlauf wurde hinzugefügt</string>
+    <string name="journal_up_to_date_title">Dein Reisetagebuch ist aktuell</string>
+    <string name="journal_growth_detail">%1$s\n%2$s\nDetaillierte Routen reichen jetzt bis %3$s</string>
+    <string name="journal_backfill_detail">%1$s wurden einem früheren Zeitraum hinzugefügt. Dein neuestes Detaildatum bleibt unverändert.</string>
+    <string name="journal_timeline_growth_detail">Der beste verfügbare Zeitachsenverlauf wurde hinzugefügt, ohne das neueste Datum deiner detaillierten Routen zu ändern.</string>
+    <string name="journal_up_to_date_detail">Es wurden keine neuen Routendetails gefunden. Dein gespeichertes Reisetagebuch wurde nicht geändert.</string>
+    <string name="keep_journal_growing">Lass dein Reisetagebuch weiter wachsen</string>
+    <string name="journal_reminder_invitation">Erhalte eine oder zwei sanfte Erinnerungen, wenn aktuelle Routendetails möglicherweise aktualisiert werden sollten.</string>
+    <string name="turn_on_reminders">Erinnerungen aktivieren</string>
+    <string name="update_journal">Reisetagebuch aktualisieren</string>
+    <string name="remind_in_three_days">In 3 Tagen erinnern</string>
+    <string name="turn_off">Deaktivieren</string>
+    <string name="journal_reminder_channel">Erinnerungen für das Reisetagebuch</string>
+    <string name="journal_reminder_channel_summary">Optionale Erinnerungen zum Bewahren aktueller Routendetails</string>
+    <string name="journal_reminder_day24_title">Lass dein Reisetagebuch weiter wachsen</string>
+    <string name="journal_reminder_day24_detail">Füge die neuesten Tage aus deinem Zeitachsenexport hinzu und bewahre ihre Routendetails.</string>
+    <string name="journal_reminder_day29_title">Aktuelle Routendetails bewahren</string>
+    <string name="journal_reminder_day29_detail">Seit 29 Tagen hat dein Reisetagebuch keine neuen Details erfasst. Einige ältere detaillierte Standorte könnten bald aus künftigen Exporten verschwinden.</string>
+    <string name="journal_reminders_enabled">Erinnerungen für das Reisetagebuch sind aktiviert.</string>
+    <string name="journal_reminders_permission_denied">Erinnerungen bleiben deaktiviert. Du kannst Benachrichtigungen später in den Android-Einstellungen aktivieren.</string>
+    <string name="journal_import_result_done">Fertig</string>
+    <string name="journal_import_result_create">Video erstellen</string>
+    <string name="journal_home_due_detail">Seit %1$d Tagen hat dein Reisetagebuch keine neuen Routendetails erfasst. Füge die neuesten Tage aus der Zeitachse hinzu.</string>
+    <string name="journal_home_risk_detail">Seit %1$d Tagen hat dein Reisetagebuch keine neuen Routendetails erfasst. Einige noch nicht gespeicherte Details könnten bald aus künftigen Exporten verschwinden.</string>
+    <string name="journal_home_overdue_detail">Seit %1$d Tagen hat dein Reisetagebuch keine neuen Routendetails erfasst. Aktualisiere es, wenn du kannst. Früher fehlende Details lassen sich möglicherweise nicht wiederherstellen.</string>
+    <string name="onboarding_skip_to_choices">Zu den Optionen springen</string>
+    <string name="onboarding_journal_title">Erstelle dein privates Reisetagebuch</string>
+    <string name="onboarding_journal_body">Die Google Maps-Zeitachse kann sich an besuchte Orte und zurückgelegte Routen erinnern.\n\nTimeline Visualizer verwandelt eine exportierte Kopie dieses Verlaufs in ein privates Reisetagebuch und animierte Reisevideos.</string>
+    <string name="onboarding_source_title">Google Maps zeichnet die Reise auf</string>
+    <string name="onboarding_source_body">Timeline Visualizer verfolgt deinen Standort nicht. Deine Reisen müssen zuerst von der Google Maps-Zeitachse aufgezeichnet werden.\n\nDie Zeitachse ist standardmäßig deaktiviert. Du musst sie aktivieren, damit neue Reisen erfasst werden können.</string>
+    <string name="onboarding_source_note">Timeline Visualizer liest nur die von dir ausgewählte Datei. Dein Zeitachsenexport wird nicht an den Entwickler hochgeladen.</string>
+    <string name="onboarding_layers_title">Eine Reise, zwei Detailstufen</string>
+    <string name="onboarding_layers_body">Routendetails zeigen deinen zurückgelegten Weg Punkt für Punkt. Der Reiseverlauf merkt sich übergeordnete Besuche, Aktivitäten und Reisen.\n\nDein Reisetagebuch verwendet immer Routendetails, wenn sie verfügbar sind, und sonst den Reiseverlauf.</string>
+    <string name="onboarding_layers_note">Du musst keinen Datenmodus auswählen. Die App nutzt für jeden Abschnitt deiner Reise automatisch die besten verfügbaren Informationen.</string>
+    <string name="onboarding_preserve_title">Lass deine Routendetails weiterwachsen</string>
+    <string name="onboarding_preserve_body">Aktuelle Zeitachsenexporte enthalten oft ausführlichere Routendetails. In einem späteren Export sind diese Details möglicherweise nicht mehr enthalten.\n\nImportiere regelmäßig einen neuen Export. Dein Reisetagebuch bewahrt jeden neuen detaillierten Abschnitt auf diesem Gerät auf.</string>
+    <string name="onboarding_preserve_note">Google veröffentlicht keine garantierte Aufbewahrungsdauer für Routendetails. Eine Aktualisierung alle 2 bis 3 Wochen ist eine vorsichtige Empfehlung auf Grundlage beobachteter Exporte.</string>
+    <string name="onboarding_start_title">Starte dein Reisetagebuch</string>
+    <string name="onboarding_start_body">Du hast bereits einen Export? Wähle Timeline.json, location-history.json oder eine andere unterstützte JSON-Datei aus der Google Maps-Zeitachse.</string>
+    <string name="onboarding_start_note">Falls die Zeitachse noch nicht aktiviert ist, richte sie zuerst ein. Google Maps kann neue Reisen erst ab diesem Zeitpunkt aufzeichnen.</string>
+    <string name="onboarding_choose_export">Zeitachsenexport auswählen</string>
+    <string name="onboarding_setup_maps">Google Maps-Zeitachse einrichten</string>
+    <string name="onboarding_page_position">%1$d von %2$d</string>
+    <string name="onboarding_page_announcement">Seite %1$d von %2$d. %3$s</string>
+    <string name="journal_how_it_works">So funktioniert das Reisetagebuch</string>
+    <string name="journal_setup_card_title">Starte dein Reisetagebuch</string>
+    <string name="journal_setup_card_detail">Importiere einen Export der Google Maps-Zeitachse, um deinen Reiseverlauf zu bewahren und detaillierte Routen aufzubauen.</string>
+    <string name="journal_setup_card_action">Reisetagebuch einrichten</string>
+    <string name="journal_update_added_detail">%1$s wurden hinzugefügt.\n\n%2$s</string>
+    <string name="import_timeline_to_journal">Timeline importieren</string>
+    <string name="import_updated_timeline">Aktualisierte Timeline importieren</string>
+    <string name="get_updated_timeline_file">Aktualisierte Timeline-Datei abrufen</string>
+    <string name="journal_route_load_failed">Ihr Reisetagebuch ist sicher, aber die Routen konnten nicht vorbereitet werden. Bitte versuchen Sie es erneut.</string>
+    <string name="save_as_preset">Als Voreinstellung speichern</string>
+    <string name="preparing_your_journeys">Deine Reisen werden vorbereitet…</string>
+    <string name="preparing_detailed_routes">Detaillierte Routen werden vorbereitet</string>
+    <string name="combining_journey_history">Reiseverlauf wird zusammengeführt</string>
+    <string name="saving_for_faster_starts">Für schnellere Starts speichern</string>
+    <string name="journal_route_action_waiting">Deine Reisen werden vorbereitet. Dies wird geöffnet, sobald sie bereit sind.</string>
+    <string name="journal_freshness_inline">Detaillierte Routen wurden zuletzt vor %1$d Tagen aktualisiert. Importiere eine aktualisierte Timeline-Datei.</string>
+    <plurals name="journal_import_added">
+        <item quantity="one">Das Reisetagebuch ist um %d detaillierten Standort gewachsen.</item>
+        <item quantity="other">Das Reisetagebuch ist um %d detaillierte Standorte gewachsen.</item>
+    </plurals>
+    <string name="journal_import_added_timeline">Dein Reisetagebuch ist mit dem verfügbaren Timeline-Verlauf gewachsen.</string>
+    <string name="journal_import_duplicate">Diese Timeline-Datei ist bereits in deinem Reisetagebuch. Es wurde nichts geändert.</string>
+    <string name="journal_import_failed_preserved">Diese Timeline-Datei konnte nicht hinzugefügt werden. Dein gespeichertes Reisetagebuch wurde nicht geändert.</string>
+    <string name="journal_import_checking">Reisetagebuch wird geprüft</string>
+    <string name="journal_import_saving">Neue Details werden gespeichert</string>
+    <string name="journal_import_updating">Deine Reisen werden aktualisiert</string>
+    <string name="journal_import_working_detail">Dein gespeichertes Reisetagebuch bleibt währenddessen geschützt.</string>
+    <string name="journal_import_read_progress">%1$s von %2$s gelesen</string>
+    <string name="journal_import_save_progress">%1$d von %2$d Einträgen im Reisetagebuch gespeichert</string>
+    <string name="journal_import_in_progress">Reisetagebuch wird aktualisiert…</string>
+    <string name="journal_import_creating">Dein Reisetagebuch wird erstellt…</string>
+    <string name="journal_import_preparing">Reisetagebuch wird vorbereitet…</string>
+    <string name="journal_import_created">Reisetagebuch erstellt. %1$s und %2$s sind bereit.</string>
+    <string name="journal_import_created_timeline">Reisetagebuch mit dem verfügbaren Timeline-Verlauf erstellt.</string>
+    <plurals name="journal_days_count"><item quantity="one">%d Tag</item><item quantity="other">%d Tage</item></plurals>
+    <plurals name="journal_detailed_locations_count"><item quantity="one">%d detaillierter Standort</item><item quantity="other">%d detaillierte Standorte</item></plurals>
+    <plurals name="journal_preserved_observations_count"><item quantity="one">%d detaillierte Beobachtung</item><item quantity="other">%d detaillierte Beobachtungen</item></plurals>
+    <string name="journal_import_no_changes">Dein Reisetagebuch enthält bereits neuere oder übereinstimmende Daten. Keine Aktualisierung war erforderlich.</string>
+    <string name="journal_import_mismatch_title">Dies könnte ein anderes Reisetagebuch sein</string>
+    <string name="journal_import_mismatch_message">Diese Datei hat nicht genügend detaillierte Standorte mit deinem gespeicherten Reisetagebuch gemeinsam. Es wurde nichts geändert. Die Timeline einer anderen Person kann nicht demselben Reisetagebuch hinzugefügt werden.</string>
+    <string name="travel_journal">Reisetagebuch</string>
+    <string name="journal_setup_title">Reisetagebuch einrichten</string>
+    <string name="journal_setup_summary">Dein Reisetagebuch bewahrt den bestmöglichen Reiseverlauf auf diesem Gerät.</string>
+    <string name="journal_setup_intro_title">Erstelle dein Reisetagebuch</string>
+    <string name="journal_setup_intro_detail">Wähle Timeline.json, um deinen Reiseverlauf zu speichern. Importiere regelmäßig einen neueren Export, damit die detaillierten Teile deines Reisetagebuchs wachsen.</string>
+    <string name="journal_automatic_source_summary">Videos verwenden automatisch deine detailliertesten gespeicherten Routen. Dein Reisetagebuch ergänzt fehlende Zeiträume mit dem besten verfügbaren Zeitachsenverlauf.</string>
 </resources>

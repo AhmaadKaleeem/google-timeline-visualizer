@@ -36,6 +36,7 @@ import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
 import dev.mahlernim.timelinevisualizer.export.VideoExportStateStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
 import dev.mahlernim.timelinevisualizer.export.VideoExportService
+import dev.mahlernim.timelinevisualizer.journal.JournalOnboardingStore
 import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
 import dev.mahlernim.timelinevisualizer.model.TimelinePeriod
@@ -59,6 +60,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeFalse
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -97,6 +99,8 @@ class MainActivityTest {
         timelineSourceStore.clearForTest()
         context.getSharedPreferences("video-presets", Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences("trips_lab", Context.MODE_PRIVATE).edit().clear().commit()
+        context.deleteDatabase("travel-journal.db")
+        if (BuildConfig.IS_JOURNAL_LAB) JournalOnboardingStore(context).complete()
         context.getSystemService(NotificationManager::class.java).deleteNotificationChannel(testNotificationChannel)
     }
 
@@ -177,6 +181,7 @@ class MainActivityTest {
 
     @Test
     fun tripWizardSelectsRecommendedPresetAndRestoresStyleStep() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         acceptPrivacyDisclosure()
         val source = Uri.fromFile(repoRoot().resolve("test-fixtures/seoul-bohol-sample.json"))
         val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
@@ -211,6 +216,48 @@ class MainActivityTest {
     }
 
     @Test
+    fun createStepperProvidesBottomContinueAndInlinePreviewControls() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
+        acceptPrivacyDisclosure()
+        val source = Uri.fromFile(repoRoot().resolve("test-fixtures/seoul-bohol-sample.json"))
+        val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
+        waitUntil { timelineSourceStore.importInProgress() == null }
+
+        activity.findViewById<View>(R.id.navigationVideos).performClick()
+        activity.findViewById<View>(R.id.createTripButton).performClick()
+        activity.findViewById<TextView>(R.id.projectTitleInput).text = "Bohol"
+        activity.findViewById<View>(R.id.wizardContinueButton).performClick()
+
+        val stepper = activity.findViewById<ViewGroup>(R.id.createStepperGroup)
+        val back = activity.findViewById<View>(R.id.wizardBackButton)
+        assertEquals(stepper, back.parent)
+
+        val navigation = activity.findViewById<View>(R.id.wizardNavigationGroup)
+        val editor = activity.findViewById<View>(R.id.editorGroup)
+        val screen = navigation.parent as ViewGroup
+        assertTrue(screen.indexOfChild(navigation) > screen.indexOfChild(editor))
+
+        activity.findViewById<View>(R.id.createStepDetails).performClick()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.projectStepGroup).visibility)
+        activity.findViewById<View>(R.id.createStepStyle).performClick()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.styleStepGroup).visibility)
+        activity.findViewById<View>(R.id.createStepCreate).performClick()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.previewStepGroup).visibility)
+
+        val play = activity.findViewById<MaterialButton>(R.id.playButton)
+        assertEquals("", play.text.toString())
+        assertEquals(activity.getString(R.string.preview), play.contentDescription.toString())
+        assertNotNull(play.icon)
+        assertTrue(activity.findViewById<TimelineView>(R.id.timelineView).hasOnClickListeners())
+        assertEquals(
+            activity.getString(R.string.journey_preview),
+            activity.findViewById<TextView>(R.id.journeyPreviewTitle).text.toString(),
+        )
+        play.performClick()
+        assertEquals(activity.getString(R.string.pause_preview), play.contentDescription.toString())
+    }
+
+    @Test
     fun editedBuiltInIsMarkedModifiedAndCanReturnToExactMatch() {
         val activity = launchActivity()
         val preset = activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown)
@@ -242,7 +289,7 @@ class MainActivityTest {
         val activity = launchActivity(intent)
 
         assertEquals(
-            activity.getString(R.string.camera_steady),
+            activity.getString(R.string.map_view_wide),
             activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
         )
         val dialog = ShadowDialog.getLatestDialog() as AlertDialog
@@ -253,7 +300,7 @@ class MainActivityTest {
         shadowOf(Looper.getMainLooper()).idle()
 
         assertEquals(
-            activity.getString(R.string.camera_close_up),
+            activity.getString(R.string.map_view_close_up),
             activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
         )
         assertEquals(activity.getString(R.string.preset_custom), activity.findViewById<AutoCompleteTextView>(R.id.presetDropdown).text.toString())
@@ -317,6 +364,7 @@ class MainActivityTest {
 
     @Test
     fun projectAssociatedLibraryVideoUsesTheSharedThumbnailBinder() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val project = TripsStore(context).create(
             title = "Bohol",
             start = LocalDate.parse("2026-07-01"),
@@ -371,6 +419,7 @@ class MainActivityTest {
 
     @Test
     fun firstTimelineLoadShowsMapPrivacyDisclosure() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val activity = launchActivity()
         activity.findViewById<View>(R.id.importButton).performClick()
 
@@ -385,6 +434,7 @@ class MainActivityTest {
 
     @Test
     fun firstTimelineDisclosureLinksToTheFullPrivacyPolicy() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val activity = launchActivity()
         activity.findViewById<View>(R.id.importButton).performClick()
 
@@ -402,6 +452,7 @@ class MainActivityTest {
 
     @Test
     fun emptyTimelineExplainsThatTimelineMayNotHaveBeenEnabled() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         acceptPrivacyDisclosure()
         val empty = File.createTempFile("empty-timeline", ".json", context.cacheDir)
         try {
@@ -557,13 +608,12 @@ class MainActivityTest {
         activity.findViewById<View>(R.id.navigationSettings).performClick()
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsScreen).visibility)
         assertEquals(
-            activity.getString(R.string.camera_steady),
+            activity.getString(R.string.map_view_wide),
             activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
         )
-        assertEquals(
-            activity.getString(R.string.compression_balanced),
-            activity.findViewById<AutoCompleteTextView>(R.id.longTripDropdown).text.toString(),
-        )
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.tripDetectionInputLayout).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.localFramingInputLayout).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.longTripInputLayout).visibility)
         assertEquals(
             activity.getString(R.string.preset_resolution_selected, 480, 480, 480),
             activity.findViewById<AutoCompleteTextView>(R.id.videoQualityDropdown).text.toString(),
@@ -607,6 +657,19 @@ class MainActivityTest {
         assertEquals(
             activity.getString(R.string.app_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
             activity.findViewById<TextView>(R.id.versionText).text.toString(),
+        )
+    }
+
+    @Test
+    fun cameraPreparationFailureIsReportedAsAPreviewProblem() {
+        val activity = launchActivity()
+        val timelineView = activity.findViewById<TimelineView>(R.id.timelineView)
+
+        timelineView.onCameraPreparationFailed?.invoke(IllegalStateException("test failure"))
+
+        assertEquals(
+            activity.getString(R.string.preview_preparation_failed),
+            activity.findViewById<TextView>(R.id.statusText).text.toString(),
         )
     }
 
@@ -679,6 +742,7 @@ class MainActivityTest {
 
     @Test
     fun changingLocationFilterImmediatelyRestoresIgnoredPoints() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         acceptPrivacyDisclosure()
         val source = Uri.fromFile(repoRoot().resolve("test-fixtures/outlier-sample.json"))
         val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
@@ -740,6 +804,7 @@ class MainActivityTest {
 
     @Test
     fun missingRememberedDocumentIsClearedAndLoadingStateAlwaysEnds() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val missing = Uri.fromFile(File(context.cacheDir, "missing-timeline.json"))
         assertTrue(timelineSourceStore.replace(missing))
         acceptPrivacyDisclosure()
@@ -757,6 +822,7 @@ class MainActivityTest {
 
     @Test
     fun interruptedRememberedImportStopsAutomaticRetryAndRequestsReselection() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val interrupted = Uri.parse("content://example/large-timeline.json")
         assertTrue(timelineSourceStore.replace(interrupted))
         assertTrue(timelineSourceStore.beginImport(interrupted))
@@ -812,6 +878,7 @@ class MainActivityTest {
 
     @Test
     fun normalLaunchOpensTripsWhenLibraryIsEmpty() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val activity = launchActivity()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.videosScreen).visibility)
@@ -821,6 +888,7 @@ class MainActivityTest {
 
     @Test
     fun normalLaunchOpensVideosWhenLibraryIsNotEmpty() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         store.upsert(
             VideoRecord(
                 uri = "content://example/video",
@@ -839,6 +907,7 @@ class MainActivityTest {
 
     @Test
     fun runningExportOpensVideosWhenLibraryIsEmpty() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         VideoExportStateStore(context).save(
             VideoExportSnapshot(status = VideoExportStatus.RUNNING, startedAtMillis = 123L),
         )
@@ -1027,6 +1096,7 @@ class MainActivityTest {
 
     @Test
     fun automaticVideosLaunchDoesNotAcknowledgeRestoredCompletion() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val uri = "content://example/generated-video"
         store.upsert(
             VideoRecord(
@@ -1102,6 +1172,7 @@ class MainActivityTest {
 
     @Test
     fun emptyVideosRemainsReachableAndBackFromAutomaticCreateDoesNotLoop() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val activity = launchActivity()
 
         activity.onBackPressedDispatcher.onBackPressed()
@@ -1114,6 +1185,7 @@ class MainActivityTest {
 
     @Test
     fun createWithoutTimelineShowsOneTimeSetupGate() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val activity = launchActivity()
 
         activity.findViewById<View>(R.id.navigationCreate).performClick()
@@ -1126,6 +1198,7 @@ class MainActivityTest {
 
     @Test
     fun importedTimelineShowsFourCreationChoicesWithoutFilePicker() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         acceptPrivacyDisclosure()
         val source = Uri.fromFile(repoRoot().resolve("test-fixtures/trips-lab-sample.json"))
         val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
@@ -1251,6 +1324,7 @@ class MainActivityTest {
     @Test
     @Config(sdk = [35], qualifiers = "en-rUS")
     fun rawProjectUsesActualRawBoundsAndUpdatesItsInclusiveTitle() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         acceptPrivacyDisclosure()
         val source = Uri.fromFile(repoRoot().resolve("test-fixtures/semantic-and-raw-ranges.json"))
         val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
@@ -1301,6 +1375,7 @@ class MainActivityTest {
     @Test
     @Config(sdk = [35])
     fun advancedSettingsCancelDiscardsAndApplyKeepsChangesInTheDraft() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         acceptPrivacyDisclosure()
         val source = Uri.fromFile(repoRoot().resolve("test-fixtures/seoul-bohol-sample.json"))
         val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
@@ -1317,8 +1392,11 @@ class MainActivityTest {
 
         var dialog = ShadowDialog.getLatestDialog() as BottomSheetDialog
         assertTrue(dialog.isShowing)
+        val originalFrameRate = dialog.findViewById<AutoCompleteTextView>(R.id.frameRateDropdown)!!.text.toString()
         dialog.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown)!!
             .onItemClickListener?.onItemClick(null, null, 3, 3L)
+        dialog.findViewById<AutoCompleteTextView>(R.id.frameRateDropdown)!!
+            .onItemClickListener?.onItemClick(null, null, 2, 60L)
         dialog.findViewById<View>(R.id.cancelButton)!!.performClick()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.styleStepGroup).visibility)
@@ -1330,19 +1408,33 @@ class MainActivityTest {
 
         activity.findViewById<View>(R.id.customizeSettingsButton).performClick()
         dialog = ShadowDialog.getLatestDialog() as BottomSheetDialog
+        assertEquals(
+            originalFrameRate,
+            dialog.findViewById<AutoCompleteTextView>(R.id.frameRateDropdown)!!.text.toString(),
+        )
         dialog.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown)!!
             .onItemClickListener?.onItemClick(null, null, 2, 2L)
+        dialog.findViewById<AutoCompleteTextView>(R.id.frameRateDropdown)!!
+            .onItemClickListener?.onItemClick(null, null, 2, 60L)
         dialog.findViewById<View>(R.id.applyButton)!!.performClick()
 
         assertEquals(
-            activity.getString(R.string.camera_dynamic),
+            activity.getString(R.string.map_view_balanced),
             activity.findViewById<AutoCompleteTextView>(R.id.cameraMovementDropdown).text.toString(),
         )
+        activity.findViewById<View>(R.id.customizeSettingsButton).performClick()
+        dialog = ShadowDialog.getLatestDialog() as BottomSheetDialog
+        assertEquals(
+            activity.getString(R.string.frame_rate_value, 60),
+            dialog.findViewById<AutoCompleteTextView>(R.id.frameRateDropdown)!!.text.toString(),
+        )
+        dialog.dismiss()
         assertEquals(CameraSettings.DEFAULT, CameraSettingsPreferences(context).load())
     }
 
     @Test
     fun createAnotherClearsTheDraftAndReturnsToDetails() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val activity = launchActivity()
         activity.findViewById<TextView>(R.id.ownerInput).text = "Mina"
         activity.findViewById<TextView>(R.id.titleInput).text = "Edited trip"
@@ -1405,6 +1497,7 @@ class MainActivityTest {
     @Test
     @Config(sdk = [28])
     fun customDurationPropagatesToTheExportRequest() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         acceptPrivacyDisclosure()
         val source = Uri.fromFile(repoRoot().resolve("test-fixtures/seoul-bohol-sample.json"))
         val activity = launchActivity(Intent(Intent.ACTION_VIEW, source))
@@ -1422,6 +1515,7 @@ class MainActivityTest {
     @Test
     @Config(sdk = [35], qualifiers = "w320dp-h640dp-port-xxhdpi")
     fun bottomNavigationFitsGestureInsetOnACompactPortraitDisplay() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val activity = launchActivity()
         val root = activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
         val density = activity.resources.displayMetrics.density
@@ -1442,6 +1536,7 @@ class MainActivityTest {
     @Test
     @Config(sdk = [35], qualifiers = "w320dp-h640dp-port-xxhdpi")
     fun bottomNavigationFitsLargerLabelsOnACompactDisplay() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val activity = launchActivity()
         val navigation = activity.findViewById<ViewGroup>(R.id.bottomNavigation)
         for (itemId in listOf(R.id.navigationVideos, R.id.navigationCreate, R.id.navigationSettings)) {
@@ -1460,6 +1555,7 @@ class MainActivityTest {
     @Test
     @Config(sdk = [35], qualifiers = "w640dp-h360dp-land-xxhdpi")
     fun bottomNavigationConsumesAThreeButtonInsetOnlyOnce() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val activity = launchActivity()
         val content = activity.findViewById<ViewGroup>(android.R.id.content)
         val root = content.getChildAt(0)
@@ -1530,6 +1626,7 @@ class MainActivityTest {
 
     @Test
     fun explicitlyOpenedTimelineTakesPrecedenceOverRememberedDocument() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         val remembered = Uri.fromFile(File(context.cacheDir, "missing-remembered.json"))
         assertTrue(timelineSourceStore.replace(remembered))
         acceptPrivacyDisclosure()
@@ -1548,6 +1645,7 @@ class MainActivityTest {
 
     @Test
     fun rawOnlyTimelineRequiresWarningBeforeUsingEstimatedRoute() {
+        assumeFalse(BuildConfig.IS_JOURNAL_LAB)
         acceptPrivacyDisclosure()
         val source = File.createTempFile("raw-only-timeline", ".json", context.cacheDir)
         source.writeText(
