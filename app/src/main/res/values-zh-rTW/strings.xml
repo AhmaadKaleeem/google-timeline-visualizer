@@ -418,7 +418,7 @@
     <string name="timeline_source_empty">匯入 Timeline.json，讓旅行記錄持續累積。</string>
     <string name="timeline_source_ready">旅行記錄儲存在本機。請定期匯入 Timeline.json，讓其中的詳細路線持續增加。</string>
     <string name="trip_badge">旅行</string>
-    <string name="trip_confirmed">行程已確定。請選擇預設集並建立影片。</string>
+    <string name="trip_confirmed">行程已確定。請選擇預設組合並建立影片。</string>
     <string name="trip_coverage_format">~%1$s %2$s 已記錄 · %3$s 積分 · %4$s 活躍天數</string>
     <string name="trip_coverage_good">影片涵蓋範圍良好</string>
     <string name="trip_coverage_limited">影片涵蓋範圍有限</string>
