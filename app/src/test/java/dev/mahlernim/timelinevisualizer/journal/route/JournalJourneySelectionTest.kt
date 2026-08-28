@@ -91,6 +91,88 @@ class JournalJourneySelectionTest {
         assertEquals(0.0, journey.knownDistanceKm, 0.0)
     }
 
+    @Test
+    fun semanticActivityProjectsOntoDetailedGeometryAsOneCameraEpisode() {
+        val points = (0..120).map { index -> point(index.toLong(), index / 10.0) }
+        val route = JournalRoute(
+            timeline = Timeline(points),
+            spans = listOf(span(RouteSource.DETAILED, *points.toTypedArray())),
+            detailedInputCount = points.size,
+            detailedUsableCount = points.size,
+            semanticUsableCount = 2,
+            cameraEpisodes = listOf(
+                SemanticCameraEpisode(
+                    start = points.first().instant,
+                    end = points.last().instant,
+                    origin = points.first(),
+                    destination = points.last(),
+                ),
+            ),
+        )
+
+        val journey = route.journeyForRange(TimelinePeriod.sameYear(2026), ZoneOffset.UTC)
+
+        assertEquals(1, journey.semanticEpisodes.size)
+        assertTrue(journey.semanticEpisodes.single().displacementKm > 1_000.0)
+        assertEquals(listOf(true), journey.legs.map { it.isTransfer })
+    }
+
+    @Test
+    fun semanticActivityCrossingAnExplicitGapFallsBackToGeometricLegs() {
+        val before = listOf(point(0, 0.0), point(10, 0.1))
+        val after = listOf(point(60, 20.0), point(70, 20.1))
+        val route = JournalRoute(
+            timeline = Timeline(before + after),
+            spans = listOf(
+                span(RouteSource.DETAILED, *before.toTypedArray()),
+                RouteSpan(instant(10), instant(60), RouteSource.GAP, emptyList()),
+                span(RouteSource.DETAILED, *after.toTypedArray()),
+            ),
+            detailedInputCount = 4,
+            detailedUsableCount = 4,
+            semanticUsableCount = 2,
+            cameraEpisodes = listOf(
+                SemanticCameraEpisode(
+                    start = before.first().instant,
+                    end = after.last().instant,
+                    origin = before.first(),
+                    destination = after.last(),
+                ),
+            ),
+        )
+
+        val journey = route.journeyForRange(TimelinePeriod.sameYear(2026), ZoneOffset.UTC)
+
+        assertTrue(journey.semanticEpisodes.isEmpty())
+        assertEquals(listOf(2), journey.breakBeforePointIndices)
+        assertFalse(journey.isConnectedToPrevious(2))
+    }
+
+    @Test
+    fun zeroDurationSemanticActivityIsIgnored() {
+        val points = listOf(point(0, 0.0), point(10, 0.1), point(20, 0.2))
+        val route = JournalRoute(
+            timeline = Timeline(points),
+            spans = listOf(span(RouteSource.DETAILED, *points.toTypedArray())),
+            detailedInputCount = points.size,
+            detailedUsableCount = points.size,
+            semanticUsableCount = 1,
+            cameraEpisodes = listOf(
+                SemanticCameraEpisode(
+                    start = points[1].instant,
+                    end = points[1].instant,
+                    origin = points[1],
+                    destination = points[1],
+                ),
+            ),
+        )
+
+        val journey = route.journeyForRange(TimelinePeriod.sameYear(2026), ZoneOffset.UTC)
+
+        assertTrue(journey.semanticEpisodes.isEmpty())
+        assertEquals(listOf(false), journey.legs.map { it.isTransfer })
+    }
+
     private fun span(source: RouteSource, vararg points: GeoPoint) = RouteSpan(
         start = points.first().instant,
         end = points.last().instant,
