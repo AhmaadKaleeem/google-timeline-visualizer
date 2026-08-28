@@ -9,6 +9,13 @@
 - Add distance-unit selection to the web app.
 - Document the web app's distance units and close-up mode.
 
+## 3.0.6
+
+- Use semantic activity episodes to recognize long transfers while retaining detailed route points for marker and trail geometry.
+- Hold the Close-up transfer view through arrival, then close progressively during protected local movement.
+- Preserve semantic camera context across interrupted and resumed video exports while remaining compatible with older pending exports.
+- Set Android version code 48 and version name 3.0.6.
+
 ## 3.0.5
 
 - Constrain the Detect trips date picker to the available Timeline range.
