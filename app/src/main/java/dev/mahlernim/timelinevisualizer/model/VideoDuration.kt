@@ -13,4 +13,5 @@ object VideoDuration {
         if (!text.matches(Regex("[0-9]+"))) return null
         return text.toIntOrNull()?.takeIf { it in MIN_SECONDS..MAX_SECONDS }
     }
+
 }

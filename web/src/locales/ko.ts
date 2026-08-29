@@ -73,6 +73,9 @@ export const ko: Strings = {
   durationSeconds: {
     other: '{count}초',
   },
+  useRecommendedDuration: {
+    other: '추천 재생 시간 사용 · {count}초',
+  },
   cameraMovementLabel: '카메라 움직임',
   cameraFixed: '고정 줌',
   cameraSteady: '안정적 따라가기',

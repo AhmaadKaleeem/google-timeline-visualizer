@@ -45,6 +45,7 @@
     <string name="custom_duration_hint">秒</string>
     <string name="custom_duration_range">请输入10到300之间的整数。</string>
     <string name="long_duration_warning">较长的视频需要更多渲染时间和存储空间。</string>
+    <string name="use_recommended_duration">使用建议时长 · %1$d 秒</string>
     <string name="reading_timeline">读取Timeline文件</string>
     <string name="opening_timeline">打开文件</string>
     <string name="opening_file">打开文件</string>

@@ -47,6 +47,7 @@
     <string name="custom_duration_hint">Segundos</string>
     <string name="custom_duration_range">Digite um número inteiro entre 10 e 300.</string>
     <string name="long_duration_warning">Vídeos longos exigem mais tempo de processamento e armazenamento.</string>
+    <string name="use_recommended_duration">Usar duração recomendada · %1$d segundos</string>
     <string name="reading_timeline">Lendo arquivo Timeline</string>
     <string name="opening_timeline">Abrindo arquivo</string>
     <string name="opening_file">Abrindo arquivo</string>

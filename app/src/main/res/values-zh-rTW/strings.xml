@@ -45,6 +45,7 @@
     <string name="custom_duration_hint">秒</string>
     <string name="custom_duration_range">請輸入 10 到 300 之間的整數。</string>
     <string name="long_duration_warning">較長的影片需要更多產製時間和儲存空間。</string>
+    <string name="use_recommended_duration">使用建議時長 · %1$d 秒</string>
     <string name="reading_timeline">正在讀取時間軸檔案</string>
     <string name="opening_timeline">正在開啟檔案</string>
     <string name="opening_file">正在開啟檔案</string>

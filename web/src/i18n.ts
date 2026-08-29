@@ -145,6 +145,7 @@ export interface Strings {
   durationLabel: string;
   /** {count} */
   durationSeconds: PluralEntry;
+  useRecommendedDuration: PluralEntry;
   cameraMovementLabel: string;
   cameraFixed: string;
   cameraSteady: string;

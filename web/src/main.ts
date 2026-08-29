@@ -1,7 +1,9 @@
 import './style.css';
 import { frameAtElapsedSeconds, totalDurationSeconds } from './animation';
+import { buildCameraTrack } from './camera';
+import { countLargeTransfers, recommendedDurationSeconds } from './duration';
 import { AppError } from './errors';
-import { cumulativeDistances } from './geo';
+import { cumulativeDistances, unwrapJourneyPoints } from './geo';
 import {
   isDistanceUnitPreference,
   readDistanceUnitPreference,
@@ -87,6 +89,7 @@ const startDateInput = element<HTMLInputElement>('start-date');
 const endDateInput = element<HTMLInputElement>('end-date');
 const titleInput = element<HTMLInputElement>('video-title');
 const durationSelect = element<HTMLInputElement>('duration');
+const durationRecommendation = element<HTMLButtonElement>('duration-recommendation');
 const cameraMovementSelect = element<HTMLSelectElement>('camera-movement');
 const aspectRatioSelect = element<HTMLSelectElement>('aspect-ratio');
 const resolutionInput = element<HTMLInputElement>('resolution');
@@ -645,6 +648,33 @@ function renderSelection(): void {
     );
   }
   refreshActionAvailability(points);
+  updateDurationRecommendation(points);
+}
+
+function updateDurationRecommendation(points: GeoPoint[]): void {
+  if (points.length < 2) {
+    durationRecommendation.classList.add('hidden');
+    return;
+  }
+  const distances = cumulativeDistances(points);
+  const format = currentFormat();
+  const worldPoints = unwrapJourneyPoints(points);
+  const track = buildCameraTrack(
+    {
+      worldPoints,
+      cumulativeDistanceKm: distances,
+      totalDistanceKm: distances.at(-1) ?? 0,
+    },
+    { width: format.width, height: format.height },
+    cameraMovementSelect.value as CameraMovement,
+  );
+  const suggested = recommendedDurationSeconds(
+    track,
+    countLargeTransfers(distances),
+  );
+  durationRecommendation.dataset.seconds = String(suggested);
+  durationRecommendation.textContent = i18n.t('useRecommendedDuration', { count: suggested });
+  durationRecommendation.classList.toggle('hidden', suggested === Number(durationSelect.value));
 }
 
 function updateSelection(): void {
@@ -883,6 +913,11 @@ endSelect.addEventListener('change', updateSelection);
 startDateInput.addEventListener('change', updateSelection);
 endDateInput.addEventListener('change', updateSelection);
 durationSelect.addEventListener('input', updateSelection);
+durationRecommendation.addEventListener('click', () => {
+  const seconds = Number(durationRecommendation.dataset.seconds);
+  durationSelect.value = String(seconds);
+  updateSelection();
+});
 cameraMovementSelect.addEventListener('change', updateSelection);
 languageSelect.addEventListener('change', onLanguageChange);
 distanceUnitSelect.addEventListener('change', onDistanceUnitChange);

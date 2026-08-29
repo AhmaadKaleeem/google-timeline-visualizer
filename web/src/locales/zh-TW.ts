@@ -68,6 +68,9 @@ export const zhTW: Strings = {
   durationSeconds: {
     other: '{count} 秒',
   },
+  useRecommendedDuration: {
+    other: '使用建議時長 · {count} 秒',
+  },
   cameraMovementLabel: '鏡頭移動',
   cameraFixed: '固定縮放',
   cameraSteady: '穩定跟隨',

@@ -72,6 +72,10 @@ export const de: Strings = {
     one: '{count} Sekunde',
     other: '{count} Sekunden',
   },
+  useRecommendedDuration: {
+    one: 'Empfohlene Dauer verwenden · {count} Sekunde',
+    other: 'Empfohlene Dauer verwenden · {count} Sekunden',
+  },
   cameraMovementLabel: 'Kamerabewegung',
   cameraFixed: 'Fester Zoom',
   cameraSteady: 'Stetiges Folgen',

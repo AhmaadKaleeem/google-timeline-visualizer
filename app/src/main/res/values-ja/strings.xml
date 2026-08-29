@@ -44,6 +44,7 @@
     <string name="custom_duration_hint">秒</string>
     <string name="custom_duration_range">10から300までの整数を入力してください。</string>
     <string name="long_duration_warning">長い動画ほど、処理時間と保存容量が多く必要です。</string>
+    <string name="use_recommended_duration">おすすめの再生時間を使用 · %1$d秒</string>
     <string name="reading_timeline">タイムライン ファイルを読み込み中</string>
     <string name="opening_timeline">ファイルを開いています</string>
     <string name="opening_file">ファイルを開いています</string>
