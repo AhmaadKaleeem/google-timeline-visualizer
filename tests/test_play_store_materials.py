@@ -47,7 +47,7 @@ def test_primary_graphics_meet_play_dimensions_and_formats():
 def test_phone_screenshots_are_current_play_recommended_size():
     for locale in ("en-US", "ko-KR", "ja-JP"):
         screenshots = sorted((PLAY_STORE / "assets" / "screenshots" / locale).glob("*.png"))
-        assert len(screenshots) == 4
+        assert len(screenshots) == 5
         for screenshot in screenshots:
             width, height, color_type = png_info(screenshot)
             assert (width, height) == (1080, 1920)
@@ -154,9 +154,9 @@ def test_canonical_terminology_and_compact_buttons():
 
 def test_screenshot_alt_text_covers_every_localized_image():
     alt_text = (PLAY_STORE / "assets/alt-text.md").read_text(encoding="utf-8")
-    for stem in ("01 Videos", "02 Timeline file", "03 Selected period", "04 Video saved"):
+    for stem in ("01 Videos", "02 Timeline file", "03 Video style", "04 Video saved", "05 Settings"):
         assert stem in alt_text
-    for stem in ("01 영상", "02 타임라인 파일", "03 선택 기간", "04 영상 저장 완료"):
+    for stem in ("01 영상", "02 타임라인 파일", "03 영상 스타일", "04 영상 저장 완료", "05 설정"):
         assert stem in alt_text
-    for stem in ("01 動画", "02 タイムライン ファイル", "03 選択期間", "04 動画を保存"):
+    for stem in ("01 動画", "02 タイムライン ファイル", "03 動画スタイル", "04 動画を保存", "05 設定"):
         assert stem in alt_text
