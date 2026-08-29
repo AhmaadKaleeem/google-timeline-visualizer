@@ -196,7 +196,7 @@ class PlayStoreScreenshotTest {
             textAlign = Paint.Align.CENTER
             textSize = 25f
         }
-        canvas.drawText("2025 mahler83's Timeline", 360f, 95f, title)
+        canvas.drawText("Timeline Visualizer Sample", 360f, 95f, title)
         canvas.drawText("December 2025  ·  33,342 km", 360f, 148f, subtitle)
         canvas.drawRect(430f, 1_235f, 720f, 1_280f, header)
         val attribution = Paint(Paint.ANTI_ALIAS_FLAG).apply {
