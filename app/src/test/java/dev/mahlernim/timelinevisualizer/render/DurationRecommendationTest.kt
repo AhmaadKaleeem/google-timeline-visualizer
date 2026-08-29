@@ -17,12 +17,12 @@ class DurationRecommendationTest {
     }
 
     @Test
-    fun wrapsDatelineMovementAndClampsToSupportedRange() {
+    fun wrapsDatelineMovementAndCapsRecommendationsAtOneMinute() {
         val wrapped = listOf(frame(centerX = 0.99), frame(centerX = 0.01))
         assertEquals(10, DurationRecommendation.recommend(wrapped, aspect = 1.0, largeTransferCount = 0))
 
         val extreme = (0..300).map { frame(centerX = it * 0.01, spanY = 0.001) }
-        assertEquals(300, DurationRecommendation.recommend(extreme, aspect = 1.0, largeTransferCount = 0))
+        assertEquals(60, DurationRecommendation.recommend(extreme, aspect = 1.0, largeTransferCount = 0))
     }
 
     @Test

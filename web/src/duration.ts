@@ -3,6 +3,7 @@ import type { CameraTrack } from './types';
 export const MIN_DURATION_SECONDS = 10;
 export const MAX_DURATION_SECONDS = 300;
 export const DEFAULT_DURATION_SECONDS = 30;
+const MAX_RECOMMENDED_DURATION_SECONDS = 60;
 
 export function recommendedDurationSeconds(track: CameraTrack, largeTransferCount = 0): number {
   if (track.frames.length < 2 || !Number.isFinite(track.aspect) || track.aspect <= 0) {
@@ -19,7 +20,7 @@ export function recommendedDurationSeconds(track: CameraTrack, largeTransferCoun
     zoomWork += Math.abs(Math.log2(current.spanY / previous.spanY));
   }
   const seconds = 1.5 + movementWork / 0.9 + zoomWork / 1.5 + Math.max(0, largeTransferCount) * 1.5;
-  return Math.max(MIN_DURATION_SECONDS, Math.min(MAX_DURATION_SECONDS, Math.ceil(seconds / 5) * 5));
+  return Math.max(MIN_DURATION_SECONDS, Math.min(MAX_RECOMMENDED_DURATION_SECONDS, Math.ceil(seconds / 5) * 5));
 }
 
 function wrappedDelta(delta: number): number {

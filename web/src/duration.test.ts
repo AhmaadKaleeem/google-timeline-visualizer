@@ -30,4 +30,14 @@ describe('duration recommendations', () => {
     }));
     expect(recommendedDurationSeconds({ frames, aspect: 1 }, 3)).toBe(35);
   });
+
+  it('caps recommendations at one minute', () => {
+    const frames = Array.from({ length: 301 }, (_, index) => ({
+      centerX: index * 0.01,
+      centerY: 0.5,
+      spanY: 0.001,
+      zoom: 12,
+    }));
+    expect(recommendedDurationSeconds({ frames, aspect: 1 })).toBe(60);
+  });
 });

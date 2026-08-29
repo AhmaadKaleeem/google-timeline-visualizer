@@ -32,7 +32,7 @@ internal object DurationRecommendation {
             largeTransferCount.coerceAtLeast(0) * SECONDS_PER_TRANSFER
         return (ceil((TimelineAnimation.OUTRO_SECONDS + journeySeconds) / ROUNDING_SECONDS) * ROUNDING_SECONDS)
             .toInt()
-            .coerceIn(VideoDuration.MIN_SECONDS, VideoDuration.MAX_SECONDS)
+            .coerceIn(VideoDuration.MIN_SECONDS, VideoDuration.LONG_DURATION_SECONDS)
     }
 
     private fun wrappedDelta(delta: Double): Double = when {
