@@ -197,6 +197,7 @@ export interface Strings {
   footerNoAccount: string;
   footerMapAttribution: string;
   footerThirdPartyNotices: string;
+  alphaTesterLink: string;
 
   // --- raw-only dialog ---
   rawOnlyDialogTitle: string;
