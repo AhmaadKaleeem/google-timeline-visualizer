@@ -123,6 +123,7 @@ export const en: Strings = {
   footerNoAccount: 'No account, location permission, or Timeline upload is required.',
   footerMapAttribution: 'Map data © OpenStreetMap contributors and © CARTO.',
   footerThirdPartyNotices: 'Third-party notices',
+  alphaTesterLink: 'Become an Alpha tester',
 
   rawOnlyDialogTitle: 'Only raw location data found',
   rawOnlyDialogBody1: 'This file contains raw location data but no processed visits or trips. You can continue, but the route may be noisy or incomplete, and its distance will only be an estimate.',

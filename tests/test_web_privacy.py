@@ -22,6 +22,14 @@ def test_web_privacy_copy_does_not_claim_analytics_are_absent() -> None:
     assert "Cloudflare Web Analytics" in readme
 
 
+def test_web_app_links_to_alpha_recruitment_discussion_not_restricted_play() -> None:
+    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+
+    assert "https://github.com/mahlernim/google-timeline-visualizer/discussions/165" in html
+    assert "https://play.google.com/apps/testing/" not in html
+    assert 'data-i18n="alphaTesterLink"' in html
+
+
 def test_web_advertising_is_prepared_but_not_enabled() -> None:
     html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     policy = (ROOT / "docs" / "privacy-web.md").read_text(encoding="utf-8")
