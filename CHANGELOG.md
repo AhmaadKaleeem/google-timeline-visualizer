@@ -9,6 +9,14 @@
 - Add distance-unit selection to the web app.
 - Document the web app's distance units and close-up mode.
 
+## 3.0.7
+
+- Recommend a video duration for each route from its camera movement, zoom changes, and large transfers.
+- Keep automatic recommendations between 10 and 60 seconds while retaining manual choices through 300 seconds.
+- Refresh the English, Korean, and Japanese Play Store screenshots with fictional sample data and a detailed route preview.
+- Add privacy-preserving aggregate daily metrics and prepare the web app for a future AdSense review.
+- Set Android version code 49 and version name 3.0.7.
+
 ## 3.0.6
 
 - Use semantic activity episodes to recognize long transfers while retaining detailed route points for marker and trail geometry.
