@@ -9,6 +9,12 @@
 - Add distance-unit selection to the web app.
 - Document the web app's distance units and close-up mode.
 
+## 3.0.8
+
+- Alert when background video creation fails and explain common causes without exposing export data.
+- Offer Retry for temporary failures in the result notification and app while creating a fresh output destination.
+- Set Android version code 50 and version name 3.0.8.
+
 ## 3.0.7
 
 - Recommend a video duration for each route from its camera movement, zoom changes, and large transfers.

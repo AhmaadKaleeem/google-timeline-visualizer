@@ -64,4 +64,31 @@ class VideoExportStateStoreTest {
 
         assertEquals(expected, VideoExportCoordinator.state.value)
     }
+
+    @Test
+    fun failureKindSurvivesCoordinatorRecreation() {
+        val expected = VideoExportSnapshot(
+            status = VideoExportStatus.FAILED,
+            errorMessage = "Free storage",
+            failureKind = VideoExportFailureKind.STORAGE_FULL,
+        )
+        store.save(expected)
+
+        VideoExportCoordinator.resetForTest()
+        VideoExportCoordinator.restore(context)
+
+        assertEquals(expected, VideoExportCoordinator.state.value)
+    }
+
+    @Test
+    fun legacyFailedStateDefaultsToUnknown() {
+        store.save(
+            VideoExportSnapshot(
+                status = VideoExportStatus.FAILED,
+                errorMessage = "Could not create video",
+            ),
+        )
+
+        assertEquals(VideoExportFailureKind.UNKNOWN, store.load().failureKind)
+    }
 }

@@ -36,6 +36,8 @@ import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
 import dev.mahlernim.timelinevisualizer.export.VideoExportStateStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
 import dev.mahlernim.timelinevisualizer.export.VideoExportService
+import dev.mahlernim.timelinevisualizer.export.VideoExportRequest
+import dev.mahlernim.timelinevisualizer.export.VideoExportRequestStore
 import dev.mahlernim.timelinevisualizer.journal.JournalOnboardingStore
 import dev.mahlernim.timelinevisualizer.model.GeoPoint
 import dev.mahlernim.timelinevisualizer.model.Journey
@@ -58,6 +60,7 @@ import dev.mahlernim.timelinevisualizer.ui.TimelineView
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeFalse
 import org.junit.Before
@@ -90,6 +93,7 @@ class MainActivityTest {
     fun setUp() {
         store.clear()
         VideoExportStateStore(context).clear()
+        VideoExportRequestStore(context).clear()
         VideoExportCoordinator.resetForTest()
         context.getSharedPreferences("display", Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences("camera-settings", Context.MODE_PRIVATE).edit().clear().commit()
@@ -280,6 +284,7 @@ class MainActivityTest {
         if (::controller.isInitialized) controller.close()
         store.clear()
         VideoExportStateStore(context).clear()
+        VideoExportRequestStore(context).clear()
         VideoExportCoordinator.resetForTest()
         timelineSourceStore.clearForTest()
         context.getSharedPreferences("video-presets", Context.MODE_PRIVATE).edit().clear().commit()
@@ -1079,7 +1084,62 @@ class MainActivityTest {
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayRetryButton).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayDismissButton).visibility)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.exportTrayProgress).visibility)
+    }
+
+    @Test
+    fun failedExportTrayHidesRetryForUserActionFailure() {
+        val activity = launchActivity()
+        VideoExportCoordinator.publish(
+            context,
+            VideoExportSnapshot(
+                status = VideoExportStatus.FAILED,
+                errorMessage = "Free storage",
+                failureKind = dev.mahlernim.timelinevisualizer.export.VideoExportFailureKind.STORAGE_FULL,
+            ),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportStatusTray).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.exportTrayRetryButton).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.exportTrayDismissButton).visibility)
+    }
+
+    @Test
+    fun coldRetryIntentCreatesFreshOutputDestination() {
+        val original = retryRequest()
+        VideoExportRequestStore(context).save(original)
+
+        launchActivity(MainActivity.retryVideoIntent(context))
+        waitUntil { VideoExportRequestStore(context).load()?.outputUri != original.outputUri }
+
+        val retried = VideoExportRequestStore(context).load()!!
+        assertNotEquals(original.outputUri, retried.outputUri)
+        assertTrue(retried.outputUri.startsWith("content://media/"))
+    }
+
+    @Test
+    fun warmRetryIntentCreatesFreshOutputDestination() {
+        launchActivity()
+        val original = retryRequest()
+        VideoExportRequestStore(context).save(original)
+
+        controller.newIntent(MainActivity.retryVideoIntent(context))
+        waitUntil { VideoExportRequestStore(context).load()?.outputUri != original.outputUri }
+
+        assertNotEquals(original.outputUri, VideoExportRequestStore(context).load()!!.outputUri)
+    }
+
+    @Test
+    fun retryIntentWithoutRetainedRequestReturnsToIdle() {
+        val activity = launchActivity()
+
+        controller.newIntent(MainActivity.retryVideoIntent(context))
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(VideoExportStatus.IDLE, VideoExportStateStore(context).load().status)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.newVideoScreen).visibility)
     }
 
     @Test
@@ -1832,6 +1892,19 @@ class MainActivityTest {
         }
         error("The asynchronous activity operation did not finish")
     }
+
+    private fun retryRequest(): VideoExportRequest = VideoExportRequest(
+        outputUri = "content://example/discarded-output",
+        journey = Journey.from(
+            listOf(
+                GeoPoint(Instant.parse("2026-01-01T00:00:00Z"), 37.5, 127.0),
+                GeoPoint(Instant.parse("2026-01-01T01:00:00Z"), 37.6, 127.1),
+            ),
+            TimelinePeriod.sameYear(2026),
+        ),
+        title = "Retry test",
+        durationSeconds = 30,
+    )
 
     private fun repoRoot(): File {
         var current = File(System.getProperty("user.dir") ?: error("Working directory unavailable")).absoluteFile

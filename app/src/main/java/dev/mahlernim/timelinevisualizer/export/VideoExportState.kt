@@ -15,6 +15,7 @@ data class VideoExportSnapshot(
     val outputUri: String? = null,
     val title: String? = null,
     val errorMessage: String? = null,
+    val failureKind: VideoExportFailureKind? = null,
 )
 
 class VideoExportStateStore(context: Context) {
@@ -35,6 +36,9 @@ class VideoExportStateStore(context: Context) {
                 total = preferences.getInt(KEY_TOTAL, 0),
             )
         }
+        val failureKind = preferences.getString(KEY_FAILURE_KIND, null)?.let { value ->
+            runCatching { VideoExportFailureKind.valueOf(value) }.getOrNull()
+        } ?: VideoExportFailureKind.UNKNOWN.takeIf { status == VideoExportStatus.FAILED }
         return VideoExportSnapshot(
             status = status,
             progress = progress,
@@ -42,6 +46,7 @@ class VideoExportStateStore(context: Context) {
             outputUri = preferences.getString(KEY_OUTPUT_URI, null),
             title = preferences.getString(KEY_TITLE, null),
             errorMessage = preferences.getString(KEY_ERROR, null),
+            failureKind = failureKind,
         )
     }
 
@@ -52,6 +57,7 @@ class VideoExportStateStore(context: Context) {
             putString(KEY_OUTPUT_URI, snapshot.outputUri)
             putString(KEY_TITLE, snapshot.title)
             putString(KEY_ERROR, snapshot.errorMessage)
+            putString(KEY_FAILURE_KIND, snapshot.failureKind?.name)
             snapshot.progress?.let { progress ->
                 putString(KEY_PHASE, progress.phase.name)
                 putFloat(KEY_FRACTION, progress.fraction)
@@ -81,6 +87,7 @@ class VideoExportStateStore(context: Context) {
         private const val KEY_OUTPUT_URI = "output_uri"
         private const val KEY_TITLE = "title"
         private const val KEY_ERROR = "error"
+        private const val KEY_FAILURE_KIND = "failure_kind"
     }
 }
 

@@ -89,6 +89,7 @@ import dev.mahlernim.timelinevisualizer.export.ExportPhase
 import dev.mahlernim.timelinevisualizer.export.VideoExportRequest
 import dev.mahlernim.timelinevisualizer.export.VideoExportRequestStore
 import dev.mahlernim.timelinevisualizer.export.VideoExportService
+import dev.mahlernim.timelinevisualizer.export.VideoExportFailureKind
 import dev.mahlernim.timelinevisualizer.export.VideoExportSnapshot
 import dev.mahlernim.timelinevisualizer.export.VideoExportStatus
 import dev.mahlernim.timelinevisualizer.export.VideoExportViewModel
@@ -684,6 +685,8 @@ class MainActivity : AppCompatActivity() {
         if (intent?.action == ACTION_OPEN_JOURNAL && BuildConfig.IS_JOURNAL_LAB) {
             openJournalFromReminder()
             intent?.action = null
+        } else if (intent?.action == ACTION_RETRY_VIDEO) {
+            handleRetryVideoIntent(intent)
         } else if (intent?.action == ACTION_WATCH_VIDEO && incoming != null) {
             if (savedInstanceState == null) watchVideo(incoming) else showVideoPlayer(incoming, resetPosition = false)
             VideoExportService.clearNotification(applicationContext)
@@ -789,6 +792,10 @@ class MainActivity : AppCompatActivity() {
         if (intent.action == ACTION_OPEN_JOURNAL && BuildConfig.IS_JOURNAL_LAB) {
             openJournalFromReminder()
             intent.action = null
+            return
+        }
+        if (intent.action == ACTION_RETRY_VIDEO) {
+            handleRetryVideoIntent(intent)
             return
         }
         intent.data?.let { uri ->
@@ -4206,6 +4213,7 @@ class MainActivity : AppCompatActivity() {
                     outputUri = uri.toString(),
                     title = completeRequest.title,
                     errorMessage = getString(R.string.video_request_unavailable),
+                    failureKind = VideoExportFailureKind.OUTPUT_UNAVAILABLE,
                 ),
             )
         }
@@ -4254,7 +4262,7 @@ class MainActivity : AppCompatActivity() {
             VideoExportStatus.FAILED -> {
                 setExporting(false)
                 editor.statusText.setText(R.string.video_export_failed)
-                showFailedExportTray(snapshot.errorMessage)
+                showFailedExportTray(snapshot)
             }
         }
         lastRenderedExportStatus = snapshot.status
@@ -4293,7 +4301,7 @@ class MainActivity : AppCompatActivity() {
         lastAnnouncedExportPhase = null
     }
 
-    private fun showFailedExportTray(message: String?) {
+    private fun showFailedExportTray(snapshot: VideoExportSnapshot) {
         if (currentScreen == Screen.ONBOARDING) {
             binding.exportStatusTray.visibility = View.GONE
             return
@@ -4303,10 +4311,11 @@ class MainActivity : AppCompatActivity() {
         binding.exportTrayCancelButton.visibility = View.GONE
         binding.exportTrayWatchButton.visibility = View.GONE
         binding.exportTrayShareButton.visibility = View.GONE
-        binding.exportTrayDismissButton.visibility = View.GONE
-        binding.exportTrayRetryButton.visibility = View.VISIBLE
+        val failureKind = snapshot.failureKind ?: VideoExportFailureKind.UNKNOWN
+        binding.exportTrayDismissButton.visibility = View.VISIBLE
+        binding.exportTrayRetryButton.visibility = if (failureKind.retryable) View.VISIBLE else View.GONE
         binding.exportTrayRetryButton.isEnabled = true
-        binding.exportTrayStatusText.text = message ?: getString(R.string.video_export_failed)
+        binding.exportTrayStatusText.text = snapshot.errorMessage ?: getString(R.string.video_export_failed)
         if (lastRenderedExportStatus != VideoExportStatus.FAILED) {
             announceExportStatus(binding.exportTrayStatusText.text)
         }
@@ -4368,6 +4377,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun handleRetryVideoIntent(intent: Intent) {
+        intent.action = null
+        VideoExportService.clearNotification(applicationContext)
+        showNewVideo(loadRemembered = true)
+        retryVideoExport()
+    }
+
     private fun retryVideoExport(request: VideoExportRequest?) {
         if (request == null) {
             videoExportViewModel.clear()
@@ -4388,6 +4404,7 @@ class MainActivity : AppCompatActivity() {
                             status = VideoExportStatus.FAILED,
                             title = retryRequest.title,
                             errorMessage = getString(R.string.video_request_unavailable),
+                            failureKind = VideoExportFailureKind.OUTPUT_UNAVAILABLE,
                         ),
                     )
                 }
@@ -6037,6 +6054,7 @@ class MainActivity : AppCompatActivity() {
         private const val STATE_CUSTOMIZATION_MODIFIED_ID = "customization_modified_id_v3"
         internal const val ACTION_WATCH_VIDEO = "dev.mahlernim.timelinevisualizer.action.WATCH_VIDEO"
         internal const val ACTION_SHARE_VIDEO = "dev.mahlernim.timelinevisualizer.action.SHARE_VIDEO"
+        internal const val ACTION_RETRY_VIDEO = "dev.mahlernim.timelinevisualizer.action.RETRY_VIDEO"
         const val ACTION_OPEN_JOURNAL = "dev.mahlernim.timelinevisualizer.action.OPEN_JOURNAL"
         private const val PROJECT_URL = "https://github.com/mahlernim/google-timeline-visualizer"
         private const val PRIVACY_URL =
@@ -6077,6 +6095,12 @@ class MainActivity : AppCompatActivity() {
                         Intent.FLAG_ACTIVITY_CLEAR_TOP or
                         Intent.FLAG_ACTIVITY_SINGLE_TOP,
                 )
+            }
+
+        internal fun retryVideoIntent(context: Context): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                action = ACTION_RETRY_VIDEO
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             }
 
         internal fun restoreGuideUrl(language: String?): String = when (language) {

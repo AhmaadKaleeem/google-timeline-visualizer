@@ -82,7 +82,14 @@ class VideoExportService : Service() {
                 VideoExportStateStore(applicationContext).load().outputUri
                     ?.toUri()
                     ?.let { GeneratedMediaRepository(applicationContext).discard(it) }
-                finishWithFailure(null, getString(R.string.video_request_unavailable), startId)
+                finishWithFailure(
+                    null,
+                    VideoExportFailure(
+                        VideoExportFailureKind.OUTPUT_UNAVAILABLE,
+                        getString(R.string.video_request_unavailable),
+                    ),
+                    startId,
+                )
                 return@launch
             }
             runExport(request, startId)
@@ -168,18 +175,12 @@ class VideoExportService : Service() {
         } catch (error: Throwable) {
             Log.e(TAG, "Video export failed", error)
             GeneratedMediaRepository(applicationContext).discard(uri)
-            finishWithFailure(request, failureMessage(error), startId)
+            finishWithFailure(request, classifyVideoExportFailure(this, error), startId)
             return
         } finally {
             exportJob = null
             stopSelf(startId)
         }
-    }
-
-    private fun failureMessage(error: Throwable): String = when (error) {
-        is UnsupportedVideoFormatException -> error.reason.describe(this, error.format)
-        is MapTilePreparationException -> getString(R.string.map_tiles_unavailable)
-        else -> getString(R.string.video_export_failed)
     }
 
     private fun cancelExport(startId: Int) {
@@ -205,18 +206,19 @@ class VideoExportService : Service() {
         }
     }
 
-    private fun finishWithFailure(request: VideoExportRequest?, message: String, startId: Int) {
+    private fun finishWithFailure(request: VideoExportRequest?, failure: VideoExportFailure, startId: Int) {
         if (request == null) requestStore.clear()
         publish(
             VideoExportSnapshot(
                 status = VideoExportStatus.FAILED,
                 outputUri = request?.outputUri,
                 title = request?.title,
-                errorMessage = message,
+                errorMessage = failure.message,
+                failureKind = failure.kind,
             ),
         )
         finishForeground()
-        notificationManager.notify(NOTIFICATION_ID, buildFailedNotification(message))
+        notificationManager.notify(NOTIFICATION_ID, buildFailedNotification(failure))
         exportJob = null
         stopSelf(startId)
     }
@@ -306,7 +308,7 @@ class VideoExportService : Service() {
     internal fun buildCompletedNotification(uri: Uri, title: String): Notification {
         val watch = MainActivity.playbackIntent(this, uri)
         val share = MainActivity.shareIntent(this, uri)
-        return completionNotificationBuilder()
+        return resultNotificationBuilder(NotificationCompat.CATEGORY_STATUS)
             .setContentTitle(getString(R.string.video_ready))
             .setContentText(title)
             .setAutoCancel(true)
@@ -324,14 +326,19 @@ class VideoExportService : Service() {
         .setProgress(0, 0, false)
         .build()
 
-    private fun buildFailedNotification(message: String): Notification = notificationBuilder()
-        .setContentTitle(getString(R.string.video_export_failed))
-        .setContentText(message)
-        .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-        .setAutoCancel(true)
-        .setOngoing(false)
-        .setProgress(0, 0, false)
-        .build()
+    internal fun buildFailedNotification(failure: VideoExportFailure): Notification {
+        val builder = resultNotificationBuilder(NotificationCompat.CATEGORY_ERROR)
+            .setContentTitle(getString(R.string.video_export_failed))
+            .setContentText(failure.message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(failure.message))
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .setProgress(0, 0, false)
+        if (failure.kind.retryable) {
+            builder.addAction(0, getString(R.string.retry), retryPendingIntent())
+        }
+        return builder.build()
+    }
 
     private fun notificationBuilder(): NotificationCompat.Builder = NotificationCompat.Builder(this, CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -340,11 +347,11 @@ class VideoExportService : Service() {
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
-    private fun completionNotificationBuilder(): NotificationCompat.Builder =
+    private fun resultNotificationBuilder(category: String): NotificationCompat.Builder =
         NotificationCompat.Builder(this, COMPLETION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(openAppPendingIntent())
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setCategory(category)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
@@ -398,6 +405,11 @@ class VideoExportService : Service() {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
+    private fun retryPendingIntent(): PendingIntent = activityPendingIntent(
+        MainActivity.retryVideoIntent(this),
+        RETRY_REQUEST_CODE,
+    )
+
     private fun activityPendingIntent(intent: Intent, requestCode: Int): PendingIntent = PendingIntent.getActivity(
         this,
         requestCode,
@@ -439,6 +451,7 @@ class VideoExportService : Service() {
         private const val CANCEL_REQUEST_CODE = 4104
         private const val WATCH_REQUEST_CODE = 4105
         private const val SHARE_REQUEST_CODE = 4106
+        private const val RETRY_REQUEST_CODE = 4107
         private const val TAG = "TimelineExport"
 
         internal fun foregroundServiceTypeForApi(apiLevel: Int): Int =
