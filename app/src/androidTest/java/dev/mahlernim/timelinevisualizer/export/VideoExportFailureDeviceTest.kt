@@ -22,6 +22,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
@@ -54,6 +55,7 @@ class VideoExportFailureDeviceTest {
 
     @Test
     fun backgroundFailurePostsRetryableResultAndRetryUsesFreshOutput() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
         val originalOutput = GeneratedMediaRepository(context).createVideoDestination(
             "Failure test",
             TimelinePeriod.sameYear(2026),
