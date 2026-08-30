@@ -40,6 +40,9 @@ data class ExportProgress(
     val total: Int,
 )
 
+internal class InsufficientJourneyDataException :
+    IllegalArgumentException("At least two location points are needed")
+
 class Mp4Exporter(
     private val contentResolver: ContentResolver,
     private val tileRepository: TileRepository,
@@ -54,7 +57,7 @@ class Mp4Exporter(
         cameraSettings: CameraSettings = CameraSettings.DEFAULT,
         onProgress: (ExportProgress) -> Unit,
     ): Bitmap = withContext(Dispatchers.Default) {
-        require(journey.points.size >= 2) { "At least two location points are needed" }
+        if (journey.points.size < 2) throw InsufficientJourneyDataException()
         val videoFormat = cameraSettings.activeVideoFormat
         val encoderProfiles = VideoEncoderSupport.deviceProfiles()
         val encoderCandidates = VideoEncoderSupport.candidates(videoFormat, encoderProfiles)

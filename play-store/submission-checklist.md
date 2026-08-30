@@ -19,7 +19,7 @@
 
 ## Release
 
-- Version name `3.0.7` and version code `49`
+- Version name `3.0.8` and version code `50`
 - Upload the signed `playRelease` Android App Bundle
 - On first enrollment, preserve the existing app-signing key so GitHub and Play installs remain update-compatible
 - Register a separate upload key for later Play releases
@@ -41,4 +41,4 @@
 - Complete the foreground-service declarations for **Media processing** and the
   older-Android **Data sync** compatibility path, explaining user-initiated
   on-device MP4 encoding and the ongoing Cancel notification
-- Declare notification permission use for background progress and completion alerts
+- Declare notification permission use for background progress, completion, and failure alerts

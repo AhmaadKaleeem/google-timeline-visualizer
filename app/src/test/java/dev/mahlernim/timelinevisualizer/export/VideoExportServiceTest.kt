@@ -92,4 +92,33 @@ class VideoExportServiceTest {
         assertEquals(uri, share.data)
         assertTrue(share.flags and android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP != 0)
     }
+
+    @Test
+    fun retryableFailureUsesAlertingResultChannelAndRetryAction() {
+        val detail = context.getString(dev.mahlernim.timelinevisualizer.R.string.map_tiles_unavailable)
+        val notification = controller.get().buildFailedNotification(
+            VideoExportFailure(VideoExportFailureKind.MAP_UNAVAILABLE, detail),
+        )
+
+        assertEquals("video_completion", notification.channelId)
+        assertEquals(Notification.CATEGORY_ERROR, notification.category)
+        assertEquals(detail, notification.extras.getCharSequence(Notification.EXTRA_TEXT))
+        assertEquals(1, notification.actions.size)
+
+        val retry = shadowOf(notification.actions.single().actionIntent).savedIntent
+        assertEquals(MainActivity::class.java.name, retry.component?.className)
+        assertEquals(MainActivity.ACTION_RETRY_VIDEO, retry.action)
+        assertTrue(retry.flags and android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP != 0)
+        assertTrue(retry.flags and android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP != 0)
+    }
+
+    @Test
+    fun userActionFailureDoesNotOfferUnchangedRetry() {
+        val notification = controller.get().buildFailedNotification(
+            VideoExportFailure(VideoExportFailureKind.STORAGE_FULL, "Free storage"),
+        )
+
+        assertEquals(Notification.CATEGORY_ERROR, notification.category)
+        assertTrue(notification.actions.isNullOrEmpty())
+    }
 }
